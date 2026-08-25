@@ -1,0 +1,298 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String     @id @default(uuid())
+  email     String     @unique
+  password  String
+  role      String     // "OWNER" or "TENANT"
+  profile   Profile?
+  auditLogs AuditLog[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Profile {
+  id                    String    @id @default(uuid())
+  userId                String    @unique
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName             String
+  lastName              String
+  phone                 String
+  photoUrl              String?
+  gender                String?
+  address               String?
+  aadhaar               String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  guardianName          String?
+  guardianPhone         String?
+  occupation            String?
+  moveInDate            DateTime?
+  moveOutDate           DateTime?
+  status                String    @default("ACTIVE") // ACTIVE, ARCHIVED, BLACKLISTED
+  tenant                Tenant?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model Tenant {
+  id            String         @id @default(uuid())
+  profileId     String         @unique
+  profile       Profile        @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  roomNumber    String?
+  bedNumber     String?
+  rentAmount    Float          @default(0.0)
+  agreementUrl  String?
+  medicalNotes  String?
+  moveInDate    DateTime?
+  moveOutDate   DateTime?
+  status        String         @default("ACTIVE") // ACTIVE, ARCHIVED, BLACKLISTED
+  payments      Payment[]
+  invoices      Invoice[]
+  complaints    Complaint[]
+  visitors      Visitor[]
+  leaves        LeaveRequest[]
+  beds          Bed[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Building {
+  id        String   @id @default(uuid())
+  name      String
+  address   String
+  floors    Floor[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Floor {
+  id         String   @id @default(uuid())
+  number     Int
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  rooms      Room[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Room {
+  id          String        @id @default(uuid())
+  number      String
+  type        String        // "AC Single", "Non-AC Double", etc.
+  rent        Float
+  status      String        @default("AVAILABLE") // AVAILABLE, OCCUPIED, MAINTENANCE, RESERVED
+  capacity    Int
+  amenities   String        // Comma-separated list e.g., "Wifi, AC, Attached Bathroom"
+  images      String?       // JSON array of image URLs
+  floorId     String
+  floor       Floor         @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  beds        Bed[]
+  maintenance Maintenance[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Bed {
+  id          String   @id @default(uuid())
+  number      String
+  roomId      String
+  room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoiceId     String?
+  invoice       Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  amount        Float
+  date          DateTime @default(now())
+  type          String   // RENT, DEPOSIT, LATE_FEE, DISCOUNT
+  paymentMethod String   // CASH, ONLINE, CARD
+  status        String   // PAID, PENDING, OVERDUE
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Invoice {
+  id            String    @id @default(uuid())
+  number        String    @unique
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  amount        Float
+  paidAmount    Float     @default(0.0)
+  dueDate       DateTime
+  status        String    // PAID, PARTIAL, PENDING, OVERDUE
+  itemsJson     String    // Description of invoice items (rent, wifi, electricity, etc.)
+  payments      Payment[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Employee {
+  id               String        @id @default(uuid())
+  name             String
+  phone            String
+  address          String
+  role             String        // MANAGER, SECURITY, COOK, CLEANER, ELECTRICIAN, PLUMBER, RECEPTION, WARDEN, MAINTENANCE
+  salary           Float
+  status           String        @default("ACTIVE") // ACTIVE, INACTIVE
+  bankDetails      String?
+  emergencyContact String?
+  photoUrl         String?
+  joiningDate      DateTime      @default(now())
+  salaries         Salary[]
+  attendance       Attendance[]
+  complaints       Complaint[]
+  maintenance      Maintenance[]
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+}
+
+model Salary {
+  id          String   @id @default(uuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  amount      Float
+  date        DateTime
+  bonus       Float    @default(0.0)
+  deductions  Float    @default(0.0)
+  advancePaid Float    @default(0.0)
+  status      String   // PAID, PENDING
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Attendance {
+  id            String   @id @default(uuid())
+  employeeId    String
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date          DateTime
+  status        String   // PRESENT, ABSENT, LEAVE, LATE
+  overtimeHours Float    @default(0.0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Visitor {
+  id             String    @id @default(uuid())
+  name           String
+  phone          String
+  personVisiting String
+  checkIn        DateTime
+  checkOut       DateTime?
+  approvalStatus String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model LeaveRequest {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  startDate DateTime
+  endDate   DateTime
+  reason    String
+  status    String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Complaint {
+  id                 String    @id @default(uuid())
+  title              String
+  description        String
+  category           String    // ELECTRICITY, WATER, FURNITURE, INTERNET, CLEANING, FOOD, OTHER
+  status             String    @default("PENDING") // PENDING, ASSIGNED, IN_PROGRESS, RESOLVED, CLOSED
+  tenantId           String
+  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignedEmployeeId String?
+  assignedEmployee   Employee? @relation(fields: [assignedEmployeeId], references: [id], onDelete: SetNull)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model Maintenance {
+  id             String    @id @default(uuid())
+  title          String
+  description    String
+  cost           Float
+  materialsUsed  String?
+  roomId         String
+  room           Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  employeeId     String?
+  employee       Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  completionDate DateTime?
+  status         String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model Inventory {
+  id              String   @id @default(uuid())
+  name            String
+  category        String   // BED, MATTRESS, FAN, LIGHT, FURNITURE, KITCHEN, CLEANING, ELECTRONIC, WATER_COOLER
+  quantity        Int
+  condition       String   // GOOD, FAIR, POOR, REPLACEMENT_REQUIRED
+  purchaseDate    DateTime
+  cost            Float
+  warrantyYears   Int      @default(0)
+  vendor          String?
+  replacementDate DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Expense {
+  id        String   @id @default(uuid())
+  title     String
+  amount    Float
+  category  String   // ELECTRICITY, WATER, INTERNET, FOOD, REPAIRS, FURNITURE, CLEANING, SALARY, TAXES, MISC
+  date      DateTime
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Notice {
+  id           String    @id @default(uuid())
+  title        String
+  content      String
+  target       String    // EVERYONE, TENANTS, EMPLOYEES
+  isEmergency  Boolean   @default(false)
+  scheduleDate DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Setting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  action    String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  details   String
+  createdAt DateTime @default(now())
+}
