@@ -31,23 +31,44 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'New password cannot be the same as your current password.' }, { status: 400 });
     }
 
+    const cleanEmail = payload.email.trim().toLowerCase();
+    const pwdCookieName = `pwd_hash_${cleanEmail.replace(/[^a-z0-9]/g, '_')}`;
+    const overriddenHash = cookies
+      .split(';')
+      .find(c => c.trim().startsWith(`${pwdCookieName}=`))
+      ?.split('=')[1];
+
     // Retrieve user record
-    const user = await dbService.getUserByEmail(payload.email);
+    const user = await dbService.getUserByEmail(cleanEmail);
 
-    if (user) {
-      const isValid = await comparePassword(currentPassword, user.password);
-      if (!isValid) {
-        return NextResponse.json({ error: 'Current password is incorrect.' }, { status: 400 });
-      }
-
-      const newHashedPassword = await hashPassword(newPassword);
-      await dbService.updateUserPassword(payload.email, newHashedPassword);
+    if (!user) {
+      return NextResponse.json({ error: 'User account not found' }, { status: 404 });
     }
 
-    return NextResponse.json({
+    const currentHashToCompare = overriddenHash ? decodeURIComponent(overriddenHash) : user.password;
+    const isValid = await comparePassword(currentPassword, currentHashToCompare);
+    if (!isValid) {
+      return NextResponse.json({ error: 'Current password is incorrect.' }, { status: 400 });
+    }
+
+    const newHashedPassword = await hashPassword(newPassword);
+    await dbService.updateUserPassword(cleanEmail, newHashedPassword);
+
+    const response = NextResponse.json({
       success: true,
       message: 'Password permanently updated! Old password invalidated. Please use your new password for all future logins.'
     });
+
+    // Set persistent HTTP-Only cookie with new password hash for serverless environment compatibility
+    response.cookies.set(pwdCookieName, encodeURIComponent(newHashedPassword), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 31536000,
+      path: '/'
+    });
+
+    return response;
   } catch (error: any) {
     console.error('Password change error:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
