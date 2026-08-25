@@ -36,8 +36,8 @@ export default function LoginPage() {
   const [hoveredRole, setHoveredRole] = useState<PortalRole | null>(null);
   
   // Auth Form State
-  const [email, setEmail] = useState('owner@srisaisiri.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [fullName, setFullName] = useState('');
   const [ownerKey, setOwnerKey] = useState('');
@@ -182,8 +182,13 @@ export default function LoginPage() {
     };
   }, [isDarkMode]);
 
-  // Update Demo Credentials when Portal Role changes
+  // Role Selection Handler
   const handleSelectRole = (role: PortalRole) => {
+    setSelectedRole(role);
+    setErrorMsg('');
+  };
+
+  const handleAutofillDemo = (role: PortalRole) => {
     setSelectedRole(role);
     setErrorMsg('');
     if (role === 'TENANT') {
@@ -559,21 +564,21 @@ export default function LoginPage() {
                     <div className="flex justify-center gap-3 pt-2">
                       <button
                         type="button"
-                        onClick={() => handleSelectRole('OWNER')}
+                        onClick={() => handleAutofillDemo('OWNER')}
                         onMouseEnter={() => setCursorHovered(true)}
                         onMouseLeave={() => setCursorHovered(false)}
                         className={`text-[10px] font-bold hover:underline cursor-pointer ${isDarkMode ? 'text-[#3B82F6]' : 'text-[#2563EB]'}`}
                       >
-                        Owner Demo
+                        ⚡ Autofill Owner Demo
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleSelectRole('TENANT')}
+                        onClick={() => handleAutofillDemo('TENANT')}
                         onMouseEnter={() => setCursorHovered(true)}
                         onMouseLeave={() => setCursorHovered(false)}
                         className={`text-[10px] font-bold hover:underline cursor-pointer ${isDarkMode ? 'text-[#38C7D9]' : 'text-[#0284C7]'}`}
                       >
-                        Tenant Demo
+                        ⚡ Autofill Tenant Demo
                       </button>
                     </div>
                   )}
