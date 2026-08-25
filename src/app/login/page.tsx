@@ -29,7 +29,7 @@ import LiveBackground from '@/components/backgrounds/LiveBackground';
 export type PortalRole = 'OWNER' | 'TENANT' | 'WARDEN';
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, registerOwner } = useAuth();
 
   // Primary State
   const [selectedRole, setSelectedRole] = useState<PortalRole>('OWNER');
@@ -55,9 +55,6 @@ export default function LoginPage() {
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSubmitting, setForgotSubmitting] = useState(false);
   const [forgotSuccess, setForgotSuccess] = useState(false);
-
-  // Demo Access Toggle
-  const [showDemoMenu, setShowDemoMenu] = useState(false);
 
   // Theme State (Default Dark, synced with localStorage and HTML class)
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
@@ -188,19 +185,7 @@ export default function LoginPage() {
     setErrorMsg('');
   };
 
-  const handleAutofillDemo = (role: PortalRole) => {
-    setSelectedRole(role);
-    setErrorMsg('');
-    if (role === 'TENANT') {
-      setEmail('tenant@srisaisiri.com');
-      setPassword('password123');
-    } else {
-      setEmail('owner@srisaisiri.com');
-      setPassword('password123');
-    }
-  };
-
-  // Handle Form Submission with Cinematic Portal Entry Transition
+  // Handle Form Submission with Passkey Registration Support
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting || authSuccess) return;
@@ -213,6 +198,33 @@ export default function LoginPage() {
     }
     if (!password) {
       setErrorMsg('Please enter your password.');
+      return;
+    }
+
+    if (authMode === 'SIGN_UP') {
+      if (!fullName) {
+        setErrorMsg('Please enter your full name.');
+        return;
+      }
+      if (!ownerKey) {
+        setErrorMsg('Please enter the Owner Passkey to register an Owner account.');
+        return;
+      }
+
+      setSubmitting(true);
+      try {
+        const res = await registerOwner(fullName, email, password, ownerKey);
+        if (res.success) {
+          setAuthSuccess(true);
+          setPortalExpanding(true);
+        } else {
+          setErrorMsg(res.error || 'Owner registration failed.');
+          setSubmitting(false);
+        }
+      } catch (err) {
+        setErrorMsg('An unexpected error occurred during registration.');
+        setSubmitting(false);
+      }
       return;
     }
 
@@ -406,13 +418,39 @@ export default function LoginPage() {
                 transition={{ duration: 0.4 }}
                 className="w-full max-w-xs flex flex-col items-center space-y-4 my-auto relative z-10"
               >
+                {/* Mode Selector Toggle (SIGN IN vs OWNER SIGNUP) */}
+                <div className="flex items-center gap-1.5 p-1 rounded-full bg-white/10 border border-white/15 mb-1">
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMode('SIGN_IN'); setErrorMsg(''); }}
+                    className={`px-3 py-1 rounded-full text-[9px] font-black tracking-wider transition-all cursor-pointer ${
+                      authMode === 'SIGN_IN' 
+                        ? (isDarkMode ? 'bg-[#38C7D9] text-black shadow-xs' : 'bg-[#2563EB] text-white shadow-xs') 
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    SIGN IN
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMode('SIGN_UP'); setSelectedRole('OWNER'); setErrorMsg(''); }}
+                    className={`px-3 py-1 rounded-full text-[9px] font-black tracking-wider transition-all cursor-pointer ${
+                      authMode === 'SIGN_UP' 
+                        ? 'bg-purple-600 text-white shadow-xs' 
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    🔑 OWNER SIGNUP
+                  </button>
+                </div>
+
                 {/* Header */}
                 <div className="space-y-1 text-center">
                   <span className={`text-[10px] font-black uppercase tracking-[3px] block ${isDarkMode ? 'text-[#38C7D9]' : 'text-[#2563EB]'}`}>
-                    {selectedRole} PORTAL
+                    {authMode === 'SIGN_UP' ? 'OWNER REGISTRATION' : `${selectedRole} PORTAL`}
                   </span>
                   <h2 className={`text-xl sm:text-2xl font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-[#0F172A]'}`}>
-                    Enter Your Space
+                    {authMode === 'SIGN_UP' ? 'Register New Owner' : 'Enter Your Space'}
                   </h2>
                 </div>
 
@@ -427,6 +465,29 @@ export default function LoginPage() {
                 {/* FORM */}
                 <form onSubmit={handleSubmit} className="w-full space-y-3 text-left">
                   
+                  {/* FULL NAME (ONLY ON SIGNUP) */}
+                  {authMode === 'SIGN_UP' && (
+                    <div className="space-y-1">
+                      <label className={`text-[9px] font-black uppercase tracking-wider block ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
+                        FULL NAME
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        onMouseEnter={() => setCursorHovered(true)}
+                        onMouseLeave={() => setCursorHovered(false)}
+                        placeholder="e.g. Alok Sharma"
+                        className={`w-full border-b py-2 px-2 text-xs font-bold focus:outline-none transition-colors rounded-none cursor-text ${
+                          isDarkMode 
+                            ? 'bg-white/5 border-white/20 text-white placeholder-slate-400 focus:border-[#38C7D9]' 
+                            : 'bg-slate-100/90 border-slate-300 text-[#0F172A] placeholder-slate-400 focus:border-[#2563EB]'
+                        }`}
+                      />
+                    </div>
+                  )}
+
                   {/* EMAIL */}
                   <div className="space-y-1">
                     <label className={`text-[9px] font-black uppercase tracking-wider block ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
@@ -454,17 +515,19 @@ export default function LoginPage() {
                       <label className={`text-[9px] font-black uppercase tracking-wider ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
                         PASSWORD
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => setViewState('FORGOT_PASSWORD')}
-                        onMouseEnter={() => setCursorHovered(true)}
-                        onMouseLeave={() => setCursorHovered(false)}
-                        className={`text-[10px] transition-colors font-bold cursor-pointer ${
-                          isDarkMode ? 'text-[#94A3B8] hover:text-[#38C7D9]' : 'text-[#64748B] hover:text-[#2563EB]'
-                        }`}
-                      >
-                        Forgot?
-                      </button>
+                      {authMode === 'SIGN_IN' && (
+                        <button
+                          type="button"
+                          onClick={() => setViewState('FORGOT_PASSWORD')}
+                          onMouseEnter={() => setCursorHovered(true)}
+                          onMouseLeave={() => setCursorHovered(false)}
+                          className={`text-[10px] transition-colors font-bold cursor-pointer ${
+                            isDarkMode ? 'text-[#94A3B8] hover:text-[#38C7D9]' : 'text-[#64748B] hover:text-[#2563EB]'
+                          }`}
+                        >
+                          Forgot?
+                        </button>
+                      )}
                     </div>
                     <div className="relative">
                       <input
@@ -495,28 +558,56 @@ export default function LoginPage() {
                     </div>
                   </div>
 
+                  {/* OWNER SECURITY PASSKEY (ONLY ON SIGNUP) */}
+                  {authMode === 'SIGN_UP' && (
+                    <div className="space-y-1 pt-1">
+                      <label className={`text-[9px] font-black uppercase tracking-wider block ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>
+                        🔑 OWNER SECURITY PASSKEY
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={ownerKey}
+                        onChange={(e) => setOwnerKey(e.target.value)}
+                        onMouseEnter={() => setCursorHovered(true)}
+                        onMouseLeave={() => setCursorHovered(false)}
+                        placeholder="e.g. SRISIRI-OWNER-2026"
+                        className={`w-full border-b py-2 px-2 text-xs font-bold focus:outline-none transition-colors rounded-none cursor-text tracking-wider uppercase ${
+                          isDarkMode 
+                            ? 'bg-purple-950/20 border-purple-500/40 text-purple-200 placeholder-purple-400/50 focus:border-purple-400' 
+                            : 'bg-purple-50/80 border-purple-300 text-purple-900 placeholder-purple-400 focus:border-purple-600'
+                        }`}
+                      />
+                      <span className="text-[8px] font-medium text-slate-400 block pt-0.5">
+                        Passkey required to verify Owner administrative privileges
+                      </span>
+                    </div>
+                  )}
+
                   {/* REMEMBER DEVICE TOGGLE */}
-                  <div className="flex items-center gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => setRememberMe(!rememberMe)}
-                      onMouseEnter={() => setCursorHovered(true)}
-                      onMouseLeave={() => setCursorHovered(false)}
-                      className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors cursor-pointer ${
-                        rememberMe 
-                          ? (isDarkMode ? 'bg-[#38C7D9] border-[#38C7D9] text-black' : 'bg-[#2563EB] border-[#2563EB] text-white') 
-                          : (isDarkMode ? 'border-white/20 bg-transparent' : 'border-slate-300 bg-transparent')
-                      }`}
-                    >
-                      {rememberMe && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                    </button>
-                    <span 
-                      onClick={() => setRememberMe(!rememberMe)}
-                      className={`text-[10px] font-bold cursor-pointer select-none ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}
-                    >
-                      Remember device
-                    </span>
-                  </div>
+                  {authMode === 'SIGN_IN' && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setRememberMe(!rememberMe)}
+                        onMouseEnter={() => setCursorHovered(true)}
+                        onMouseLeave={() => setCursorHovered(false)}
+                        className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors cursor-pointer ${
+                          rememberMe 
+                            ? (isDarkMode ? 'bg-[#38C7D9] border-[#38C7D9] text-black' : 'bg-[#2563EB] border-[#2563EB] text-white') 
+                            : (isDarkMode ? 'border-white/20 bg-transparent' : 'border-slate-300 bg-transparent')
+                        }`}
+                      >
+                        {rememberMe && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                      </button>
+                      <span 
+                        onClick={() => setRememberMe(!rememberMe)}
+                        className={`text-[10px] font-bold cursor-pointer select-none ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}
+                      >
+                        Remember device
+                      </span>
+                    </div>
+                  )}
 
                   {/* CTA ACTION BUTTON */}
                   <div className="pt-3">
@@ -526,7 +617,9 @@ export default function LoginPage() {
                       onMouseEnter={() => setCursorHovered(true)}
                       onMouseLeave={() => setCursorHovered(false)}
                       className={`w-full py-3 rounded-full border font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 cursor-pointer group shadow-md ${
-                        isDarkMode 
+                        authMode === 'SIGN_UP'
+                          ? 'bg-purple-600 hover:bg-purple-700 border-purple-500 text-white'
+                          : isDarkMode 
                           ? 'bg-white/10 hover:bg-[#38C7D9] hover:text-black border-white/20 text-white' 
                           : 'bg-[#2563EB] hover:bg-[#1D4ED8] border-[#2563EB] text-white'
                       }`}
@@ -537,7 +630,7 @@ export default function LoginPage() {
                         <span className="flex items-center gap-1.5"><Check className="w-4 h-4" /> Entry Granted</span>
                       ) : (
                         <>
-                          <span>ENTER PORTAL</span>
+                          <span>{authMode === 'SIGN_UP' ? 'CREATE OWNER ACCOUNT' : 'ENTER PORTAL'}</span>
                           <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                         </>
                       )}
@@ -545,44 +638,6 @@ export default function LoginPage() {
                   </div>
 
                 </form>
-
-                {/* TRY DEMO ACTION LINK */}
-                <div className="pt-2 text-center">
-                  <button
-                    type="button"
-                    onClick={() => setShowDemoMenu(!showDemoMenu)}
-                    onMouseEnter={() => setCursorHovered(true)}
-                    onMouseLeave={() => setCursorHovered(false)}
-                    className={`text-[10px] font-black uppercase tracking-widest transition-colors cursor-pointer ${
-                      isDarkMode ? 'text-[#94A3B8] hover:text-white' : 'text-[#64748B] hover:text-[#0F172A]'
-                    }`}
-                  >
-                    TRY DEMO ACCESS
-                  </button>
-                  
-                  {showDemoMenu && (
-                    <div className="flex justify-center gap-3 pt-2">
-                      <button
-                        type="button"
-                        onClick={() => handleAutofillDemo('OWNER')}
-                        onMouseEnter={() => setCursorHovered(true)}
-                        onMouseLeave={() => setCursorHovered(false)}
-                        className={`text-[10px] font-bold hover:underline cursor-pointer ${isDarkMode ? 'text-[#3B82F6]' : 'text-[#2563EB]'}`}
-                      >
-                        ⚡ Autofill Owner Demo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleAutofillDemo('TENANT')}
-                        onMouseEnter={() => setCursorHovered(true)}
-                        onMouseLeave={() => setCursorHovered(false)}
-                        className={`text-[10px] font-bold hover:underline cursor-pointer ${isDarkMode ? 'text-[#38C7D9]' : 'text-[#0284C7]'}`}
-                      >
-                        ⚡ Autofill Tenant Demo
-                      </button>
-                    </div>
-                  )}
-                </div>
 
               </motion.div>
             ) : (

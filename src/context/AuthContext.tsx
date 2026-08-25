@@ -14,6 +14,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string, role?: 'OWNER' | 'TENANT') => Promise<{ success: boolean; error?: string }>;
+  registerOwner: (name: string, email: string, password: string, ownerKey: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   checkSession: () => Promise<void>;
 }
@@ -81,6 +82,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const registerOwner = async (name: string, email: string, password: string, ownerKey: string) => {
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password, ownerKey, role: 'OWNER' })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setUser(data.user);
+        router.push('/owner/dashboard');
+        return { success: true };
+      } else {
+        return { success: false, error: data.error || 'Owner registration failed' };
+      }
+    } catch (err: any) {
+      return { success: false, error: 'Failed to connect to authentication server' };
+    }
+  };
+
   const logout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
@@ -93,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, checkSession }}>
+    <AuthContext.Provider value={{ user, loading, login, registerOwner, logout, checkSession }}>
       {children}
     </AuthContext.Provider>
   );
