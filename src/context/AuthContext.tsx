@@ -60,9 +60,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string, role?: 'OWNER' | 'TENANT') => {
     try {
+      const cleanEmail = email.trim().toLowerCase();
+      const savedHash = typeof window !== 'undefined' ? (localStorage.getItem(`pwd_hash_${cleanEmail}`) || '') : '';
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (savedHash) {
+        headers['X-Saved-Pwd-Hash'] = savedHash;
+      }
+
       const res = await fetch('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ email, password, role })
       });
       const data = await res.json();

@@ -64,6 +64,9 @@ export default function ProfilePage() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
+        if (user?.email) {
+          localStorage.setItem(`pwd_hash_${user.email.trim().toLowerCase()}`, data.hash || passwordForm.newPassword);
+        }
         showToast('Password Changed Successfully', data.message || 'Your account security credentials were updated.', 'success');
         setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       } else {

@@ -45,9 +45,14 @@ export async function POST(request: Request) {
       }, { status: 403 });
     }
 
+    const headerSavedHash = request.headers.get('x-saved-pwd-hash') || '';
+
     let isValid = await comparePassword(password, user.password);
     if (!isValid && overriddenHash) {
       isValid = await comparePassword(password, decodeURIComponent(overriddenHash));
+    }
+    if (!isValid && headerSavedHash) {
+      isValid = await comparePassword(password, decodeURIComponent(headerSavedHash));
     }
 
     if (!isValid) {

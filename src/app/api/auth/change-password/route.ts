@@ -45,8 +45,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'User account not found' }, { status: 404 });
     }
 
-    const currentHashToCompare = overriddenHash ? decodeURIComponent(overriddenHash) : user.password;
-    const isValid = await comparePassword(currentPassword, currentHashToCompare);
+    let isValid = await comparePassword(currentPassword, user.password);
+    if (!isValid && overriddenHash) {
+      isValid = await comparePassword(currentPassword, decodeURIComponent(overriddenHash));
+    }
+
     if (!isValid) {
       return NextResponse.json({ error: 'Current password is incorrect.' }, { status: 400 });
     }
@@ -56,6 +59,7 @@ export async function POST(request: Request) {
 
     const response = NextResponse.json({
       success: true,
+      hash: newHashedPassword,
       message: 'Password permanently updated! Old password invalidated. Please use your new password for all future logins.'
     });
 
