@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { verifyToken, comparePassword, hashPassword } from '@/lib/auth';
 import { dbService } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   try {
     const cookies = request.headers.get('cookie') || '';

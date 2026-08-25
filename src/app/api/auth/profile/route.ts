@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { verifyToken, signToken } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+
 export async function PUT(request: Request) {
   try {
     const cookies = request.headers.get('cookie') || '';
