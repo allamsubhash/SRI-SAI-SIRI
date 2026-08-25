@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     const providedPasskey = (ownerKey || '').trim().toUpperCase();
     if (!providedPasskey || !VALID_OWNER_PASSKEYS.includes(providedPasskey)) {
       return NextResponse.json({ 
-        error: 'Invalid Owner Passkey! Owner registration requires a valid Security Passkey (e.g. SRISIRI-OWNER-2026).' 
+        error: 'Invalid Owner Passkey! Administrative authorization failed.' 
       }, { status: 403 });
     }
 

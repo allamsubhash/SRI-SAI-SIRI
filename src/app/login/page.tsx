@@ -567,22 +567,19 @@ export default function LoginPage() {
                         🔑 OWNER SECURITY PASSKEY
                       </label>
                       <input
-                        type="text"
+                        type="password"
                         required
                         value={ownerKey}
                         onChange={(e) => setOwnerKey(e.target.value)}
                         onMouseEnter={() => setCursorHovered(true)}
                         onMouseLeave={() => setCursorHovered(false)}
-                        placeholder="e.g. SRISIRI-OWNER-2026"
-                        className={`w-full border-b py-2 px-2 text-xs font-bold focus:outline-none transition-colors rounded-none cursor-text tracking-wider uppercase ${
+                        placeholder="••••••••••••"
+                        className={`w-full border-b py-2 px-2 text-xs font-bold focus:outline-none transition-colors rounded-none cursor-text tracking-wider ${
                           isDarkMode 
                             ? 'bg-purple-950/20 border-purple-500/40 text-purple-200 placeholder-purple-400/50 focus:border-purple-400' 
                             : 'bg-purple-50/80 border-purple-300 text-purple-900 placeholder-purple-400 focus:border-purple-600'
                         }`}
                       />
-                      <span className="text-[8px] font-medium text-slate-400 block pt-0.5">
-                        Passkey required to verify Owner administrative privileges
-                      </span>
                     </div>
                   )}
 
