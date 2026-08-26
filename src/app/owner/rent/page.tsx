@@ -37,6 +37,7 @@ import {
 import NeonModal from '@/components/NeonModal';
 import { useToast } from '@/components/ToastProvider';
 import { formatINR, formatDate } from '@/utils/formatters';
+import QuickInvoiceModal from '@/components/QuickInvoiceModal';
 
 export default function RentPage() {
   const { showToast } = useToast();
@@ -1334,6 +1335,13 @@ export default function RentPage() {
           {radialMenuOpen ? '×' : '+'}
         </button>
       </div>
+
+      {/* Quick Invoice Popup Modal */}
+      <QuickInvoiceModal
+        isOpen={showQuickIssuer}
+        onClose={() => setShowQuickIssuer(false)}
+        onInvoiceCreated={fetchInitialData}
+      />
 
     </div>
   );

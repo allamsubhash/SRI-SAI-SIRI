@@ -419,9 +419,9 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
               </motion.button>
 
               <div className="text-left">
-                <h1 className="text-lg sm:text-xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-1.5">
-                  <span>Good Morning, {user?.name || 'Alok'}!</span>
-                  <span className="text-xl">👋</span>
+                <h1 className="text-sm sm:text-xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-1 min-w-0">
+                  <span className="truncate">Good Morning, {user?.name?.split(' ')[0] || 'Alok'}!</span>
+                  <span className="text-base shrink-0">👋</span>
                 </h1>
                 <p className="text-xs text-slate-500 dark:text-zinc-400 font-medium hidden sm:block">
                   Here's what's happening in your hostel today.

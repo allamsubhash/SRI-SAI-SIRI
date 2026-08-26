@@ -5,8 +5,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, UserPlus, FilePlus, Megaphone, X, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 
+import QuickInvoiceModal from '@/components/QuickInvoiceModal';
+
 export default function QuickActionSpeedDial() {
   const [isOpen, setIsOpen] = useState(false);
+  const [showQuickInvoiceModal, setShowQuickInvoiceModal] = useState(false);
 
   const actions = [
     {
@@ -16,14 +19,14 @@ export default function QuickActionSpeedDial() {
       bgColor: 'bg-slate-900 text-white dark:bg-zinc-800'
     },
     {
-      label: 'Create Invoice',
-      icon: <FilePlus className="w-4 h-4 text-blue-400" />,
-      href: '/owner/rent',
+      label: '⚡ Quick Invoice Generator',
+      icon: <FilePlus className="w-4 h-4 text-purple-400" />,
+      onClick: () => setShowQuickInvoiceModal(true),
       bgColor: 'bg-slate-900 text-white dark:bg-zinc-800'
     },
     {
       label: 'Broadcast Notice',
-      icon: <Megaphone className="w-4 h-4 text-amber-400" />,
+      icon: <Megaphone className="w-4 h-4 text-amber-400 text-purple-400" />,
       href: '/owner/notices',
       bgColor: 'bg-slate-900 text-white dark:bg-zinc-800'
     }
@@ -43,18 +46,36 @@ export default function QuickActionSpeedDial() {
                 exit={{ opacity: 0, scale: 0.8, y: 10 }}
                 transition={{ duration: 0.18, delay: idx * 0.04 }}
               >
-                <Link
-                  href={action.href}
-                  onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-white dark:bg-[#121824] border border-slate-200 dark:border-zinc-800 shadow-xl hover:scale-105 transition-all text-xs font-extrabold text-slate-900 dark:text-white cursor-pointer group"
-                >
-                  <span className="text-slate-700 dark:text-zinc-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                    {action.label}
-                  </span>
-                  <div className="w-7 h-7 rounded-xl bg-slate-100 dark:bg-zinc-800 flex items-center justify-center">
-                    {action.icon}
-                  </div>
-                </Link>
+                {action.onClick ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsOpen(false);
+                      action.onClick!();
+                    }}
+                    className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-white dark:bg-[#121824] border border-slate-200 dark:border-zinc-800 shadow-xl hover:scale-105 transition-all text-xs font-extrabold text-slate-900 dark:text-white cursor-pointer group"
+                  >
+                    <span className="text-slate-700 dark:text-zinc-300 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                      {action.label}
+                    </span>
+                    <div className="w-7 h-7 rounded-xl bg-purple-500/15 flex items-center justify-center">
+                      {action.icon}
+                    </div>
+                  </button>
+                ) : (
+                  <Link
+                    href={action.href!}
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-white dark:bg-[#121824] border border-slate-200 dark:border-zinc-800 shadow-xl hover:scale-105 transition-all text-xs font-extrabold text-slate-900 dark:text-white cursor-pointer group"
+                  >
+                    <span className="text-slate-700 dark:text-zinc-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                      {action.label}
+                    </span>
+                    <div className="w-7 h-7 rounded-xl bg-slate-100 dark:bg-zinc-800 flex items-center justify-center">
+                      {action.icon}
+                    </div>
+                  </Link>
+                )}
               </motion.div>
             ))}
           </div>
@@ -80,6 +101,12 @@ export default function QuickActionSpeedDial() {
           <Plus className="w-6 h-6 stroke-[2.5]" />
         </motion.div>
       </motion.button>
+
+      {/* Quick Invoice Popup Modal */}
+      <QuickInvoiceModal
+        isOpen={showQuickInvoiceModal}
+        onClose={() => setShowQuickInvoiceModal(false)}
+      />
     </div>
   );
 }

@@ -54,13 +54,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid credentials. User account not found.' }, { status: 401 });
     }
 
-    // Role Enforcement Check
-    if (role && user.role !== role) {
-      const targetRoleName = role === 'OWNER' ? 'Hostel Owner' : 'Tenant';
-      return NextResponse.json({ 
-        error: `Access Denied: This account is registered as a ${user.role === 'OWNER' ? 'Hostel Owner' : 'Tenant'} and cannot log in under the ${targetRoleName} portal.` 
-      }, { status: 403 });
-    }
+    // Automatic Role Determination based on user record
 
     const headerSavedHash = request.headers.get('x-saved-pwd-hash') || '';
 
