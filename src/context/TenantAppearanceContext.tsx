@@ -28,7 +28,7 @@ export function TenantAppearanceProvider({ children }: { children: React.ReactNo
 
   const [preferences, setPreferences] = useState<TenantPreferences>({
     tenantId,
-    themeMode: 'light',
+    themeMode: 'dark',
     accentColor: '#0891B2',
     accentName: 'Cyan Aqua',
     updatedAt: new Date().toISOString()

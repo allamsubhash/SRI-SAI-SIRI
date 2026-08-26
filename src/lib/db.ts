@@ -32,6 +32,9 @@ function logDebug(message: string, error?: any) {
   console.log(`[Sri Sai Siri DB Service] ${message}`, error ? error.message || error : '');
 }
 
+const deletedTenantIdsSet = new Set<string>();
+const deletedBuildingIdsSet = new Set<string>();
+
 async function ensureDbSeeded() {
   try {
     const userCount = await prisma.user.count();
@@ -233,7 +236,7 @@ const rawDbService = {
         }
       });
 
-      return buildings.map(b => ({
+      const result = buildings.map(b => ({
         ...b,
         floors: b.floors.map(f => ({
           ...f,
@@ -256,9 +259,10 @@ const rawDbService = {
           }))
         }))
       }));
+      return result.filter((b: any) => !deletedBuildingIdsSet.has(b.id));
     } catch (e) {
       logDebug("getBuildings failed, using mock", e);
-      return mockState.buildings;
+      return mockState.buildings.filter(b => !deletedBuildingIdsSet.has(b.id));
     }
   },
 
@@ -292,6 +296,7 @@ const rawDbService = {
   },
 
   async deleteBuilding(buildingId: string) {
+    deletedBuildingIdsSet.add(buildingId);
     mockState.buildings = mockState.buildings.filter(x => x.id !== buildingId);
     try {
       await prisma.building.delete({
@@ -416,7 +421,7 @@ const rawDbService = {
       const dbTenants = await prisma.tenant.findMany({
         include: { profile: { include: { user: true } } }
       });
-      return dbTenants.map(t => ({
+      const tenantsList = dbTenants.map(t => ({
         id: t.id,
         userId: t.profile.userId,
         name: `${t.profile.firstName} ${t.profile.lastName}`.trim(),
@@ -440,9 +445,10 @@ const rawDbService = {
         medicalNotes: t.medicalNotes || '',
         photoUrl: t.profile.photoUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop'
       }));
+      return tenantsList.filter((t: any) => !deletedTenantIdsSet.has(t.id));
     } catch (e) {
       logDebug("getTenants failed, using mock", e);
-      return mockState.tenants;
+      return mockState.tenants.filter(t => !deletedTenantIdsSet.has(t.id));
     }
   },
 
@@ -1489,6 +1495,7 @@ const rawDbService = {
   },
 
   async deleteTenant(id: string) {
+    deletedTenantIdsSet.add(id);
     const tenant = mockState.tenants.find(t => t.id === id);
     if (tenant) {
       mockState.tenants = mockState.tenants.filter(t => t.id !== id);

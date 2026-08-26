@@ -7,7 +7,7 @@ export interface TenantPreferences {
 }
 
 export const DEFAULT_TENANT_PREFERENCES: Omit<TenantPreferences, 'tenantId'> = {
-  themeMode: 'light',
+  themeMode: 'dark',
   accentColor: '#0891B2',
   accentName: 'Cyan Aqua',
   updatedAt: new Date().toISOString()

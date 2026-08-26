@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import NeonModal from '@/components/NeonModal';
 import { useToast } from '@/components/ToastProvider';
-import { Receipt, DollarSign, Calendar, User, Zap, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { Receipt, DollarSign, Calendar, User, Zap, ShieldCheck, CheckCircle2, Building, AlertCircle, ArrowRight } from 'lucide-react';
 
 interface QuickInvoiceModalProps {
   isOpen: boolean;
@@ -17,7 +17,7 @@ export default function QuickInvoiceModal({ isOpen, onClose, onInvoiceCreated }:
   const [tenants, setTenants] = useState<any[]>([]);
   const [selectedTenantId, setSelectedTenantId] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
-  const [baseRent, setBaseRent] = useState(6500);
+  const [baseRent, setBaseRent] = useState(8500);
   const [electricity, setElectricity] = useState(500);
   const [maintenance, setMaintenance] = useState(300);
   const [extra, setExtra] = useState(0);
@@ -30,14 +30,13 @@ export default function QuickInvoiceModal({ isOpen, onClose, onInvoiceCreated }:
       fetch('/api/tenants')
         .then(res => res.json())
         .then(data => {
-          if (Array.isArray(data)) {
+          if (Array.isArray(data) && data.length > 0) {
             setTenants(data);
-            if (data.length > 0) {
-              const first = data[0];
-              setSelectedTenantId(first.id);
-              setRoomNumber(first.roomNumber || first.bedNumber || '101');
-              setBaseRent(first.monthlyRent || 6500);
-            }
+            const first = data[0];
+            setSelectedTenantId(first.id);
+            setRoomNumber(first.roomNumber || first.bedNumber || '101');
+            const actualRent = Number(first.rentAmount || first.monthlyRent || first.rent || 8500);
+            setBaseRent(actualRent);
           }
         })
         .catch(err => console.error(err));
@@ -49,10 +48,12 @@ export default function QuickInvoiceModal({ isOpen, onClose, onInvoiceCreated }:
     const tenant = tenants.find(t => t.id === tenantId);
     if (tenant) {
       setRoomNumber(tenant.roomNumber || tenant.bedNumber || '101');
-      setBaseRent(tenant.monthlyRent || 6500);
+      const actualRent = Number(tenant.rentAmount || tenant.monthlyRent || tenant.rent || 8500);
+      setBaseRent(actualRent);
     }
   };
 
+  const selectedTenantObj = tenants.find(t => t.id === selectedTenantId);
   const totalAmount = Number(baseRent) + Number(electricity) + Number(maintenance) + Number(extra);
 
   const handleSubmitInvoice = async (e: React.FormEvent) => {
@@ -81,16 +82,16 @@ export default function QuickInvoiceModal({ isOpen, onClose, onInvoiceCreated }:
       });
 
       if (res.ok) {
-        showToast('Invoice Generated!', `₹${totalAmount.toLocaleString()} rent invoice dispatched to ${selectedTenant?.name || 'Tenant'}.`, 'success');
+        showToast('Invoice Dispatched!', `₹${totalAmount.toLocaleString()} rent bill sent to ${selectedTenant?.name || 'Tenant'}.`, 'success');
         if (onInvoiceCreated) onInvoiceCreated();
         onClose();
       } else {
-        showToast('Generated Locally', `Rent invoice of ₹${totalAmount.toLocaleString()} generated for ${selectedTenant?.name || 'Tenant'}.`, 'success');
+        showToast('Generated Locally', `Rent invoice of ₹${totalAmount.toLocaleString()} created for ${selectedTenant?.name || 'Tenant'}.`, 'success');
         if (onInvoiceCreated) onInvoiceCreated();
         onClose();
       }
     } catch (err) {
-      showToast('Invoice Saved', `Quick invoice created for Room ${roomNumber}.`, 'success');
+      showToast('Invoice Created', `Quick invoice created for Room ${roomNumber}.`, 'success');
       if (onInvoiceCreated) onInvoiceCreated();
       onClose();
     } finally {
@@ -107,27 +108,36 @@ export default function QuickInvoiceModal({ isOpen, onClose, onInvoiceCreated }:
       size="md"
       accentColor="purple"
     >
-      <form onSubmit={handleSubmitInvoice} className="space-y-4 text-left font-sans">
+      <form onSubmit={handleSubmitInvoice} className="space-y-4 text-left font-sans select-none">
         
-        {/* RESIDENT TENANT SELECTOR */}
-        <div className="space-y-1">
-          <label className="text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
-            <User className="w-3.5 h-3.5 text-purple-500" />
-            SELECT RESIDENT TENANT
-          </label>
+        {/* RESIDENT SELECTOR & SUMMARY HERO BANNER */}
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/60 via-[#131127] to-slate-900 border border-purple-500/30 space-y-3 shadow-lg">
+          <div className="flex justify-between items-center">
+            <label className="text-[10px] font-black uppercase tracking-wider text-purple-400 flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-purple-400" />
+              SELECT RESIDENT TENANT
+            </label>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+              {selectedTenantObj ? `Room ${selectedTenantObj.roomNumber || '101'}` : 'Room Allocation'}
+            </span>
+          </div>
+
           <select
             value={selectedTenantId}
             onChange={(e) => handleSelectTenant(e.target.value)}
-            className="w-full py-2.5 px-3 text-xs font-bold bg-slate-100 dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition-colors"
+            className="w-full py-2.5 px-3 text-xs font-black bg-slate-900/90 border border-purple-500/40 rounded-xl text-white focus:outline-none focus:border-purple-400 cursor-pointer shadow-inner"
           >
             {tenants.length === 0 ? (
-              <option value="">Rohan Verma (Room 101)</option>
+              <option value="">Rohan Verma (Room 101 — ₹8,500/mo)</option>
             ) : (
-              tenants.map(t => (
-                <option key={t.id} value={t.id}>
-                  {t.name || t.user?.name} — Room {t.roomNumber || '101'} (₹{(t.monthlyRent || 6500).toLocaleString()}/mo)
-                </option>
-              ))
+              tenants.map(t => {
+                const rentVal = Number(t.rentAmount || t.monthlyRent || t.rent || 8500);
+                return (
+                  <option key={t.id} value={t.id}>
+                    {t.name} — Room {t.roomNumber || '101'} (Actual Rent: ₹{rentVal.toLocaleString()}/mo)
+                  </option>
+                );
+              })
             )}
           </select>
         </div>
@@ -135,19 +145,21 @@ export default function QuickInvoiceModal({ isOpen, onClose, onInvoiceCreated }:
         {/* ROOM & BILLING MONTH ROW */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <label className="text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-zinc-300">
-              ROOM NUMBER
+            <label className="text-[10px] font-black uppercase tracking-wider text-slate-300 flex items-center gap-1">
+              <Building className="w-3 h-3 text-purple-400" />
+              ASSIGNED ROOM
             </label>
             <input
               type="text"
               required
               value={roomNumber}
               onChange={(e) => setRoomNumber(e.target.value)}
-              className="w-full py-2 px-3 text-xs font-bold bg-slate-100 dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+              className="w-full py-2 px-3 text-xs font-extrabold bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-purple-500"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-zinc-300">
+            <label className="text-[10px] font-black uppercase tracking-wider text-slate-300 flex items-center gap-1">
+              <Calendar className="w-3 h-3 text-purple-400" />
               BILLING MONTH
             </label>
             <input
@@ -156,66 +168,75 @@ export default function QuickInvoiceModal({ isOpen, onClose, onInvoiceCreated }:
               value={billingMonth}
               onChange={(e) => setBillingMonth(e.target.value)}
               placeholder="e.g. August 2026"
-              className="w-full py-2 px-3 text-xs font-bold bg-slate-100 dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+              className="w-full py-2 px-3 text-xs font-extrabold bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-purple-500"
             />
           </div>
         </div>
 
-        {/* BREAKDOWN FEES GRID */}
-        <div className="p-3.5 rounded-2xl bg-purple-500/10 border border-purple-500/20 space-y-3">
-          <span className="text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400 block">
-            FEE BREAKDOWN (₹)
-          </span>
+        {/* FEE BREAKDOWN GRID */}
+        <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-black uppercase tracking-wider text-purple-400 block">
+              ACTUAL RENT & EXTRA CHARGES (₹)
+            </span>
+            <span className="text-[9px] font-bold text-slate-400">Auto-filled from Tenant Profile</span>
+          </div>
 
-          <div className="grid grid-cols-2 gap-2 text-xs font-bold">
+          <div className="grid grid-cols-2 gap-2.5 text-xs font-extrabold">
             <div>
-              <span className="text-[9px] text-slate-500 dark:text-zinc-400 block">BASE RENT</span>
+              <span className="text-[9px] text-slate-400 block mb-0.5">ACTUAL BASE RENT (₹)</span>
               <input
                 type="number"
                 value={baseRent}
                 onChange={(e) => setBaseRent(Number(e.target.value))}
-                className="w-full py-1.5 px-2 bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white"
+                className="w-full py-2 px-2.5 bg-slate-950 border border-purple-500/30 rounded-xl text-emerald-400 font-black text-sm"
               />
             </div>
             <div>
-              <span className="text-[9px] text-slate-500 dark:text-zinc-400 block">ELECTRICITY</span>
+              <span className="text-[9px] text-slate-400 block mb-0.5">ELECTRICITY BILL (₹)</span>
               <input
                 type="number"
                 value={electricity}
                 onChange={(e) => setElectricity(Number(e.target.value))}
-                className="w-full py-1.5 px-2 bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white"
+                className="w-full py-2 px-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white"
               />
             </div>
             <div>
-              <span className="text-[9px] text-slate-500 dark:text-zinc-400 block">MAINTENANCE / WATER</span>
+              <span className="text-[9px] text-slate-400 block mb-0.5">MAINTENANCE & WATER (₹)</span>
               <input
                 type="number"
                 value={maintenance}
                 onChange={(e) => setMaintenance(Number(e.target.value))}
-                className="w-full py-1.5 px-2 bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white"
+                className="w-full py-2 px-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white"
               />
             </div>
             <div>
-              <span className="text-[9px] text-slate-500 dark:text-zinc-400 block">EXTRA / LATE FINE</span>
+              <span className="text-[9px] text-slate-400 block mb-0.5">EXTRA / LATE FINE (₹)</span>
               <input
                 type="number"
                 value={extra}
                 onChange={(e) => setExtra(Number(e.target.value))}
-                className="w-full py-1.5 px-2 bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-lg text-slate-900 dark:text-white"
+                className="w-full py-2 px-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white"
               />
             </div>
           </div>
 
-          <div className="pt-2 border-t border-purple-500/20 flex justify-between items-center text-sm font-black text-slate-900 dark:text-white">
-            <span>TOTAL DUE:</span>
-            <span className="text-purple-600 dark:text-purple-400 text-lg">₹{totalAmount.toLocaleString()}</span>
+          {/* DYNAMIC TOTAL PREVIEW BOX */}
+          <div className="pt-3 border-t border-slate-800 flex justify-between items-center">
+            <div>
+              <span className="text-[10px] font-black uppercase text-slate-400 block">TOTAL PAYABLE AMOUNT</span>
+              <span className="text-[9px] text-slate-500">Base Rent + Utilities + Fines</span>
+            </div>
+            <div className="text-right">
+              <span className="text-xl font-black text-purple-400 block">₹{totalAmount.toLocaleString()}</span>
+            </div>
           </div>
         </div>
 
         {/* DUE DATE */}
         <div className="space-y-1">
-          <label className="text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-zinc-300 flex items-center gap-1">
-            <Calendar className="w-3.5 h-3.5 text-purple-500" />
+          <label className="text-[10px] font-black uppercase tracking-wider text-slate-300 flex items-center gap-1">
+            <Calendar className="w-3.5 h-3.5 text-purple-400" />
             PAYMENT DUE DATE
           </label>
           <input
@@ -223,7 +244,7 @@ export default function QuickInvoiceModal({ isOpen, onClose, onInvoiceCreated }:
             required
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
-            className="w-full py-2 px-3 text-xs font-bold bg-slate-100 dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+            className="w-full py-2 px-3 text-xs font-extrabold bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-purple-500"
           />
         </div>
 
@@ -232,14 +253,15 @@ export default function QuickInvoiceModal({ isOpen, onClose, onInvoiceCreated }:
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer"
+            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-xl hover:shadow-purple-500/25 transition-all cursor-pointer border border-purple-400/40"
           >
             {submitting ? (
               <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
               <>
-                <Zap className="w-4 h-4" />
+                <Zap className="w-4 h-4 fill-white" />
                 <span>GENERATE & DISPATCH INVOICE (₹{totalAmount.toLocaleString()})</span>
+                <ArrowRight className="w-4 h-4 ml-1" />
               </>
             )}
           </button>

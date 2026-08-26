@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { dbService } from '@/lib/db';
+import { hashPassword } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,9 +25,13 @@ export async function POST(request: Request) {
       }
     }
 
+    const cleanEmail = data.email.trim().toLowerCase();
+    const rawPassword = data.password || 'password123';
+    const hashedPassword = await hashPassword(rawPassword);
+
     const newTenant = await dbService.createTenant({
       name: data.name,
-      email: data.email,
+      email: cleanEmail,
       phone: data.phone,
       gender: data.gender,
       address: data.address || '',
@@ -45,10 +50,49 @@ export async function POST(request: Request) {
       agreementUrl: data.agreementUrl || '/docs/default_agreement.pdf',
       medicalNotes: data.medicalNotes || '',
       photoUrl: data.photoUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop',
-      password: data.password
+      password: hashedPassword
     });
 
-    return NextResponse.json({ success: true, tenant: newTenant });
+    // Register User account for resident login
+    await dbService.registerUser({
+      id: newTenant.userId || `u-tenant-${Date.now()}`,
+      email: cleanEmail,
+      password: hashedPassword,
+      role: 'TENANT',
+      name: data.name
+    });
+
+    const response = NextResponse.json({ success: true, tenant: newTenant });
+
+    // Set 10-year persistent account & password cookies for resident login
+    const accCookieName = `user_acc_${cleanEmail.replace(/[^a-z0-9]/g, '_')}`;
+    const pwdCookieName = `pwd_hash_${cleanEmail.replace(/[^a-z0-9]/g, '_')}`;
+
+    const accData = JSON.stringify({
+      id: newTenant.userId || `u-tenant-${Date.now()}`,
+      email: cleanEmail,
+      password: hashedPassword,
+      role: 'TENANT',
+      name: data.name
+    });
+
+    response.cookies.set(accCookieName, encodeURIComponent(accData), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 315360000,
+      path: '/'
+    });
+
+    response.cookies.set(pwdCookieName, encodeURIComponent(hashedPassword), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 315360000,
+      path: '/'
+    });
+
+    return response;
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
