@@ -30,7 +30,7 @@ export default function QuickActionSpeedDial() {
   ];
 
   return (
-    <div className="fixed bottom-6 right-6 z-[999] flex flex-col items-end gap-3 pointer-events-auto">
+    <div className="fixed bottom-24 sm:bottom-28 right-6 z-[999] flex flex-col items-end gap-3 pointer-events-auto">
       {/* Speed Dial Action Items */}
       <AnimatePresence>
         {isOpen && (

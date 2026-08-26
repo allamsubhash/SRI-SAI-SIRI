@@ -346,67 +346,34 @@ export default function LoginPage() {
       </header>
 
       {/* ================================================== */}
-      {/* 🔮 4. CENTRAL SUSPENDED FROSTED GLASS ORB PORTAL  */}
+      {/* 🔮 4. CENTRAL SUSPENDED FROSTED GLASS PORTAL CONTAINER */}
       {/* ================================================== */}
-      <main className="w-full max-w-7xl mx-auto px-4 py-4 my-auto relative z-20 flex flex-col items-center justify-center">
+      <main className="w-full max-w-7xl mx-auto px-4 py-6 my-auto relative z-20 flex flex-col items-center justify-center">
         
-        {/* 🛸 FLOATING PORTAL ROLE ACCESS POINTS */}
-        <div className="w-full max-w-md flex justify-between items-center mb-6 px-4 relative z-30">
-          {[
-            { role: 'OWNER' as PortalRole, label: 'OWNER', color: isDarkMode ? 'text-[#3B82F6] border-[#3B82F6]' : 'text-[#2563EB] border-[#2563EB]' },
-            { role: 'TENANT' as PortalRole, label: 'TENANT', color: isDarkMode ? 'text-[#38C7D9] border-[#38C7D9]' : 'text-[#0284C7] border-[#0284C7]' },
-            { role: 'WARDEN' as PortalRole, label: 'WARDEN', color: isDarkMode ? 'text-[#34D399] border-[#34D399]' : 'text-[#059669] border-[#059669]' }
-          ].map((item) => {
-            const isSelected = selectedRole === item.role;
-            const isHovered = hoveredRole === item.role;
-            return (
-              <button
-                key={item.role}
-                onClick={() => handleSelectRole(item.role)}
-                onMouseEnter={() => { setHoveredRole(item.role); setCursorHovered(true); }}
-                onMouseLeave={() => { setHoveredRole(null); setCursorHovered(false); }}
-                className={`text-xs font-black tracking-widest px-4 py-2 rounded-full border transition-all duration-300 cursor-pointer relative ${
-                  isSelected 
-                    ? (isDarkMode ? `bg-white/15 ${item.color} shadow-lg backdrop-blur-md scale-110` : `bg-[#0F172A] text-white border-[#0F172A] shadow-md scale-110`) 
-                    : isHovered 
-                    ? (isDarkMode ? `bg-white/10 ${item.color} -translate-y-1` : `bg-slate-200/60 ${item.color} -translate-y-1`) 
-                    : (isDarkMode ? 'bg-transparent border-transparent text-[#94A3B8] hover:text-white' : 'bg-transparent border-transparent text-[#64748B] hover:text-[#0F172A]')
-                }`}
-              >
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* 🔮 THE FROSTED GLASS ORB CONTAINER */}
+        {/* 🔮 THE FROSTED GLASS PORTAL CONTAINER */}
         <motion.div
           animate={{
             rotateX: parallaxY * -1.5,
             rotateY: parallaxX * 1.5,
-            scale: portalExpanding ? 1.15 : 1,
+            scale: portalExpanding ? 1.08 : 1,
             opacity: portalExpanding ? 0.9 : 1,
           }}
           transition={{ type: 'spring', stiffness: 50, damping: 25 }}
           style={{ transformStyle: 'preserve-3d' }}
-          className={`w-full max-w-[440px] sm:max-w-[480px] aspect-square rounded-full p-8 sm:p-12 backdrop-blur-3xl border transition-all duration-500 flex flex-col justify-center items-center text-center relative overflow-hidden ${
+          className={`w-full max-w-[420px] sm:max-w-[460px] rounded-[36px] sm:rounded-[44px] p-6 sm:p-10 backdrop-blur-3xl border transition-all duration-500 flex flex-col justify-center items-center text-center relative overflow-hidden shadow-2xl ${
             isDarkMode 
-              ? 'bg-[#020306]/75 border-white/15 text-white shadow-[0_25px_80px_rgba(0,0,0,0.9)]' 
-              : 'bg-white/85 border-slate-300/80 text-[#0F172A] shadow-[0_20px_50px_rgba(0,0,0,0.08)]'
+              ? 'bg-[#020306]/85 border-white/15 text-white shadow-[0_25px_80px_rgba(0,0,0,0.9)]' 
+              : 'bg-white/90 border-slate-300/80 text-[#0F172A] shadow-[0_20px_50px_rgba(0,0,0,0.08)]'
           }`}
         >
           {/* Travelling Specular Rim Glare */}
-          <div className={`absolute inset-0 rounded-full border pointer-events-none animate-[spin_12s_linear_infinite] ${
+          <div className={`absolute inset-0 rounded-[36px] sm:rounded-[44px] border pointer-events-none animate-[spin_16s_linear_infinite] ${
             isDarkMode ? 'border-white/20 bg-gradient-to-tr from-transparent via-white/10 to-transparent' : 'border-slate-300/50 bg-gradient-to-tr from-transparent via-slate-200/30 to-transparent'
           }`} />
 
           {/* DYNAMIC REFRACTION TINT SPILL */}
-          <div className={`absolute inset-0 rounded-full blur-3xl pointer-events-none transition-colors duration-700 ${
-            selectedRole === 'OWNER' 
-              ? (isDarkMode ? 'bg-[#3B82F6]/10' : 'bg-[#2563EB]/08') 
-              : selectedRole === 'TENANT' 
-              ? (isDarkMode ? 'bg-[#38C7D9]/10' : 'bg-[#0284C7]/08') 
-              : (isDarkMode ? 'bg-[#34D399]/10' : 'bg-[#059669]/08')
+          <div className={`absolute inset-0 rounded-[36px] sm:rounded-[44px] blur-3xl pointer-events-none transition-colors duration-700 ${
+            isDarkMode ? 'bg-[#3B82F6]/10' : 'bg-[#2563EB]/08'
           }`} />
 
           {/* IN-ORB VIEW STAGES */}
@@ -449,10 +416,10 @@ export default function LoginPage() {
                 {/* Header */}
                 <div className="space-y-1 text-center">
                   <span className={`text-[10px] font-black uppercase tracking-[3px] block ${isDarkMode ? 'text-[#38C7D9]' : 'text-[#2563EB]'}`}>
-                    {authMode === 'SIGN_UP' ? 'OWNER REGISTRATION' : `${selectedRole} PORTAL`}
+                    {authMode === 'SIGN_UP' ? 'OWNER REGISTRATION' : 'SRI SAI SIRI PORTAL'}
                   </span>
                   <h2 className={`text-xl sm:text-2xl font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-[#0F172A]'}`}>
-                    {authMode === 'SIGN_UP' ? 'Register New Owner' : 'Enter Your Space'}
+                    {authMode === 'SIGN_UP' ? 'Register New Owner' : 'Management Portal Login'}
                   </h2>
                 </div>
 

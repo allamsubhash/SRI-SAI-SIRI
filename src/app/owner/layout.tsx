@@ -598,7 +598,7 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* REUSABLE FLOATING RADIAL BUBBLE ACTION MENU SYSTEM */}
-        <div className="fixed bottom-6 right-6 z-50 pointer-events-auto">
+        <div className="fixed bottom-24 sm:bottom-28 right-6 z-50 pointer-events-auto">
           <AnimatePresence>
             {bubbleActionsOpen && (
               <motion.div 

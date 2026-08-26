@@ -22,7 +22,24 @@ export async function POST(request: Request) {
       .find(c => c.trim().startsWith(`${pwdCookieName}=`))
       ?.split('=')[1];
 
+    const accCookieName = `user_acc_${cleanEmail.replace(/[^a-z0-9]/g, '_')}`;
+    const userAccCookie = cookies
+      .split(';')
+      .find(c => c.trim().startsWith(`${accCookieName}=`))
+      ?.split('=')[1];
+
     let user = await dbService.getUserByEmail(cleanEmail);
+
+    if (!user && userAccCookie) {
+      try {
+        const parsedAcc = JSON.parse(decodeURIComponent(userAccCookie));
+        if (parsedAcc && parsedAcc.email) {
+          user = await dbService.registerUser(parsedAcc);
+        }
+      } catch (e) {
+        console.error('Failed to parse user account cookie', e);
+      }
+    }
 
     // Flexible email alias fallback
     if (!user) {

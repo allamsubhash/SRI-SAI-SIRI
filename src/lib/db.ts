@@ -154,6 +154,60 @@ const rawDbService = {
     return true;
   },
 
+  async registerUser(userData: { id: string; email: string; password: string; role: 'OWNER' | 'TENANT'; name: string }) {
+    if (!userData || !userData.email) return null;
+    const cleanEmail = userData.email.trim().toLowerCase();
+    
+    const existingIndex = mockState.users.findIndex(u => u.email.toLowerCase() === cleanEmail);
+    if (existingIndex >= 0) {
+      mockState.users[existingIndex] = {
+        ...mockState.users[existingIndex],
+        ...userData,
+        password: userData.password
+      };
+    } else {
+      mockState.users.push({
+        id: userData.id || `u-owner-${Date.now()}`,
+        email: cleanEmail,
+        password: userData.password,
+        role: userData.role || 'OWNER',
+        name: userData.name || 'Owner'
+      });
+    }
+
+    try {
+      await prisma.user.upsert({
+        where: { email: cleanEmail },
+        update: { password: userData.password },
+        create: {
+          id: userData.id || `u-owner-${Date.now()}`,
+          email: cleanEmail,
+          password: userData.password,
+          role: userData.role || 'OWNER',
+          profile: {
+            create: {
+              firstName: userData.name.split(' ')[0] || userData.name,
+              lastName: userData.name.split(' ').slice(1).join(' ') || '',
+              phone: '+91 98765 43210',
+              status: 'ACTIVE'
+            }
+          }
+        }
+      });
+    } catch (e) {
+      logDebug("registerUser Prisma upsert fallback", e);
+    }
+
+    return {
+      id: userData.id || `u-owner-${Date.now()}`,
+      email: cleanEmail,
+      password: userData.password,
+      role: userData.role || 'OWNER',
+      name: userData.name || 'Owner',
+      profile: null
+    };
+  },
+
   // --- BUILDINGS & ROOMS ---
   async getBuildings() {
     try {

@@ -37,39 +37,19 @@ export async function POST(request: Request) {
     }
 
     const hashedPassword = await hashPassword(password);
-
-    // Create user in Prisma DB
-    let newUser: any;
-    try {
-      newUser = await prisma.user.create({
-        data: {
-          email: cleanEmail,
-          password: hashedPassword,
-          role: 'OWNER',
-          profile: {
-            create: {
-              firstName: name.split(' ')[0] || name,
-              lastName: name.split(' ').slice(1).join(' ') || '',
-              phone: '+91 98765 43210',
-              status: 'ACTIVE'
-            }
-          }
-        },
-        include: { profile: true }
-      });
-    } catch (dbErr) {
-      // Fallback
-      newUser = {
-        id: `u-owner-${Date.now()}`,
-        email: cleanEmail,
-        role: 'OWNER',
-        name
-      };
-    }
-
     const userName = name || 'Owner Admin';
+
+    // Register user in dbService runtime state + Prisma DB
+    const newUser = await dbService.registerUser({
+      id: `u-owner-${Date.now()}`,
+      email: cleanEmail,
+      password: hashedPassword,
+      role: 'OWNER',
+      name: userName
+    });
+
     const token = signToken({
-      userId: newUser.id,
+      userId: newUser?.id || `u-owner-${Date.now()}`,
       email: cleanEmail,
       role: 'OWNER',
       name: userName
@@ -78,18 +58,47 @@ export async function POST(request: Request) {
     const response = NextResponse.json({
       success: true,
       user: {
-        id: newUser.id,
+        id: newUser?.id || `u-owner-${Date.now()}`,
         email: cleanEmail,
         role: 'OWNER',
         name: userName
       }
     });
 
+    // 1. Set active session cookie
     response.cookies.set('auth_token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       maxAge: 604800,
+      path: '/'
+    });
+
+    // 2. Set persistent user account & password cookies for serverless compatibility across Vercel builds
+    const accCookieName = `user_acc_${cleanEmail.replace(/[^a-z0-9]/g, '_')}`;
+    const pwdCookieName = `pwd_hash_${cleanEmail.replace(/[^a-z0-9]/g, '_')}`;
+
+    const accData = JSON.stringify({
+      id: newUser?.id || `u-owner-${Date.now()}`,
+      email: cleanEmail,
+      password: hashedPassword,
+      role: 'OWNER',
+      name: userName
+    });
+
+    response.cookies.set(accCookieName, encodeURIComponent(accData), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 315360000,
+      path: '/'
+    });
+
+    response.cookies.set(pwdCookieName, encodeURIComponent(hashedPassword), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 315360000,
       path: '/'
     });
 
