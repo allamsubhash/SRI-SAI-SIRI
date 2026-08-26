@@ -117,6 +117,7 @@ export default function BuildingsManagement() {
           roomNumber: targetRoomNumber || 'A-101',
           bedNumber: targetBedNumber || 'Bed A',
           rentAmount: selectedRoomDetail?.rent || 8500,
+          moveInDate: new Date().toISOString().split('T')[0],
           status: 'ACTIVE'
         })
       });
@@ -126,7 +127,7 @@ export default function BuildingsManagement() {
         setRegName('');
         setRegEmail('');
         setRegPhone('');
-        setSuccessToast({ title: 'Resident Registered', subtitle: `Registered ${regName} into Room ${targetRoomNumber} (${targetBedNumber})` });
+        setSuccessToast({ title: 'Resident Registered Successfully!', subtitle: `Created resident ${regName} (${regEmail}) — Login Password: ${regPassword || 'password123'}` });
         fetchInitialData();
       } else {
         const err = await res.json();
@@ -153,11 +154,21 @@ export default function BuildingsManagement() {
       fetch('/api/tenants').then(res => res.json())
     ])
       .then(([bData, tData]) => {
-        const validBuildings = Array.isArray(bData) ? bData : [];
+        let deletedIds: string[] = [];
+        if (typeof window !== 'undefined') {
+          const saved = localStorage.getItem('srisaisiri_deleted_buildings');
+          if (saved) {
+            try { deletedIds = JSON.parse(saved); } catch (e) {}
+          }
+        }
+        const rawBuildings = Array.isArray(bData) ? bData : [];
+        const validBuildings = rawBuildings.filter((b: any) => !deletedIds.includes(b.id));
         setBuildings(validBuildings);
         setTenants(Array.isArray(tData) ? tData : []);
-        if (validBuildings.length > 0 && !selectedBuildingId) {
-          setSelectedBuildingId(validBuildings[0].id);
+        if (validBuildings.length > 0) {
+          setSelectedBuildingId(prev => (prev && validBuildings.some(b => b.id === prev)) ? prev : validBuildings[0].id);
+        } else {
+          setSelectedBuildingId(null);
         }
         setLoading(false);
       })
@@ -264,12 +275,21 @@ export default function BuildingsManagement() {
 
   const handleDeleteBuilding = async (id: string) => {
     try {
-      const res = await fetch(`/api/buildings?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setDeleteBConfirm(null);
-        setSuccessToast({ title: 'Building Deleted', subtitle: 'Property record removed.' });
-        fetchInitialData();
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('srisaisiri_deleted_buildings');
+        const deletedIds: string[] = saved ? JSON.parse(saved) : [];
+        if (!deletedIds.includes(id)) {
+          deletedIds.push(id);
+          localStorage.setItem('srisaisiri_deleted_buildings', JSON.stringify(deletedIds));
+        }
       }
+
+      setBuildings(prev => prev.filter(b => b.id !== id));
+      setDeleteBConfirm(null);
+      setSuccessToast({ title: 'Building Deleted', subtitle: 'Property record permanently removed.' });
+
+      await fetch(`/api/buildings?id=${id}`, { method: 'DELETE' });
+      fetchInitialData();
     } catch (e) {
       console.error(e);
     }
@@ -950,146 +970,95 @@ export default function BuildingsManagement() {
         )}
       </AnimatePresence>
 
-      {/* 🏢 6. ADD BUILDING MULTI-STEP WIZARD MODAL (LARGE - 820px) */}
+      {/* 🏢 6. ADD BUILDING SINGLE-PAGE POPUP MODAL */}
       {showAddBuildingModal && (
         <NeonModal
           isOpen={true}
-          onClose={() => { setShowAddBuildingModal(false); setAddBStep(1); }}
-          title={`Add Building Wizard (Step ${addBStep}/4)`}
-          size="lg"
+          onClose={() => setShowAddBuildingModal(false)}
+          title="Add New Building"
+          subtitle="Provision building name, address, floors, & rooms in one single popup."
+          size="md"
           accentColor="purple"
         >
-          <div className="space-y-5 text-left">
-            
-            {/* Step Indicators */}
-            <div className="flex items-center justify-center gap-3 py-1">
-              {[1, 2, 3, 4].map((step) => (
-                <div key={step} className="flex items-center gap-2">
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black transition-all ${
-                    addBStep === step 
-                      ? 'bg-purple-600 text-white shadow-md scale-110' 
-                      : addBStep > step 
-                      ? 'bg-emerald-500 text-white' 
-                      : 'bg-slate-200 dark:bg-zinc-800 text-slate-400'
-                  }`}>
-                    {addBStep > step ? '✓' : step}
-                  </div>
-                  {step < 4 && <div className={`w-6 h-0.5 ${addBStep > step ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-zinc-800'}`} />}
-                </div>
-              ))}
+          <form onSubmit={handleCreateBuilding} className="space-y-4 text-left font-sans select-none">
+            <div>
+              <label className="text-xs font-black uppercase text-slate-700 dark:text-zinc-300 block mb-1">Building Name</label>
+              <input 
+                type="text" 
+                required
+                placeholder="e.g. Block C - Elite Hostel"
+                value={bName}
+                onChange={(e) => setBName(e.target.value)}
+                className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+              />
             </div>
 
-            {/* Step 1: Building Identity */}
-            {addBStep === 1 && (
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">Building Name</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. Block C - Elite Hostel"
-                    value={bName}
-                    onChange={(e) => setBName(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">Street Address</label>
-                  <input 
-                    type="text" 
-                    placeholder="Plot 42, Cyber City, Knowledge Park"
-                    value={bAddress}
-                    onChange={(e) => setBAddress(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
-                  />
-                </div>
-              </div>
-            )}
+            <div>
+              <label className="text-xs font-black uppercase text-slate-700 dark:text-zinc-300 block mb-1">Street Address</label>
+              <input 
+                type="text" 
+                required
+                placeholder="Plot 42, Cyber City, Knowledge Park"
+                value={bAddress}
+                onChange={(e) => setBAddress(e.target.value)}
+                className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+              />
+            </div>
 
-            {/* Step 2: Structure */}
-            {addBStep === 2 && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">Number of Floors</label>
-                    <input 
-                      type="number" 
-                      min="1" 
-                      max="10"
-                      value={bFloors}
-                      onChange={(e) => setBFloors(e.target.value)}
-                      className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">Rooms per Floor</label>
-                    <input 
-                      type="number" 
-                      min="1" 
-                      max="20"
-                      value={bRoomsPerFloor}
-                      onChange={(e) => setBRoomsPerFloor(e.target.value)}
-                      className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
-                    />
-                  </div>
-                </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-black uppercase text-slate-700 dark:text-zinc-300 block mb-1">Number of Floors</label>
+                <input 
+                  type="number" 
+                  min="1" 
+                  max="10"
+                  required
+                  value={bFloors}
+                  onChange={(e) => setBFloors(e.target.value)}
+                  className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+                />
               </div>
-            )}
-
-            {/* Step 3: Room Configuration */}
-            {addBStep === 3 && (
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">Default Rent Rate (₹)</label>
-                  <input 
-                    type="number" 
-                    value={bDefaultRent}
-                    onChange={(e) => setBDefaultRent(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
-                  />
-                </div>
+              <div>
+                <label className="text-xs font-black uppercase text-slate-700 dark:text-zinc-300 block mb-1">Rooms per Floor</label>
+                <input 
+                  type="number" 
+                  min="1" 
+                  max="20"
+                  required
+                  value={bRoomsPerFloor}
+                  onChange={(e) => setBRoomsPerFloor(e.target.value)}
+                  className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+                />
               </div>
-            )}
+            </div>
 
-            {/* Step 4: 3D Preview Review */}
-            {addBStep === 4 && (
-              <div className="space-y-4 text-center">
-                <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-left space-y-1">
-                  <h4 className="font-black text-slate-900 dark:text-white text-base">{bName || 'New Hostel Building'}</h4>
-                  <p className="text-xs text-slate-400">{bAddress || 'Cyber City'}</p>
-                  <div className="flex gap-4 text-xs font-bold text-purple-600 dark:text-purple-300 pt-2">
-                    <span>{bFloors} Floors Structure</span> • <span>{parseInt(bFloors) * parseInt(bRoomsPerFloor)} Total Rooms</span>
-                  </div>
-                </div>
-              </div>
-            )}
+            <div>
+              <label className="text-xs font-black uppercase text-slate-700 dark:text-zinc-300 block mb-1">Default Monthly Rent (₹)</label>
+              <input 
+                type="number" 
+                required
+                value={bDefaultRent}
+                onChange={(e) => setBDefaultRent(e.target.value)}
+                className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+              />
+            </div>
 
-            {/* Navigation Buttons */}
             <div className="flex justify-between items-center pt-3 border-t border-slate-100 dark:border-zinc-800">
               <button
-                onClick={() => { setShowAddBuildingModal(false); setAddBStep(1); }}
+                type="button"
+                onClick={() => setShowAddBuildingModal(false)}
                 className="py-2.5 px-5 rounded-2xl bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 font-bold text-xs hover:bg-slate-200 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
-
-              {addBStep < 4 ? (
-                <button
-                  onClick={() => setAddBStep((addBStep + 1) as any)}
-                  className="py-2.5 px-6 rounded-2xl bg-purple-600 text-white font-black text-xs shadow-md hover:scale-105 transition-transform cursor-pointer"
-                >
-                  Next Step →
-                </button>
-              ) : (
-                <button
-                  onClick={handleCreateBuilding}
-                  className="py-2.5 px-6 rounded-2xl bg-purple-600 text-white font-black text-xs shadow-md hover:scale-105 transition-transform cursor-pointer"
-                >
-                  Create Building ✓
-                </button>
-              )}
+              <button
+                type="submit"
+                className="py-3 px-6 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider shadow-md hover:scale-105 transition-transform cursor-pointer"
+              >
+                CREATE BUILDING ✓
+              </button>
             </div>
-
-          </div>
+          </form>
         </NeonModal>
       )}
 

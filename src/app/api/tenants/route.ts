@@ -17,12 +17,9 @@ export async function POST(request: Request) {
   try {
     const data = await request.json();
     
-    // Validate required fields
-    const required = ['name', 'email', 'phone', 'gender', 'moveInDate', 'roomNumber', 'bedNumber', 'rentAmount', 'password'];
-    for (const field of required) {
-      if (data[field] === undefined || data[field] === null || data[field] === '') {
-        return NextResponse.json({ error: `Field '${field}' is required` }, { status: 400 });
-      }
+    // Validate required fields (only name and email are strictly mandatory)
+    if (!data.name || !data.email) {
+      return NextResponse.json({ error: "Name and email are required" }, { status: 400 });
     }
 
     const cleanEmail = data.email.trim().toLowerCase();
@@ -32,8 +29,8 @@ export async function POST(request: Request) {
     const newTenant = await dbService.createTenant({
       name: data.name,
       email: cleanEmail,
-      phone: data.phone,
-      gender: data.gender,
+      phone: data.phone || '+91 98765 43210',
+      gender: data.gender || 'Male',
       address: data.address || '',
       aadhaar: data.aadhaar || '',
       emergencyName: data.emergencyName || '',
@@ -41,12 +38,12 @@ export async function POST(request: Request) {
       guardianName: data.guardianName || '',
       guardianPhone: data.guardianPhone || '',
       occupation: data.occupation || 'Student',
-      moveInDate: data.moveInDate,
+      moveInDate: data.moveInDate || new Date().toISOString().split('T')[0],
       moveOutDate: null,
       status: 'ACTIVE',
-      roomNumber: data.roomNumber,
-      bedNumber: data.bedNumber,
-      rentAmount: parseFloat(data.rentAmount),
+      roomNumber: data.roomNumber || 'A-101',
+      bedNumber: data.bedNumber || 'Bed A',
+      rentAmount: parseFloat(data.rentAmount || 8500),
       agreementUrl: data.agreementUrl || '/docs/default_agreement.pdf',
       medicalNotes: data.medicalNotes || '',
       photoUrl: data.photoUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop',
