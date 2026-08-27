@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import * as mock from './mockData';
 import bcrypt from 'bcryptjs';
+import { loadPersistentStore, savePersistentStore } from './persistentStore';
 
 // Avoid multiple PrismaClient instances in development
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
@@ -9,8 +10,10 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
 const INITIAL_PASSWORD_HASH = bcrypt.hashSync('password123', 10);
 
-// Runtime state for mock fallback
-let mockState = {
+// Load existing state from disk store if present, avoiding reset on deployments
+const loadedStore = loadPersistentStore();
+
+let mockState = loadedStore || {
   users: mock.mockUsers.map(u => ({
     ...u,
     password: INITIAL_PASSWORD_HASH
@@ -27,6 +30,10 @@ let mockState = {
   leaveRequests: [...mock.mockLeaveRequests]
 };
 
+function syncPersistentStore() {
+  savePersistentStore(mockState);
+}
+
 // Log DB helper
 function logDebug(message: string, error?: any) {
   console.log(`[Sri Sai Siri DB Service] ${message}`, error ? error.message || error : '');
@@ -36,10 +43,12 @@ const deletedTenantIdsSet = new Set<string>();
 const deletedBuildingIdsSet = new Set<string>();
 
 async function ensureDbSeeded() {
+  // If users exist in database or in persistent store, DO NOT RE-SEED OR RESET DATA
+  if (mockState.users && mockState.users.length > 0) return;
   try {
     const userCount = await prisma.user.count();
     if (userCount === 0) {
-      logDebug("Database user count is 0, auto-seeding demo users into SQLite...");
+      logDebug("Database user count is 0, initializing seed users...");
       const passwordHash = bcrypt.hashSync('password123', 10);
       await prisma.user.create({
         data: {
@@ -73,7 +82,6 @@ async function ensureDbSeeded() {
           }
         }
       });
-      logDebug("Auto-seeded initial users into SQLite database.");
     }
   } catch (e) {
     logDebug("ensureDbSeeded warning", e);
@@ -99,10 +107,10 @@ const rawDbService = {
       });
       if (user) return user;
     } catch (e) {
-      logDebug("getUserByEmail failed, using mock", e);
+      logDebug("getUserByEmail failed, using persistent store", e);
     }
 
-    const mUser = mockState.users.find(u => {
+    const mUser = mockState.users.find((u: any) => {
       const uEmail = u.email.toLowerCase();
       return uEmail === cleanEmail || 
              uEmail.replace('@hostelflow.com', '@srisaisiri.com') === cleanEmail ||
@@ -117,7 +125,7 @@ const rawDbService = {
       password: (mUser as any).password,
       role: mUser.role,
       name: mUser.name,
-      profile: mUser.role === 'TENANT' ? mockState.tenants.find(t => t.userId === mUser.id) : null
+      profile: mUser.role === 'TENANT' ? mockState.tenants.find((t: any) => t.userId === mUser.id) : null
     };
   },
 
@@ -125,7 +133,6 @@ const rawDbService = {
     if (!email) return false;
     const cleanEmail = email.trim().toLowerCase();
     try {
-      // Find all user records matching email or alias
       const users = await prisma.user.findMany({
         where: {
           OR: [
@@ -141,10 +148,10 @@ const rawDbService = {
         });
       }
     } catch (e) {
-      logDebug("updateUserPassword Prisma failed, updating mock", e);
+      logDebug("updateUserPassword Prisma failed, updating persistent store", e);
     }
 
-    mockState.users.forEach(mUser => {
+    mockState.users.forEach((mUser: any) => {
       const uEmail = mUser.email.toLowerCase();
       if (
         uEmail === cleanEmail ||
@@ -154,6 +161,8 @@ const rawDbService = {
         (mUser as any).password = hashedPassword;
       }
     });
+
+    syncPersistentStore();
     return true;
   },
 
@@ -161,7 +170,7 @@ const rawDbService = {
     if (!userData || !userData.email) return null;
     const cleanEmail = userData.email.trim().toLowerCase();
     
-    const existingIndex = mockState.users.findIndex(u => u.email.toLowerCase() === cleanEmail);
+    const existingIndex = mockState.users.findIndex((u: any) => u.email.toLowerCase() === cleanEmail);
     if (existingIndex >= 0) {
       mockState.users[existingIndex] = {
         ...mockState.users[existingIndex],
@@ -200,6 +209,8 @@ const rawDbService = {
     } catch (e) {
       logDebug("registerUser Prisma upsert fallback", e);
     }
+
+    syncPersistentStore();
 
     return {
       id: userData.id || `u-owner-${Date.now()}`,
@@ -262,7 +273,7 @@ const rawDbService = {
       return result.filter((b: any) => !deletedBuildingIdsSet.has(b.id));
     } catch (e) {
       logDebug("getBuildings failed, using mock", e);
-      return mockState.buildings.filter(b => !deletedBuildingIdsSet.has(b.id));
+      return mockState.buildings.filter((b: any) => !deletedBuildingIdsSet.has(b.id));
     }
   },
 
@@ -297,7 +308,7 @@ const rawDbService = {
 
   async deleteBuilding(buildingId: string) {
     deletedBuildingIdsSet.add(buildingId);
-    mockState.buildings = mockState.buildings.filter(x => x.id !== buildingId);
+    mockState.buildings = mockState.buildings.filter((x: any) => x.id !== buildingId);
     try {
       await prisma.building.delete({
         where: { id: buildingId }
@@ -327,9 +338,9 @@ const rawDbService = {
       });
     } catch (e) {
       logDebug("createRoom failed, using mock", e);
-      const bIndex = mockState.buildings.findIndex(b => b.floors.some(f => f.id === floorId));
+      const bIndex = mockState.buildings.findIndex((b: any) => b.floors.some((f: any) => f.id === floorId));
       if (bIndex !== -1) {
-        const fIndex = mockState.buildings[bIndex].floors.findIndex(f => f.id === floorId);
+        const fIndex = mockState.buildings[bIndex].floors.findIndex((f: any) => f.id === floorId);
         const newRoom = {
           id: `r-${Date.now()}`,
           number,
@@ -359,8 +370,8 @@ const rawDbService = {
       });
     } catch (e) {
       logDebug("deleteRoom failed, using mock", e);
-      mockState.buildings.forEach(b => {
-        b.floors.forEach(f => {
+      mockState.buildings.forEach((b: any) => {
+        b.floors.forEach((f: any) => {
           f.rooms = f.rooms.filter((r: any) => r.id !== roomId);
         });
       });
@@ -381,8 +392,8 @@ const rawDbService = {
       });
     } catch (e) {
       logDebug("updateRoom failed, updating mock", e);
-      mockState.buildings.forEach(b => {
-        b.floors.forEach(f => {
+      mockState.buildings.forEach((b: any) => {
+        b.floors.forEach((f: any) => {
           f.rooms.forEach((r: any) => {
             if (r.id === roomId) {
               if (data.number) r.number = data.number;
@@ -406,7 +417,7 @@ const rawDbService = {
       });
     } catch (e) {
       logDebug("updateBuilding failed, updating mock", e);
-      const b = mockState.buildings.find(b => b.id === buildingId);
+      const b = mockState.buildings.find((b: any) => b.id === buildingId);
       if (b) {
         if (data.name) b.name = data.name;
         if (data.address) b.address = data.address;
@@ -448,7 +459,7 @@ const rawDbService = {
       return tenantsList.filter((t: any) => !deletedTenantIdsSet.has(t.id));
     } catch (e) {
       logDebug("getTenants failed, using mock", e);
-      return mockState.tenants.filter(t => !deletedTenantIdsSet.has(t.id));
+      return mockState.tenants.filter((t: any) => !deletedTenantIdsSet.has(t.id));
     }
   },
 
@@ -474,10 +485,10 @@ const rawDbService = {
     mockState.users.push({ ...newUser, password: INITIAL_PASSWORD_HASH });
 
     // Book bed in mock data
-    mockState.buildings.forEach(b => {
-      b.floors.forEach(f => {
-        f.rooms.forEach(r => {
-          r.beds.forEach(bed => {
+    mockState.buildings.forEach((b: any) => {
+      b.floors.forEach((f: any) => {
+        f.rooms.forEach((r: any) => {
+          r.beds.forEach((bed: any) => {
             if (bed.number === tenantData.bedNumber) {
               bed.tenantId = tenantId;
               bed.tenantName = tenantData.name;
@@ -555,19 +566,20 @@ const rawDbService = {
       logDebug("createTenant Prisma insert bypassed (using mock fallback)", e);
     }
 
+    syncPersistentStore();
     return newTenant;
   },
 
   async updateTenantStatus(tenantId: string, status: 'ACTIVE' | 'ARCHIVED' | 'BLACKLISTED') {
-    const t = mockState.tenants.find(x => x.id === tenantId);
+    const t = mockState.tenants.find((x: any) => x.id === tenantId);
     if (t) {
       t.status = status;
       if (status !== 'ACTIVE') {
         // Free bed
-        mockState.buildings.forEach(b => {
-          b.floors.forEach(f => {
-            f.rooms.forEach(r => {
-              r.beds.forEach(bed => {
+        mockState.buildings.forEach((b: any) => {
+          b.floors.forEach((f: any) => {
+            f.rooms.forEach((r: any) => {
+              r.beds.forEach((bed: any) => {
                 if (bed.number === t.bedNumber) {
                   bed.tenantId = null;
                   bed.tenantName = undefined;
@@ -575,7 +587,7 @@ const rawDbService = {
                 }
               });
               // check occupancy status
-              const hasOccupants = r.beds.some(b => !b.isAvailable);
+              const hasOccupants = r.beds.some((b: any) => !b.isAvailable);
               r.status = hasOccupants ? 'OCCUPIED' : 'AVAILABLE';
             });
           });
@@ -610,7 +622,7 @@ const rawDbService = {
     }
   },
   async updateTenantProfile(tenantId: string, data: { name: string, email: string, phone: string, gender: string, moveInDate: string, password?: string, roomNumber?: string, bedNumber?: string, rentAmount?: number }) {
-    const t = mockState.tenants.find(x => x.id === tenantId);
+    const t = mockState.tenants.find((x: any) => x.id === tenantId);
     let hashedPassword = '';
     if (data.password) {
       const bcrypt = require('bcryptjs');
@@ -631,7 +643,7 @@ const rawDbService = {
       if (data.rentAmount !== undefined) t.rentAmount = data.rentAmount;
 
       // also update user
-      const u = mockState.users.find(x => x.id === t.userId);
+      const u = mockState.users.find((x: any) => x.id === t.userId);
       if (u) {
         u.name = data.name;
         u.email = data.email;
@@ -642,10 +654,10 @@ const rawDbService = {
 
       // Update mock beds occupancy
       if (data.bedNumber && data.bedNumber !== oldBedNumber) {
-        mockState.buildings.forEach(b => {
-          b.floors.forEach(f => {
-            f.rooms.forEach(r => {
-              r.beds.forEach(bed => {
+        mockState.buildings.forEach((b: any) => {
+          b.floors.forEach((f: any) => {
+            f.rooms.forEach((r: any) => {
+              r.beds.forEach((bed: any) => {
                 // Free old bed
                 if (bed.number === oldBedNumber) {
                   bed.tenantId = null;
@@ -660,7 +672,7 @@ const rawDbService = {
                 }
               });
               // Recalculate room status
-              const hasOccupants = r.beds.some(b => !b.isAvailable);
+              const hasOccupants = r.beds.some((b: any) => !b.isAvailable);
               r.status = hasOccupants ? 'OCCUPIED' : 'AVAILABLE';
             });
           });
@@ -785,7 +797,7 @@ const rawDbService = {
     let resolvedTenantName = 'Unknown Tenant';
     let resolvedRoomNumber = 'N/A';
 
-    const tenant = mockState.tenants.find(t => t.id === tenantId || t.userId === tenantId);
+    const tenant = mockState.tenants.find((t: any) => t.id === tenantId || t.userId === tenantId);
     if (tenant) {
       resolvedTenantId = tenant.id;
       resolvedTenantName = tenant.name;
@@ -842,11 +854,12 @@ const rawDbService = {
     } catch (e) {
       logDebug("createInvoice Prisma bypassed", e);
     }
+    syncPersistentStore();
     return newInvoice;
   },
 
   async recordPayment(invoiceId: string, amount: number, method: string, isTenantPayment: boolean = false) {
-    const inv = mockState.invoices.find(i => i.id === invoiceId);
+    const inv = mockState.invoices.find((i: any) => i.id === invoiceId);
     if (inv) {
       if (isTenantPayment) {
         inv.status = 'PENDING_VERIFICATION';
@@ -890,6 +903,7 @@ const rawDbService = {
               }
             }
           });
+          syncPersistentStore();
           return updated;
         }
       } else {
@@ -913,17 +927,19 @@ const rawDbService = {
               }
             }
           });
+          syncPersistentStore();
           return updated;
         }
       }
     } catch (e) {
       logDebug("recordPayment failed", e);
     }
+    syncPersistentStore();
     return inv;
   },
 
   async verifyInvoicePayment(invoiceId: string, remarks: string = 'Verified online payment') {
-    const inv = mockState.invoices.find(i => i.id === invoiceId);
+    const inv = mockState.invoices.find((i: any) => i.id === invoiceId);
     if (inv) {
       const verifyAmount = (inv as any).tempPaidAmount !== undefined ? (inv as any).tempPaidAmount : (inv.amount - inv.paidAmount);
       inv.paidAmount += verifyAmount;
@@ -948,7 +964,7 @@ const rawDbService = {
         include: { payments: true }
       });
       if (dbInv) {
-        const pendingPayment = dbInv.payments.find(p => p.status === 'PENDING');
+        const pendingPayment = dbInv.payments.find((p: any) => p.status === 'PENDING');
         const verifyAmount = pendingPayment ? pendingPayment.amount : (dbInv.amount - dbInv.paidAmount);
 
         if (pendingPayment) {
@@ -991,23 +1007,25 @@ const rawDbService = {
             itemsJson: newItemsJson
           }
         });
+        syncPersistentStore();
         return updated;
       }
     } catch (e) {
       logDebug("verifyInvoicePayment failed", e);
     }
+    syncPersistentStore();
     return inv;
   },
 
   async revertInvoicePayment(invoiceId: string, remarks: string) {
-    const inv = mockState.invoices.find(i => i.id === invoiceId);
+    const inv = mockState.invoices.find((i: any) => i.id === invoiceId);
     if (inv) {
       inv.status = 'PENDING_VERIFICATION';
       inv.paidAmount = 0;
       (inv as any).remarks = remarks;
 
       // also remove from expenses if it was recorded
-      mockState.expenses = mockState.expenses.filter(exp => !exp.title.includes(inv.number));
+      mockState.expenses = mockState.expenses.filter((exp: any) => !exp.title.includes(inv.number));
     }
 
     try {
@@ -1085,8 +1103,8 @@ const rawDbService = {
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
 
-      return mockState.employees.map(emp => {
-        const hasSalaryExpense = mockState.expenses.some(exp => 
+      return mockState.employees.map((emp: any) => {
+        const hasSalaryExpense = mockState.expenses.some((exp: any) => 
           exp.category === 'SALARY' && 
           exp.title.includes(emp.name) && 
           new Date(exp.date) >= startOfMonth
@@ -1126,11 +1144,12 @@ const rawDbService = {
     } catch (e) {
       logDebug("createEmployee Prisma bypassed", e);
     }
+    syncPersistentStore();
     return newEmp;
   },
 
   async paySalary(employeeId: string, amount: number, bonus: number, deductions: number, advancePaid: number) {
-    const emp = mockState.employees.find(e => e.id === employeeId);
+    const emp = mockState.employees.find((e: any) => e.id === employeeId);
     if (emp) {
       emp.pendingSalary = Math.max(0, emp.pendingSalary - amount);
       emp.advanceTaken += advancePaid;
@@ -1161,10 +1180,11 @@ const rawDbService = {
     } catch (e) {
       logDebug("paySalary Prisma bypassed", e);
     }
+    syncPersistentStore();
   },
 
   async updateEmployee(id: string, data: any) {
-    const emp = mockState.employees.find(e => e.id === id);
+    const emp = mockState.employees.find((e: any) => e.id === id);
     if (emp) {
       if (data.name) emp.name = data.name;
       if (data.phone) emp.phone = data.phone;
@@ -1221,7 +1241,7 @@ const rawDbService = {
     let resolvedTenantName = 'Unknown Tenant';
     let resolvedRoomNumber = 'N/A';
 
-    const tenant = mockState.tenants.find(t => t.id === tenantId || t.userId === tenantId);
+    const tenant = mockState.tenants.find((t: any) => t.id === tenantId || t.userId === tenantId);
     if (tenant) {
       resolvedTenantId = tenant.id;
       resolvedTenantName = tenant.name;
@@ -1275,18 +1295,19 @@ const rawDbService = {
     } catch (e) {
       logDebug("createComplaint Prisma bypassed", e);
     }
+    syncPersistentStore();
     return newComp;
   },
 
   async updateComplaintStatus(complaintId: string, status: string, employeeId?: string) {
-    const comp = mockState.complaints.find(c => c.id === complaintId);
+    const comp = mockState.complaints.find((c: any) => c.id === complaintId);
     let assignedEmployeeName: string | undefined = undefined;
     
     if (comp) {
       comp.status = status as any;
       if (employeeId) {
         comp.assignedEmployeeId = employeeId;
-        const emp = mockState.employees.find(e => e.id === employeeId);
+        const emp = mockState.employees.find((e: any) => e.id === employeeId);
         comp.assignedEmployeeName = emp ? emp.name : undefined;
         assignedEmployeeName = comp.assignedEmployeeName;
       }
@@ -1311,6 +1332,7 @@ const rawDbService = {
       logDebug("updateComplaintStatus Prisma bypassed", e);
     }
 
+    syncPersistentStore();
     return comp ? {
       ...comp,
       status,
@@ -1320,7 +1342,7 @@ const rawDbService = {
   },
 
   async deleteComplaint(complaintId: string) {
-    mockState.complaints = mockState.complaints.filter(c => c.id !== complaintId);
+    mockState.complaints = mockState.complaints.filter((c: any) => c.id !== complaintId);
     try {
       await prisma.complaint.delete({
         where: { id: complaintId }
@@ -1328,6 +1350,7 @@ const rawDbService = {
     } catch (e) {
       logDebug("deleteComplaint Prisma failed", e);
     }
+    syncPersistentStore();
     return true;
   },
 
@@ -1337,7 +1360,7 @@ const rawDbService = {
   },
 
   async createLeaveRequest(tenantId: string, startDate: string, endDate: string, reason: string) {
-    const tenant = mockState.tenants.find(t => t.id === tenantId || t.userId === tenantId);
+    const tenant = mockState.tenants.find((t: any) => t.id === tenantId || t.userId === tenantId);
     const newLeave: mock.MockLeaveRequest = {
       id: `l-${Date.now()}`,
       tenantId: tenant ? tenant.id : tenantId,
@@ -1350,12 +1373,14 @@ const rawDbService = {
       dateCreated: new Date().toISOString().split('T')[0]
     };
     mockState.leaveRequests.unshift(newLeave);
+    syncPersistentStore();
     return newLeave;
   },
 
   async approveLeaveRequest(leaveId: string, status: 'APPROVED' | 'REJECTED') {
-    const l = mockState.leaveRequests.find(x => x.id === leaveId);
+    const l = mockState.leaveRequests.find((x: any) => x.id === leaveId);
     if (l) l.status = status;
+    syncPersistentStore();
     return l;
   },
 
@@ -1376,11 +1401,12 @@ const rawDbService = {
       tenantId
     };
     mockState.visitors.unshift(newVisitor);
+    syncPersistentStore();
     return newVisitor;
   },
 
   async updateVisitorStatus(visitorId: string, status: 'APPROVED' | 'REJECTED' | 'CHECKOUT') {
-    const v = mockState.visitors.find(x => x.id === visitorId);
+    const v = mockState.visitors.find((x: any) => x.id === visitorId);
     if (v) {
       if (status === 'CHECKOUT') {
         v.checkOut = new Date().toISOString().replace('T', ' ').slice(0, 16);
@@ -1388,6 +1414,7 @@ const rawDbService = {
         v.approvalStatus = status;
       }
     }
+    syncPersistentStore();
     return v;
   },
 
@@ -1406,6 +1433,7 @@ const rawDbService = {
       notes
     };
     mockState.expenses.unshift(newExpense);
+    syncPersistentStore();
     return newExpense;
   },
 
@@ -1428,15 +1456,17 @@ const rawDbService = {
       replacementDate: null
     };
     mockState.inventory.unshift(newItem);
+    syncPersistentStore();
     return newItem;
   },
 
   async updateInventoryItem(itemId: string, quantity: number, condition: string) {
-    const item = mockState.inventory.find(i => i.id === itemId);
+    const item = mockState.inventory.find((i: any) => i.id === itemId);
     if (item) {
       item.quantity = quantity;
       item.condition = condition;
     }
+    syncPersistentStore();
     return item;
   },
 
@@ -1455,55 +1485,60 @@ const rawDbService = {
       scheduleDate: new Date().toISOString().split('T')[0]
     };
     mockState.notices.unshift(newNotice);
+    syncPersistentStore();
     return newNotice;
   },
 
   async deleteNotice(id: string) {
-    mockState.notices = mockState.notices.filter(n => n.id !== id);
+    mockState.notices = mockState.notices.filter((n: any) => n.id !== id);
     try {
       await prisma.notice.delete({ where: { id } });
     } catch (e) {
       logDebug("deleteNotice failed", e);
     }
+    syncPersistentStore();
   },
 
   async deleteExpense(id: string) {
-    mockState.expenses = mockState.expenses.filter(e => e.id !== id);
+    mockState.expenses = mockState.expenses.filter((e: any) => e.id !== id);
     try {
       await prisma.expense.delete({ where: { id } });
     } catch (e) {
       logDebug("deleteExpense failed", e);
     }
+    syncPersistentStore();
   },
 
   async deleteInventory(id: string) {
-    mockState.inventory = mockState.inventory.filter(i => i.id !== id);
+    mockState.inventory = mockState.inventory.filter((i: any) => i.id !== id);
     try {
       await prisma.inventory.delete({ where: { id } });
     } catch (e) {
       logDebug("deleteInventory failed", e);
     }
+    syncPersistentStore();
   },
 
   async deleteEmployee(id: string) {
-    mockState.employees = mockState.employees.filter(e => e.id !== id);
+    mockState.employees = mockState.employees.filter((e: any) => e.id !== id);
     try {
       await prisma.employee.delete({ where: { id } });
     } catch (e) {
       logDebug("deleteEmployee failed", e);
     }
+    syncPersistentStore();
   },
 
   async deleteTenant(id: string) {
     deletedTenantIdsSet.add(id);
-    const tenant = mockState.tenants.find(t => t.id === id);
+    const tenant = mockState.tenants.find((t: any) => t.id === id);
     if (tenant) {
-      mockState.tenants = mockState.tenants.filter(t => t.id !== id);
+      mockState.tenants = mockState.tenants.filter((t: any) => t.id !== id);
       // Mark bed as available
-      mockState.buildings.forEach(b => {
-        b.floors.forEach(f => {
-          f.rooms.forEach(r => {
-            r.beds.forEach(bed => {
+      mockState.buildings.forEach((b: any) => {
+        b.floors.forEach((f: any) => {
+          f.rooms.forEach((r: any) => {
+            r.beds.forEach((bed: any) => {
               if (bed.tenantId === id) {
                 bed.isAvailable = true;
                 bed.tenantId = null;
@@ -1532,10 +1567,11 @@ const rawDbService = {
     } catch (e) {
       logDebug("deleteTenant failed", e);
     }
+    syncPersistentStore();
   },
 
   async deleteInvoice(invoiceId: string) {
-    mockState.invoices = mockState.invoices.filter(i => i.id !== invoiceId);
+    mockState.invoices = mockState.invoices.filter((i: any) => i.id !== invoiceId);
     try {
       await prisma.payment.deleteMany({
         where: { invoiceId }
@@ -1543,15 +1579,17 @@ const rawDbService = {
       const deleted = await prisma.invoice.delete({
         where: { id: invoiceId }
       });
+      syncPersistentStore();
       return deleted;
     } catch (e) {
       logDebug("deleteInvoice failed", e);
     }
+    syncPersistentStore();
     return null;
   },
 
   async updateInvoice(invoiceId: string, data: { amount?: number; dueDate?: string; month?: string; status?: string }) {
-    const inv = mockState.invoices.find(i => i.id === invoiceId);
+    const inv = mockState.invoices.find((i: any) => i.id === invoiceId);
     if (inv) {
       if (data.amount !== undefined) inv.amount = data.amount;
       if (data.dueDate !== undefined) inv.dueDate = data.dueDate;
@@ -1585,11 +1623,13 @@ const rawDbService = {
           where: { id: invoiceId },
           data: updatePayload
         });
+        syncPersistentStore();
         return updated;
       }
     } catch (e) {
       logDebug("updateInvoice failed", e);
     }
+    syncPersistentStore();
     return inv;
   },
 
@@ -1608,22 +1648,24 @@ const rawDbService = {
       await prisma.visitor.deleteMany();
       await prisma.leaveRequest.deleteMany();
       await prisma.salary.deleteMany();
+      syncPersistentStore();
       return true;
     } catch (e) {
       logDebug("resetAnalytics failed", e);
     }
+    syncPersistentStore();
     return false;
   },
 
   async resetTenants() {
-    mockState.users = mockState.users.filter(u => u.role === 'OWNER');
+    mockState.users = mockState.users.filter((u: any) => u.role === 'OWNER');
     mockState.tenants = [];
     mockState.invoices = [];
     
-    mockState.buildings.forEach(b => {
-      b.floors.forEach(f => {
-        f.rooms.forEach(r => {
-          r.beds.forEach(bed => {
+    mockState.buildings.forEach((b: any) => {
+      b.floors.forEach((f: any) => {
+        f.rooms.forEach((r: any) => {
+          r.beds.forEach((bed: any) => {
             bed.isAvailable = true;
             bed.tenantId = null;
             bed.tenantName = undefined;
@@ -1644,10 +1686,12 @@ const rawDbService = {
           tenantId: null
         }
       });
+      syncPersistentStore();
       return true;
     } catch (e) {
       logDebug("resetTenants failed", e);
     }
+    syncPersistentStore();
     return false;
   }
 };
