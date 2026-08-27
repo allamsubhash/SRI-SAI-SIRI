@@ -154,15 +154,7 @@ export default function BuildingsManagement() {
       fetch('/api/tenants').then(res => res.json())
     ])
       .then(([bData, tData]) => {
-        let deletedIds: string[] = [];
-        if (typeof window !== 'undefined') {
-          const saved = localStorage.getItem('srisaisiri_deleted_buildings');
-          if (saved) {
-            try { deletedIds = JSON.parse(saved); } catch (e) {}
-          }
-        }
-        const rawBuildings = Array.isArray(bData) ? bData : [];
-        const validBuildings = rawBuildings.filter((b: any) => !deletedIds.includes(b.id));
+        const validBuildings = Array.isArray(bData) ? bData : [];
         setBuildings(validBuildings);
         setTenants(Array.isArray(tData) ? tData : []);
         if (validBuildings.length > 0) {
@@ -275,15 +267,6 @@ export default function BuildingsManagement() {
 
   const handleDeleteBuilding = async (id: string) => {
     try {
-      if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem('srisaisiri_deleted_buildings');
-        const deletedIds: string[] = saved ? JSON.parse(saved) : [];
-        if (!deletedIds.includes(id)) {
-          deletedIds.push(id);
-          localStorage.setItem('srisaisiri_deleted_buildings', JSON.stringify(deletedIds));
-        }
-      }
-
       setBuildings(prev => prev.filter(b => b.id !== id));
       setDeleteBConfirm(null);
       setSuccessToast({ title: 'Building Deleted', subtitle: 'Property record permanently removed.' });

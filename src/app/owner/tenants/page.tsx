@@ -110,11 +110,11 @@ export default function TenantsManagement() {
     fetchInitialData();
   }, []);
 
-  // Flat array of all rooms across buildings
+  // Flat array of ONLY rooms with AVAILABLE beds across buildings (Phase 9)
   const allRoomsFlat = useMemo(() => {
     return buildings.flatMap(b => 
       b.floors?.flatMap((f: any) => 
-        f.rooms?.map((r: any) => ({
+        f.rooms?.filter((r: any) => r.beds?.some((bed: any) => bed.isAvailable)).map((r: any) => ({
           ...r,
           buildingName: b.name,
           floorNumber: f.number

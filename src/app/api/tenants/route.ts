@@ -23,6 +23,28 @@ export async function POST(request: Request) {
     }
 
     const cleanEmail = data.email.trim().toLowerCase();
+
+    // Check server-side bed availability (Phase 10: Prevent race conditions & duplicate bed assignment)
+    const targetBedSpot = data.bedNumber;
+    if (targetBedSpot) {
+      const buildings = await dbService.getBuildings();
+      let isOccupied = false;
+      buildings.forEach((b: any) => {
+        b.floors?.forEach((f: any) => {
+          f.rooms?.forEach((r: any) => {
+            r.beds?.forEach((bed: any) => {
+              if (bed.number === targetBedSpot && !bed.isAvailable) {
+                isOccupied = true;
+              }
+            });
+          });
+        });
+      });
+      if (isOccupied) {
+        return NextResponse.json({ error: `Bed spot '${targetBedSpot}' is already occupied. Please select an available bed.` }, { status: 400 });
+      }
+    }
+
     const rawPassword = data.password || 'password123';
     const hashedPassword = await hashPassword(rawPassword);
 
