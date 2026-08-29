@@ -1,63 +1,33 @@
 import { PrismaClient } from '@prisma/client';
-import * as mock from './mockData';
 import bcrypt from 'bcryptjs';
-import { loadPersistentStore, savePersistentStore } from './persistentStore';
 
-// Avoid multiple PrismaClient instances in development
+// Avoid multiple PrismaClient instances in development / serverless executions
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 export const prisma = globalForPrisma.prisma || new PrismaClient();
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
-const INITIAL_PASSWORD_HASH = bcrypt.hashSync('password123', 10);
-
-// Load existing state from disk store if present, avoiding reset on deployments
-const loadedStore = loadPersistentStore();
-
-let mockState = loadedStore || {
-  users: mock.mockUsers.map(u => ({
-    ...u,
-    password: INITIAL_PASSWORD_HASH
-  })),
-  buildings: [...mock.mockBuildings],
-  tenants: [...mock.mockTenants],
-  invoices: [...mock.mockInvoices],
-  employees: [...mock.mockEmployees],
-  complaints: [] as mock.MockComplaint[],
-  visitors: [...mock.mockVisitors],
-  inventory: [...mock.mockInventory],
-  expenses: [...mock.mockExpenses],
-  notices: [...mock.mockNotices],
-  leaveRequests: [...mock.mockLeaveRequests]
-};
-
-function syncPersistentStore() {
-  savePersistentStore(mockState);
-}
-
-// Log DB helper
 function logDebug(message: string, error?: any) {
   console.log(`[Sri Sai Siri DB Service] ${message}`, error ? error.message || error : '');
 }
 
-const deletedTenantIdsSet = new Set<string>();
-const deletedBuildingIdsSet = new Set<string>();
-
-async function ensureDbSeeded() {
-  // If users exist in database or in persistent store, DO NOT RE-SEED OR RESET DATA
-  if (mockState.users && mockState.users.length > 0) return;
+// Idempotent initial setup helper (creates default owner if no users exist in MySQL DB)
+async function ensureDbInitialized() {
   try {
     const userCount = await prisma.user.count();
     if (userCount === 0) {
-      logDebug("Database user count is 0, initializing seed users...");
+      logDebug("Database user count is 0. Performing initial idempotent owner setup...");
       const passwordHash = bcrypt.hashSync('password123', 10);
-      await prisma.user.create({
-        data: {
-          id: 'u-owner-1',
+      await prisma.user.upsert({
+        where: { email: 'owner@srisaisiri.com' },
+        update: {}, // DO NOT overwrite existing user password if already present
+        create: {
+          id: 'u-owner-001',
           email: 'owner@srisaisiri.com',
           password: passwordHash,
           role: 'OWNER',
           profile: {
             create: {
+              id: 'p-owner-001',
               firstName: 'Alok',
               lastName: 'Sharma',
               phone: '+91 98765 43210',
@@ -66,177 +36,119 @@ async function ensureDbSeeded() {
           }
         }
       });
-      await prisma.user.create({
-        data: {
-          id: 'u-tenant-1',
-          email: 'tenant@srisaisiri.com',
-          password: passwordHash,
-          role: 'TENANT',
-          profile: {
-            create: {
-              firstName: 'Rohan',
-              lastName: 'Verma',
-              phone: '+91 98765 43210',
-              status: 'ACTIVE'
-            }
-          }
-        }
-      });
     }
   } catch (e) {
-    logDebug("ensureDbSeeded warning", e);
+    logDebug("ensureDbInitialized warning (will retry on active DB connection)", e);
   }
 }
 
-ensureDbSeeded();
+ensureDbInitialized();
 
-const rawDbService = {
+export const dbService = {
   // --- AUTHENTICATION ---
   async getUserByEmail(email: string) {
     if (!email) return null;
     const cleanEmail = email.trim().toLowerCase();
-    try {
-      const user = await prisma.user.findFirst({
-        where: {
-          OR: [
-            { email: { equals: cleanEmail } },
-            { email: { equals: email } }
-          ]
-        },
-        include: { profile: true }
-      });
-      if (user) return user;
-    } catch (e) {
-      logDebug("getUserByEmail failed, using persistent store", e);
-    }
-
-    const mUser = mockState.users.find((u: any) => {
-      const uEmail = u.email.toLowerCase();
-      return uEmail === cleanEmail || 
-             uEmail.replace('@hostelflow.com', '@srisaisiri.com') === cleanEmail ||
-             uEmail.replace('@srisaisiri.com', '@hostelflow.com') === cleanEmail;
-    });
-
-    if (!mUser) return null;
-
-    return {
-      id: mUser.id,
-      email: mUser.email,
-      password: (mUser as any).password,
-      role: mUser.role,
-      name: mUser.name,
-      profile: mUser.role === 'TENANT' ? mockState.tenants.find((t: any) => t.userId === mUser.id) : null
-    };
-  },
-
-  async updateUserPassword(email: string, hashedPassword: string) {
-    if (!email) return false;
-    const cleanEmail = email.trim().toLowerCase();
-    try {
-      const users = await prisma.user.findMany({
-        where: {
-          OR: [
-            { email: { equals: cleanEmail } },
-            { email: { equals: email } }
-          ]
-        }
-      });
-      for (const u of users) {
-        await prisma.user.update({
-          where: { id: u.id },
-          data: { password: hashedPassword }
-        });
-      }
-    } catch (e) {
-      logDebug("updateUserPassword Prisma failed, updating persistent store", e);
-    }
-
-    mockState.users.forEach((mUser: any) => {
-      const uEmail = mUser.email.toLowerCase();
-      if (
-        uEmail === cleanEmail ||
-        uEmail.replace('@hostelflow.com', '@srisaisiri.com') === cleanEmail ||
-        uEmail.replace('@srisaisiri.com', '@hostelflow.com') === cleanEmail
-      ) {
-        (mUser as any).password = hashedPassword;
-      }
-    });
-
-    syncPersistentStore();
-    return true;
-  },
-
-  async registerUser(userData: { id: string; email: string; password: string; role: 'OWNER' | 'TENANT'; name: string }) {
-    if (!userData || !userData.email) return null;
-    const cleanEmail = userData.email.trim().toLowerCase();
-    
-    const existingIndex = mockState.users.findIndex((u: any) => u.email.toLowerCase() === cleanEmail);
-    if (existingIndex >= 0) {
-      mockState.users[existingIndex] = {
-        ...mockState.users[existingIndex],
-        ...userData,
-        password: userData.password
-      };
-    } else {
-      mockState.users.push({
-        id: userData.id || `u-owner-${Date.now()}`,
-        email: cleanEmail,
-        password: userData.password,
-        role: userData.role || 'OWNER',
-        name: userData.name || 'Owner'
-      });
-    }
-
-    try {
-      await prisma.user.upsert({
-        where: { email: cleanEmail },
-        update: { password: userData.password },
-        create: {
-          id: userData.id || `u-owner-${Date.now()}`,
-          email: cleanEmail,
-          password: userData.password,
-          role: userData.role || 'OWNER',
-          profile: {
-            create: {
-              firstName: userData.name.split(' ')[0] || userData.name,
-              lastName: userData.name.split(' ').slice(1).join(' ') || '',
-              phone: '+91 98765 43210',
-              status: 'ACTIVE'
-            }
+    const user = await prisma.user.findFirst({
+      where: { email: cleanEmail },
+      include: {
+        profile: {
+          include: {
+            tenant: true
           }
         }
-      });
-    } catch (e) {
-      logDebug("registerUser Prisma upsert fallback", e);
-    }
+      }
+    });
 
-    syncPersistentStore();
+    if (!user) return null;
 
     return {
-      id: userData.id || `u-owner-${Date.now()}`,
-      email: cleanEmail,
-      password: userData.password,
-      role: userData.role || 'OWNER',
-      name: userData.name || 'Owner',
-      profile: null
+      id: user.id,
+      email: user.email,
+      password: user.password,
+      role: user.role,
+      name: user.profile ? `${user.profile.firstName} ${user.profile.lastName}`.trim() : 'User',
+      tenantId: user.profile?.tenant?.id || null
     };
   },
 
-  // --- BUILDINGS & ROOMS ---
+  async registerUser(userData: { id?: string; email: string; password?: string; role: 'OWNER' | 'TENANT'; name: string }) {
+    const cleanEmail = userData.email.trim().toLowerCase();
+    const existing = await prisma.user.findUnique({ where: { email: cleanEmail } });
+    if (existing) {
+      return {
+        id: existing.id,
+        email: existing.email,
+        role: existing.role,
+        name: userData.name
+      };
+    }
+
+    const passwordHash = userData.password || bcrypt.hashSync('password123', 10);
+    const userId = userData.id || `u-${Date.now()}`;
+    const names = userData.name.trim().split(' ');
+    const firstName = names[0] || 'User';
+    const lastName = names.slice(1).join(' ') || '';
+
+    const createdUser = await prisma.user.create({
+      data: {
+        id: userId,
+        email: cleanEmail,
+        password: passwordHash,
+        role: userData.role,
+        profile: {
+          create: {
+            firstName,
+            lastName,
+            phone: '+91 98765 43210',
+            status: 'ACTIVE'
+          }
+        }
+      },
+      include: { profile: true }
+    });
+
+    return {
+      id: createdUser.id,
+      email: createdUser.email,
+      role: createdUser.role,
+      name: `${createdUser.profile?.firstName || ''} ${createdUser.profile?.lastName || ''}`.trim()
+    };
+  },
+
+  async updateUserPassword(email: string, newPassword: string) {
+    const cleanEmail = email.trim().toLowerCase();
+    const passwordHash = bcrypt.hashSync(newPassword, 10);
+
+    const updated = await prisma.user.update({
+      where: { email: cleanEmail },
+      data: { password: passwordHash },
+      include: { profile: true }
+    });
+
+    return {
+      id: updated.id,
+      email: updated.email,
+      role: updated.role,
+      name: updated.profile ? `${updated.profile.firstName} ${updated.profile.lastName}`.trim() : 'User'
+    };
+  },
+
+  // --- BUILDINGS ---
   async getBuildings() {
-    try {
-      const buildings = await prisma.building.findMany({
-        include: {
-          floors: {
-            include: {
-              rooms: {
-                include: {
-                  beds: {
-                    include: {
-                      tenant: {
-                        include: {
-                          profile: true
-                        }
+    const dbBuildings = await prisma.building.findMany({
+      include: {
+        floors: {
+          orderBy: { number: 'asc' },
+          include: {
+            rooms: {
+              orderBy: { number: 'asc' },
+              include: {
+                beds: {
+                  include: {
+                    tenant: {
+                      include: {
+                        profile: true
                       }
                     }
                   }
@@ -245,17 +157,44 @@ const rawDbService = {
             }
           }
         }
-      });
+      },
+      orderBy: { createdAt: 'desc' }
+    });
 
-      const result = buildings.map(b => ({
-        ...b,
-        floors: b.floors.map(f => ({
-          ...f,
-          rooms: f.rooms.map(r => ({
-            ...r,
+    return dbBuildings.map(b => ({
+      id: b.id,
+      name: b.name,
+      address: b.address,
+      floors: b.floors.map(f => ({
+        id: f.id,
+        number: f.number,
+        rooms: f.rooms.map(r => {
+          let amenitiesList: string[] = [];
+          try {
+            amenitiesList = r.amenities ? r.amenities.split(',').map((a: string) => a.trim()) : [];
+          } catch (e) {
+            amenitiesList = [];
+          }
+
+          let imagesList: string[] = [];
+          try {
+            imagesList = r.images ? JSON.parse(r.images) : [];
+          } catch (e) {
+            imagesList = [];
+          }
+
+          return {
+            id: r.id,
+            number: r.number,
+            type: r.type,
+            rent: r.rent,
+            status: r.status as any,
+            capacity: r.capacity,
+            amenities: amenitiesList,
+            images: imagesList,
             beds: r.beds.map(bed => {
-              let tenantName = undefined;
-              if (bed.tenant?.profile) {
+              let tenantName: string | undefined = undefined;
+              if (bed.tenant && bed.tenant.profile) {
                 tenantName = `${bed.tenant.profile.firstName} ${bed.tenant.profile.lastName}`.trim();
               }
               return {
@@ -264,909 +203,673 @@ const rawDbService = {
                 roomId: bed.roomId,
                 tenantId: bed.tenantId,
                 isAvailable: bed.isAvailable,
-                tenantName: tenantName
+                tenantName
               };
             })
-          }))
-        }))
-      }));
-      return result.filter((b: any) => !deletedBuildingIdsSet.has(b.id));
-    } catch (e) {
-      logDebug("getBuildings failed, using mock", e);
-      return mockState.buildings.filter((b: any) => !deletedBuildingIdsSet.has(b.id));
-    }
+          };
+        })
+      }))
+    }));
   },
 
   async createBuilding(name: string, address: string, floorsCount: number) {
-    try {
-      return await prisma.building.create({
-        data: {
-          name,
-          address,
-          floors: {
-            create: Array.from({ length: floorsCount }).map((_, i) => ({
-              number: i + 1
-            }))
-          }
-        }
-      });
-    } catch (e) {
-      logDebug("createBuilding failed, using mock", e);
-      const newBuilding: mock.MockBuilding = {
-        id: `b-${Date.now()}`,
+    return await prisma.building.create({
+      data: {
         name,
         address,
-        floors: Array.from({ length: floorsCount }).map((_, i) => ({
-          id: `f-${Date.now()}-${i}`,
-          number: i + 1,
-          rooms: []
-        }))
-      };
-      mockState.buildings.push(newBuilding);
-    }
-  },
-
-  async deleteBuilding(buildingId: string) {
-    deletedBuildingIdsSet.add(buildingId);
-    mockState.buildings = mockState.buildings.filter((x: any) => x.id !== buildingId);
-    try {
-      await prisma.building.delete({
-        where: { id: buildingId }
-      });
-    } catch (e) {
-      logDebug("deleteBuilding Prisma failed", e);
-    }
-  },
-
-  async createRoom(floorId: string, number: string, type: string, rent: number, capacity: number, amenities: string) {
-    try {
-      return await prisma.room.create({
-        data: {
-          number,
-          type,
-          rent,
-          capacity,
-          amenities,
-          floorId,
-          beds: {
-            create: Array.from({ length: capacity }).map((_, i) => ({
-              number: `${number}-${String.fromCharCode(65 + i)}`,
-              isAvailable: true
-            }))
-          }
-        }
-      });
-    } catch (e) {
-      logDebug("createRoom failed, using mock", e);
-      const bIndex = mockState.buildings.findIndex((b: any) => b.floors.some((f: any) => f.id === floorId));
-      if (bIndex !== -1) {
-        const fIndex = mockState.buildings[bIndex].floors.findIndex((f: any) => f.id === floorId);
-        const newRoom = {
-          id: `r-${Date.now()}`,
-          number,
-          type,
-          rent,
-          capacity,
-          status: 'AVAILABLE' as const,
-          amenities: amenities.split(',').map(a => a.trim()),
-          beds: Array.from({ length: capacity }).map((_, i) => ({
-            id: `bed-${Date.now()}-${i}`,
-            number: `${number}-${String.fromCharCode(65 + i)}`,
-            tenantId: null,
-            isAvailable: true
+        floors: {
+          create: Array.from({ length: floorsCount }).map((_, i) => ({
+            number: i + 1
           }))
-        };
-        mockState.buildings[bIndex].floors[fIndex].rooms.push(newRoom);
-        return newRoom;
-      }
-      return null;
-    }
-  },
-
-  async deleteRoom(roomId: string) {
-    try {
-      await prisma.room.delete({
-        where: { id: roomId }
-      });
-    } catch (e) {
-      logDebug("deleteRoom failed, using mock", e);
-      mockState.buildings.forEach((b: any) => {
-        b.floors.forEach((f: any) => {
-          f.rooms = f.rooms.filter((r: any) => r.id !== roomId);
-        });
-      });
-    }
-  },
-
-  async updateRoom(roomId: string, data: { number?: string; type?: string; rent?: number; capacity?: number; status?: string }) {
-    try {
-      await prisma.room.update({
-        where: { id: roomId },
-        data: {
-          number: data.number,
-          type: data.type,
-          rent: data.rent,
-          capacity: data.capacity,
-          status: data.status
         }
-      });
-    } catch (e) {
-      logDebug("updateRoom failed, updating mock", e);
-      mockState.buildings.forEach((b: any) => {
-        b.floors.forEach((f: any) => {
-          f.rooms.forEach((r: any) => {
-            if (r.id === roomId) {
-              if (data.number) r.number = data.number;
-              if (data.type) r.type = data.type;
-              if (data.rent !== undefined) r.rent = data.rent;
-              if (data.capacity !== undefined) r.capacity = data.capacity;
-              if (data.status) r.status = data.status;
-            }
-          });
-        });
-      });
-    }
-    return true;
+      },
+      include: {
+        floors: {
+          include: { rooms: true }
+        }
+      }
+    });
   },
 
   async updateBuilding(buildingId: string, data: { name?: string; address?: string }) {
-    try {
-      await prisma.building.update({
-        where: { id: buildingId },
-        data
-      });
-    } catch (e) {
-      logDebug("updateBuilding failed, updating mock", e);
-      const b = mockState.buildings.find((b: any) => b.id === buildingId);
-      if (b) {
-        if (data.name) b.name = data.name;
-        if (data.address) b.address = data.address;
+    return await prisma.building.update({
+      where: { id: buildingId },
+      data
+    });
+  },
+
+  async deleteBuilding(buildingId: string) {
+    // Safeguard: Check if any active tenants reside in this building before allowing delete
+    const activeTenantsInBuilding = await prisma.tenant.count({
+      where: {
+        beds: {
+          some: {
+            room: {
+              floor: {
+                buildingId: buildingId
+              }
+            }
+          }
+        },
+        status: 'ACTIVE'
       }
+    });
+
+    if (activeTenantsInBuilding > 0) {
+      throw new Error(`Cannot delete building while active residents are assigned to its rooms. Please reassign or relocate residents first.`);
     }
-    return true;
+
+    return await prisma.building.delete({
+      where: { id: buildingId }
+    });
+  },
+
+  // --- ROOMS ---
+  async createRoom(floorId: string, number: string, type: string, rent: number, capacity: number, amenities: string) {
+    return await prisma.room.create({
+      data: {
+        number,
+        type,
+        rent,
+        capacity,
+        amenities,
+        floorId,
+        status: 'AVAILABLE',
+        beds: {
+          create: Array.from({ length: capacity }).map((_, i) => ({
+            number: `${number}-${String.fromCharCode(65 + i)}`,
+            isAvailable: true
+          }))
+        }
+      },
+      include: { beds: true }
+    });
+  },
+
+  async updateRoom(roomId: string, data: { number?: string; type?: string; rent?: number; capacity?: number; status?: string }) {
+    return await prisma.room.update({
+      where: { id: roomId },
+      data: {
+        number: data.number,
+        type: data.type,
+        rent: data.rent,
+        capacity: data.capacity,
+        status: data.status
+      }
+    });
+  },
+
+  async deleteRoom(roomId: string) {
+    return await prisma.room.delete({
+      where: { id: roomId }
+    });
   },
 
   // --- TENANTS ---
   async getTenants() {
-    try {
-      const dbTenants = await prisma.tenant.findMany({
-        include: { profile: { include: { user: true } } }
-      });
-      const tenantsList = dbTenants.map(t => ({
+    const dbTenants = await prisma.tenant.findMany({
+      include: {
+        profile: {
+          include: {
+            user: true
+          }
+        },
+        beds: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return dbTenants.map(t => {
+      const assignedBed = t.beds && t.beds.length > 0 ? t.beds[0] : null;
+      return {
         id: t.id,
         userId: t.profile.userId,
         name: `${t.profile.firstName} ${t.profile.lastName}`.trim(),
         email: t.profile.user.email,
         phone: t.profile.phone,
+        roomNumber: t.roomNumber || 'N/A',
+        bedNumber: assignedBed ? assignedBed.number : (t.bedNumber || 'N/A'),
+        rentAmount: t.rentAmount || 8500,
+        status: t.status as any,
+        moveInDate: t.moveInDate ? t.moveInDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         gender: t.profile.gender || 'Male',
-        address: t.profile.address || '',
         aadhaar: t.profile.aadhaar || '',
+        address: t.profile.address || '',
         emergencyName: t.profile.emergencyContactName || '',
         emergencyPhone: t.profile.emergencyContactPhone || '',
         guardianName: t.profile.guardianName || '',
         guardianPhone: t.profile.guardianPhone || '',
         occupation: t.profile.occupation || 'Student',
-        moveInDate: t.profile.moveInDate ? new Date(t.profile.moveInDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        moveOutDate: t.profile.moveOutDate ? new Date(t.profile.moveOutDate).toISOString().split('T')[0] : null,
-        status: t.status as 'ACTIVE' | 'ARCHIVED' | 'BLACKLISTED',
-        roomNumber: t.roomNumber || '',
-        bedNumber: t.bedNumber || '',
-        rentAmount: t.rentAmount,
-        agreementUrl: t.agreementUrl || '/docs/default_agreement.pdf',
         medicalNotes: t.medicalNotes || '',
-        photoUrl: t.profile.photoUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop'
-      }));
-      return tenantsList.filter((t: any) => !deletedTenantIdsSet.has(t.id));
-    } catch (e) {
-      logDebug("getTenants failed, using mock", e);
-      return mockState.tenants.filter((t: any) => !deletedTenantIdsSet.has(t.id));
-    }
+        agreementUrl: t.agreementUrl || '',
+        photoUrl: t.profile.photoUrl || ''
+      };
+    });
   },
 
-  async createTenant(data: Omit<mock.MockTenant, 'id' | 'userId'> & { password?: string }) {
-    const { password, ...tenantData } = data;
-    const tenantId = `t-${Date.now()}`;
+  async createTenant(data: {
+    name: string;
+    email: string;
+    phone: string;
+    gender?: string;
+    address?: string;
+    aadhaar?: string;
+    emergencyName?: string;
+    emergencyPhone?: string;
+    guardianName?: string;
+    guardianPhone?: string;
+    occupation?: string;
+    moveInDate?: string;
+    roomNumber?: string;
+    bedNumber?: string;
+    rentAmount?: number;
+    agreementUrl?: string;
+    medicalNotes?: string;
+    photoUrl?: string;
+    password?: string;
+  }) {
+    const cleanEmail = data.email.trim().toLowerCase();
     const userId = `u-tenant-${Date.now()}`;
+    const tenantId = `t-${Date.now()}`;
+    const profileId = `p-${Date.now()}`;
+    const passwordHash = data.password ? (data.password.startsWith('$2a$') ? data.password : bcrypt.hashSync(data.password, 10)) : bcrypt.hashSync('password123', 10);
 
-    // Update local mock store
-    const newTenant: mock.MockTenant = {
-      id: tenantId,
-      userId,
-      ...tenantData
-    };
-    mockState.tenants.push(newTenant);
+    const names = data.name.trim().split(' ');
+    const firstName = names[0] || 'Tenant';
+    const lastName = names.slice(1).join(' ') || '';
 
-    const newUser: mock.MockUser = {
-      id: userId,
-      email: tenantData.email,
-      role: 'TENANT',
-      name: tenantData.name
-    };
-    mockState.users.push({ ...newUser, password: INITIAL_PASSWORD_HASH });
-
-    // Book bed in mock data
-    mockState.buildings.forEach((b: any) => {
-      b.floors.forEach((f: any) => {
-        f.rooms.forEach((r: any) => {
-          r.beds.forEach((bed: any) => {
-            if (bed.number === tenantData.bedNumber) {
-              bed.tenantId = tenantId;
-              bed.tenantName = tenantData.name;
-              bed.isAvailable = false;
-              r.status = 'OCCUPIED';
-            }
-          });
+    // ACID Transaction: Create User + Profile + Tenant + Book Bed
+    return await prisma.$transaction(async (tx) => {
+      // 1. If bedNumber provided, verify bed availability
+      let targetBedId: string | null = null;
+      if (data.bedNumber) {
+        const targetBed = await tx.bed.findFirst({
+          where: {
+            number: { equals: data.bedNumber.trim() }
+          }
         });
-      });
-    });
+        if (targetBed) {
+          if (!targetBed.isAvailable) {
+            throw new Error(`Bed spot '${data.bedNumber}' is already occupied. Please select an available bed.`);
+          }
+          targetBedId = targetBed.id;
+        }
+      }
 
-    let passwordHash = "$2a$10$3zR14Q8tVvGq.3wKjJ3eDeZc2UuW5R4lQpUaO.u5Xl.u5Xl.u5Xl."; // password123 default
-    if (password) {
-      passwordHash = bcrypt.hashSync(password, 10);
-    }
-
-    try {
-      // Attempt prisma write
-      const createdUser = await prisma.user.create({
+      // 2. Create User record
+      const createdUser = await tx.user.create({
         data: {
           id: userId,
-          email: tenantData.email,
-          password: passwordHash,          role: "TENANT",
-          profile: {
-            create: {
-              firstName: tenantData.name.split(' ')[0] || 'Tenant',
-              lastName: tenantData.name.split(' ').slice(1).join(' ') || '',
-              phone: tenantData.phone,
-              gender: tenantData.gender,
-              address: tenantData.address,
-              aadhaar: tenantData.aadhaar,
-              emergencyContactName: tenantData.emergencyName,
-              emergencyContactPhone: tenantData.emergencyPhone,
-              guardianName: tenantData.guardianName,
-              guardianPhone: tenantData.guardianPhone,
-              occupation: tenantData.occupation || 'Student',
-              moveInDate: new Date(tenantData.moveInDate),
-              status: "ACTIVE",
-              tenant: {
-                create: {
-                  id: tenantId,
-                  roomNumber: tenantData.roomNumber,
-                  bedNumber: tenantData.bedNumber,
-                  rentAmount: tenantData.rentAmount,
-                  agreementUrl: tenantData.agreementUrl,
-                  medicalNotes: tenantData.medicalNotes,
-                  status: "ACTIVE",
-                  moveInDate: new Date(tenantData.moveInDate)
-                }
-              }
-            }
-          }
+          email: cleanEmail,
+          password: passwordHash,
+          role: 'TENANT'
         }
       });
 
-      // Also update bed occupancy in database
-      if (tenantData.bedNumber) {
-        const beds = await prisma.bed.findMany();
-        const targetBed = beds.find(b => 
-          b.number.replace(/\s+/g, '') === tenantData.bedNumber.replace(/\s+/g, '')
-        );
-        if (targetBed) {
-          await prisma.bed.update({
-            where: { id: targetBed.id },
-            data: {
-              tenantId: tenantId,
-              isAvailable: false
-            }
+      // 3. Create Profile & Tenant records
+      const createdProfile = await tx.profile.create({
+        data: {
+          id: profileId,
+          userId: createdUser.id,
+          firstName,
+          lastName,
+          phone: data.phone || '+91 98765 43210',
+          gender: data.gender || 'Male',
+          address: data.address || '',
+          aadhaar: data.aadhaar || '',
+          emergencyContactName: data.emergencyName || '',
+          emergencyContactPhone: data.emergencyPhone || '',
+          guardianName: data.guardianName || '',
+          guardianPhone: data.guardianPhone || '',
+          occupation: data.occupation || 'Student',
+          moveInDate: data.moveInDate ? new Date(data.moveInDate) : new Date(),
+          photoUrl: data.photoUrl || '',
+          status: 'ACTIVE'
+        }
+      });
+
+      const createdTenant = await tx.tenant.create({
+        data: {
+          id: tenantId,
+          profileId: createdProfile.id,
+          roomNumber: data.roomNumber || 'N/A',
+          bedNumber: data.bedNumber || 'N/A',
+          rentAmount: data.rentAmount || 8500,
+          agreementUrl: data.agreementUrl || '',
+          medicalNotes: data.medicalNotes || '',
+          moveInDate: data.moveInDate ? new Date(data.moveInDate) : new Date(),
+          status: 'ACTIVE'
+        }
+      });
+
+      // 4. Update Bed occupancy in database
+      if (targetBedId) {
+        await tx.bed.update({
+          where: { id: targetBedId },
+          data: {
+            tenantId: createdTenant.id,
+            isAvailable: false
+          }
+        });
+      }
+
+      return {
+        id: createdTenant.id,
+        userId: createdUser.id,
+        name: `${firstName} ${lastName}`.trim(),
+        email: cleanEmail,
+        phone: data.phone,
+        roomNumber: createdTenant.roomNumber,
+        bedNumber: createdTenant.bedNumber,
+        rentAmount: createdTenant.rentAmount,
+        status: 'ACTIVE'
+      };
+    });
+  },
+
+  async updateTenantProfile(tenantId: string, data: {
+    name: string;
+    email: string;
+    phone: string;
+    gender: string;
+    moveInDate: string;
+    password?: string;
+    roomNumber?: string;
+    bedNumber?: string;
+    rentAmount?: number;
+  }) {
+    const names = data.name.trim().split(' ');
+    const firstName = names[0] || 'Tenant';
+    const lastName = names.slice(1).join(' ') || '';
+
+    return await prisma.$transaction(async (tx) => {
+      const dbTenant = await tx.tenant.findUnique({
+        where: { id: tenantId },
+        include: { profile: true }
+      });
+
+      if (!dbTenant) throw new Error('Tenant record not found.');
+
+      // Update User email/password if provided
+      const userUpdate: any = { email: data.email.trim().toLowerCase() };
+      if (data.password) {
+        userUpdate.password = bcrypt.hashSync(data.password, 10);
+      }
+      await tx.user.update({
+        where: { id: dbTenant.profile.userId },
+        data: userUpdate
+      });
+
+      // Update Profile
+      await tx.profile.update({
+        where: { id: dbTenant.profileId },
+        data: {
+          firstName,
+          lastName,
+          phone: data.phone,
+          gender: data.gender,
+          moveInDate: new Date(data.moveInDate)
+        }
+      });
+
+      // Handle Bed reallocation if bedNumber changed
+      if (data.bedNumber && data.bedNumber !== dbTenant.bedNumber) {
+        // Free old bed
+        await tx.bed.updateMany({
+          where: { tenantId: tenantId },
+          data: { tenantId: null, isAvailable: true }
+        });
+
+        // Occupy new bed
+        const newBed = await tx.bed.findFirst({
+          where: { number: { equals: data.bedNumber.trim() } }
+        });
+
+        if (newBed) {
+          await tx.bed.update({
+            where: { id: newBed.id },
+            data: { tenantId: tenantId, isAvailable: false }
           });
         }
       }
 
-      logDebug("Successfully wrote tenant to db", createdUser);
-    } catch (e) {
-      logDebug("createTenant Prisma insert bypassed (using mock fallback)", e);
-    }
-
-    syncPersistentStore();
-    return newTenant;
+      // Update Tenant
+      return await tx.tenant.update({
+        where: { id: tenantId },
+        data: {
+          roomNumber: data.roomNumber,
+          bedNumber: data.bedNumber,
+          rentAmount: data.rentAmount
+        }
+      });
+    });
   },
 
   async updateTenantStatus(tenantId: string, status: 'ACTIVE' | 'ARCHIVED' | 'BLACKLISTED') {
-    const t = mockState.tenants.find((x: any) => x.id === tenantId);
-    if (t) {
-      t.status = status;
+    return await prisma.$transaction(async (tx) => {
       if (status !== 'ACTIVE') {
-        // Free bed
-        mockState.buildings.forEach((b: any) => {
-          b.floors.forEach((f: any) => {
-            f.rooms.forEach((r: any) => {
-              r.beds.forEach((bed: any) => {
-                if (bed.number === t.bedNumber) {
-                  bed.tenantId = null;
-                  bed.tenantName = undefined;
-                  bed.isAvailable = true;
-                }
-              });
-              // check occupancy status
-              const hasOccupants = r.beds.some((b: any) => !b.isAvailable);
-              r.status = hasOccupants ? 'OCCUPIED' : 'AVAILABLE';
-            });
-          });
+        // Free assigned bed
+        await tx.bed.updateMany({
+          where: { tenantId: tenantId },
+          data: { tenantId: null, isAvailable: true }
         });
       }
-    }
-    if (status !== 'ACTIVE') {
-      try {
-        const dbTenant = await prisma.tenant.findUnique({
-          where: { id: tenantId }
-        });
-        if (dbTenant) {
-          await prisma.bed.updateMany({
-            where: { tenantId: tenantId },
-            data: {
-              tenantId: null,
-              isAvailable: true
-            }
-          });
-        }
-      } catch (e) {
-        logDebug("updateTenantStatus DB bed free failed", e);
-      }
-    }
-    try {
-      await prisma.tenant.update({
+
+      return await tx.tenant.update({
         where: { id: tenantId },
         data: { status }
       });
-    } catch (e) {
-      logDebug("updateTenantStatus bypassed", e);
-    }
+    });
   },
-  async updateTenantProfile(tenantId: string, data: { name: string, email: string, phone: string, gender: string, moveInDate: string, password?: string, roomNumber?: string, bedNumber?: string, rentAmount?: number }) {
-    const t = mockState.tenants.find((x: any) => x.id === tenantId);
-    let hashedPassword = '';
-    if (data.password) {
-      const bcrypt = require('bcryptjs');
-      hashedPassword = await bcrypt.hash(data.password, 10);
-    }
 
-    const oldBedNumber = t?.bedNumber;
-
-    if (t) {
-      t.name = data.name;
-      t.email = data.email;
-      t.phone = data.phone;
-      t.gender = data.gender;
-      t.moveInDate = data.moveInDate;
-
-      if (data.roomNumber !== undefined) t.roomNumber = data.roomNumber;
-      if (data.bedNumber !== undefined) t.bedNumber = data.bedNumber;
-      if (data.rentAmount !== undefined) t.rentAmount = data.rentAmount;
-
-      // also update user
-      const u = mockState.users.find((x: any) => x.id === t.userId);
-      if (u) {
-        u.name = data.name;
-        u.email = data.email;
-        if (hashedPassword) {
-          (u as any).password = hashedPassword;
-        }
-      }
-
-      // Update mock beds occupancy
-      if (data.bedNumber && data.bedNumber !== oldBedNumber) {
-        mockState.buildings.forEach((b: any) => {
-          b.floors.forEach((f: any) => {
-            f.rooms.forEach((r: any) => {
-              r.beds.forEach((bed: any) => {
-                // Free old bed
-                if (bed.number === oldBedNumber) {
-                  bed.tenantId = null;
-                  bed.tenantName = undefined;
-                  bed.isAvailable = true;
-                }
-                // Book new bed
-                if (bed.number === data.bedNumber) {
-                  bed.tenantId = tenantId;
-                  bed.tenantName = data.name;
-                  bed.isAvailable = false;
-                }
-              });
-              // Recalculate room status
-              const hasOccupants = r.beds.some((b: any) => !b.isAvailable);
-              r.status = hasOccupants ? 'OCCUPIED' : 'AVAILABLE';
-            });
-          });
-        });
-      }
-    }
-
-    try {
-      const tenant = await prisma.tenant.findUnique({
+  async deleteTenant(tenantId: string) {
+    return await prisma.$transaction(async (tx) => {
+      const dbTenant = await tx.tenant.findUnique({
         where: { id: tenantId },
         include: { profile: true }
       });
-      if (tenant) {
-        const parts = data.name.trim().split(/\s+/);
-        const firstName = parts[0] || '';
-        const lastName = parts.slice(1).join(' ') || '';
 
-        await prisma.profile.update({
-          where: { id: tenant.profileId },
-          data: {
-            firstName,
-            lastName,
-            phone: data.phone,
-            gender: data.gender,
-            moveInDate: new Date(data.moveInDate)
-          }
+      if (dbTenant) {
+        // Free assigned beds
+        await tx.bed.updateMany({
+          where: { tenantId: tenantId },
+          data: { tenantId: null, isAvailable: true }
         });
 
-        const userUpdateData: any = { email: data.email };
-        if (hashedPassword) {
-          userUpdateData.password = hashedPassword;
-        }
-
-        await prisma.user.update({
-          where: { id: tenant.profile.userId },
-          data: userUpdateData
+        // Cascade delete User -> Profile -> Tenant
+        await tx.user.delete({
+          where: { id: dbTenant.profile.userId }
         });
-
-        // Update Tenant Table room and bed info
-        const tenantUpdateData: any = {};
-        if (data.roomNumber !== undefined) tenantUpdateData.roomNumber = data.roomNumber;
-        if (data.bedNumber !== undefined) tenantUpdateData.bedNumber = data.bedNumber;
-        if (data.rentAmount !== undefined) tenantUpdateData.rentAmount = data.rentAmount;
-
-        if (Object.keys(tenantUpdateData).length > 0) {
-          await prisma.tenant.update({
-            where: { id: tenantId },
-            data: tenantUpdateData
-          });
-        }
-
-        // Update database beds occupancy
-        if (data.bedNumber && data.bedNumber !== oldBedNumber) {
-          const targetBedNumber = data.bedNumber;
-          // Free any beds currently occupied by this tenant
-          await prisma.bed.updateMany({
-            where: { tenantId: tenantId },
-            data: { tenantId: null, isAvailable: true }
-          });
-          
-          // Book new bed in DB (matching space-insensitively)
-          const beds = await prisma.bed.findMany();
-          const targetBed = beds.find(b => 
-            b.number.replace(/\s+/g, '') === targetBedNumber.replace(/\s+/g, '')
-          );
-          if (targetBed) {
-            await prisma.bed.update({
-              where: { id: targetBed.id },
-              data: { tenantId: tenantId, isAvailable: false }
-            });
-          }
-        }
       }
-    } catch (e) {
-      logDebug("updateTenantProfile Prisma bypassed", e);
-    }
+
+      return true;
+    });
   },
 
-  // --- RENT & INVOICES ---
+  // --- INVOICES & PAYMENTS ---
   async getInvoices() {
-    try {
-      const dbInvoices = await prisma.invoice.findMany({
-        include: { tenant: { include: { profile: true } } }
-      });
-      return dbInvoices.map(inv => {
-        let items: any[] = [];
-        let remarks: string = '';
-        try {
-          const parsed = JSON.parse(inv.itemsJson);
-          if (Array.isArray(parsed)) {
-            items = parsed;
-          } else {
-            items = parsed.items || [];
-            remarks = parsed.remarks || '';
-          }
-        } catch (e) {
-          items = [];
+    const dbInvoices = await prisma.invoice.findMany({
+      include: {
+        tenant: {
+          include: { profile: true }
         }
-        return {
-          id: inv.id,
-          number: inv.number,
-          tenantId: inv.tenantId,
-          tenantName: `${inv.tenant.profile.firstName} ${inv.tenant.profile.lastName}`.trim(),
-          roomNumber: inv.tenant.roomNumber || 'N/A',
-          amount: inv.amount,
-          paidAmount: inv.paidAmount,
-          dueDate: new Date(inv.dueDate).toISOString().split('T')[0],
-          status: inv.status as any,
-          items,
-          remarks,
-          dateCreated: new Date(inv.createdAt).toISOString().split('T')[0]
-        };
-      });
-    } catch (e) {
-      logDebug("getInvoices failed, using mock", e);
-      return mockState.invoices;
-    }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return dbInvoices.map(inv => {
+      let itemsList: any[] = [];
+      try {
+        itemsList = JSON.parse(inv.itemsJson);
+        if (!Array.isArray(itemsList)) itemsList = (itemsList as any)?.items || [];
+      } catch (e) {
+        itemsList = [];
+      }
+
+      return {
+        id: inv.id,
+        number: inv.number,
+        tenantId: inv.tenantId,
+        tenantName: inv.tenant ? `${inv.tenant.profile.firstName} ${inv.tenant.profile.lastName}`.trim() : 'Resident',
+        roomNumber: inv.tenant?.roomNumber || 'N/A',
+        amount: inv.amount,
+        paidAmount: inv.paidAmount,
+        dueDate: inv.dueDate.toISOString().split('T')[0],
+        status: inv.status as any,
+        items: itemsList,
+        dateCreated: inv.createdAt.toISOString().split('T')[0]
+      };
+    });
   },
 
   async createInvoice(tenantId: string, amount: number, items: { description: string; amount: number }[], dueDate: string) {
-    let resolvedTenantId = tenantId;
-    let resolvedTenantName = 'Unknown Tenant';
-    let resolvedRoomNumber = 'N/A';
-
-    const tenant = mockState.tenants.find((t: any) => t.id === tenantId || t.userId === tenantId);
-    if (tenant) {
-      resolvedTenantId = tenant.id;
-      resolvedTenantName = tenant.name;
-      resolvedRoomNumber = tenant.roomNumber;
-    }
-
-    try {
-      const dbTenant = await prisma.tenant.findFirst({
-        where: {
-          OR: [
-            { id: tenantId },
-            { profile: { userId: tenantId } }
-          ]
-        },
-        include: { profile: true }
-      });
-      if (dbTenant) {
-        resolvedTenantId = dbTenant.id;
-        resolvedTenantName = `${dbTenant.profile.firstName} ${dbTenant.profile.lastName}`.trim();
-        resolvedRoomNumber = dbTenant.roomNumber || 'N/A';
+    const dbTenant = await prisma.tenant.findFirst({
+      where: {
+        OR: [
+          { id: tenantId },
+          { profile: { userId: tenantId } }
+        ]
       }
-    } catch (e) {
-      logDebug("createInvoice database lookup failed", e);
-    }
+    });
 
-    const newInvoice: mock.MockInvoice = {
-      id: `inv-${Date.now()}`,
-      number: `INV-2026-${String(Date.now()).slice(-4)}`,
-      tenantId: resolvedTenantId,
-      tenantName: resolvedTenantName,
-      roomNumber: resolvedRoomNumber,
-      amount,
-      paidAmount: 0,
-      dueDate,
-      status: 'PENDING',
-      items,
-      dateCreated: new Date().toISOString().split('T')[0]
-    };
-    mockState.invoices.unshift(newInvoice);
+    if (!dbTenant) throw new Error('Tenant not found for invoice creation.');
 
-    try {
-      await prisma.invoice.create({
-        data: {
-          id: newInvoice.id,
-          number: newInvoice.number,
-          tenantId: resolvedTenantId,
-          amount,
-          paidAmount: 0,
-          dueDate: new Date(dueDate),
-          status: 'PENDING',
-          itemsJson: JSON.stringify(items)
-        }
-      });
-    } catch (e) {
-      logDebug("createInvoice Prisma bypassed", e);
-    }
-    syncPersistentStore();
-    return newInvoice;
+    const invId = `inv-${Date.now()}`;
+    const invNumber = `INV-2026-${String(Date.now()).slice(-4)}`;
+
+    return await prisma.invoice.create({
+      data: {
+        id: invId,
+        number: invNumber,
+        tenantId: dbTenant.id,
+        amount,
+        paidAmount: 0,
+        dueDate: new Date(dueDate),
+        status: 'PENDING',
+        itemsJson: JSON.stringify(items)
+      }
+    });
   },
 
   async recordPayment(invoiceId: string, amount: number, method: string, isTenantPayment: boolean = false) {
-    const inv = mockState.invoices.find((i: any) => i.id === invoiceId);
-    if (inv) {
-      if (isTenantPayment) {
-        inv.status = 'PENDING_VERIFICATION';
-        (inv as any).tempPaidAmount = amount;
-      } else {
-        inv.paidAmount += amount;
-        if (inv.paidAmount >= inv.amount) {
-          inv.status = 'PAID';
-        } else {
-          inv.status = 'PARTIAL';
-        }
+    return await prisma.$transaction(async (tx) => {
+      const dbInv = await tx.invoice.findUnique({
+        where: { id: invoiceId },
+        include: { tenant: { include: { profile: true } } }
+      });
 
-        // Add payment
-        mockState.expenses.push({
-          id: `pay-${Date.now()}`,
-          title: `Rent collection - ${inv.tenantName} (${inv.number})`,
-          amount: -amount, // negative expense = income
-          category: 'SALARY', // category map
-          date: new Date().toISOString().split('T')[0],
-          notes: `Rent received via ${method}`
+      if (!dbInv) throw new Error('Invoice record not found.');
+
+      if (isTenantPayment) {
+        return await tx.invoice.update({
+          where: { id: invoiceId },
+          data: {
+            status: 'PENDING_VERIFICATION',
+            payments: {
+              create: {
+                amount,
+                type: 'RENT',
+                paymentMethod: method,
+                status: 'PENDING',
+                tenantId: dbInv.tenantId
+              }
+            }
+          }
+        });
+      } else {
+        const newPaid = dbInv.paidAmount + amount;
+        const status = newPaid >= dbInv.amount ? 'PAID' : 'PARTIAL';
+
+        // Record income expense entry
+        const tenantName = dbInv.tenant ? `${dbInv.tenant.profile.firstName} ${dbInv.tenant.profile.lastName}`.trim() : 'Tenant';
+        await tx.expense.create({
+          data: {
+            title: `Rent collection - ${tenantName} (${dbInv.number})`,
+            amount: -amount, // negative expense = income
+            category: 'SALARY',
+            date: new Date(),
+            notes: `Rent received via ${method}`
+          }
+        });
+
+        return await tx.invoice.update({
+          where: { id: invoiceId },
+          data: {
+            paidAmount: newPaid,
+            status,
+            payments: {
+              create: {
+                amount,
+                type: 'RENT',
+                paymentMethod: method,
+                status: 'PAID',
+                tenantId: dbInv.tenantId
+              }
+            }
+          }
         });
       }
-    }
-
-    try {
-      if (isTenantPayment) {
-        const dbInv = await prisma.invoice.findUnique({ where: { id: invoiceId } });
-        if (dbInv) {
-          const updated = await prisma.invoice.update({
-            where: { id: invoiceId },
-            data: {
-              status: 'PENDING_VERIFICATION',
-              payments: {
-                create: {
-                  amount,
-                  type: 'RENT',
-                  paymentMethod: method,
-                  status: 'PENDING',
-                  tenantId: dbInv.tenantId
-                }
-              }
-            }
-          });
-          syncPersistentStore();
-          return updated;
-        }
-      } else {
-        const dbInv = await prisma.invoice.findUnique({ where: { id: invoiceId } });
-        if (dbInv) {
-          const newPaid = dbInv.paidAmount + amount;
-          const status = newPaid >= dbInv.amount ? 'PAID' : 'PARTIAL';
-          const updated = await prisma.invoice.update({
-            where: { id: invoiceId },
-            data: {
-              paidAmount: newPaid,
-              status,
-              payments: {
-                create: {
-                  amount,
-                  type: 'RENT',
-                  paymentMethod: method,
-                  status: 'PAID',
-                  tenantId: dbInv.tenantId
-                }
-              }
-            }
-          });
-          syncPersistentStore();
-          return updated;
-        }
-      }
-    } catch (e) {
-      logDebug("recordPayment failed", e);
-    }
-    syncPersistentStore();
-    return inv;
+    });
   },
 
   async verifyInvoicePayment(invoiceId: string, remarks: string = 'Verified online payment') {
-    const inv = mockState.invoices.find((i: any) => i.id === invoiceId);
-    if (inv) {
-      const verifyAmount = (inv as any).tempPaidAmount !== undefined ? (inv as any).tempPaidAmount : (inv.amount - inv.paidAmount);
-      inv.paidAmount += verifyAmount;
-      inv.status = inv.paidAmount >= inv.amount ? 'PAID' : 'PARTIAL';
-      (inv as any).remarks = remarks;
-      delete (inv as any).tempPaidAmount;
-
-      // Add payment
-      mockState.expenses.push({
-        id: `pay-${Date.now()}`,
-        title: `Rent collection verified - ${inv.tenantName} (${inv.number})`,
-        amount: -verifyAmount, // negative expense = income
-        category: 'SALARY', // category map
-        date: new Date().toISOString().split('T')[0],
-        notes: remarks
-      });
-    }
-
-    try {
-      const dbInv = await prisma.invoice.findUnique({
+    return await prisma.$transaction(async (tx) => {
+      const dbInv = await tx.invoice.findUnique({
         where: { id: invoiceId },
-        include: { payments: true }
-      });
-      if (dbInv) {
-        const pendingPayment = dbInv.payments.find((p: any) => p.status === 'PENDING');
-        const verifyAmount = pendingPayment ? pendingPayment.amount : (dbInv.amount - dbInv.paidAmount);
-
-        if (pendingPayment) {
-          await prisma.payment.update({
-            where: { id: pendingPayment.id },
-            data: { status: 'PAID' }
-          });
-        } else {
-          await prisma.payment.create({
-            data: {
-              amount: verifyAmount,
-              type: 'RENT',
-              paymentMethod: 'ONLINE',
-              status: 'PAID',
-              tenantId: dbInv.tenantId,
-              invoiceId: dbInv.id
-            }
-          });
-        }
-
-        const newPaidAmount = dbInv.paidAmount + verifyAmount;
-        const newStatus = newPaidAmount >= dbInv.amount ? 'PAID' : 'PARTIAL';
-
-        // Parse existing itemsJson to append remarks
-        let items = [];
-        try {
-          const parsed = JSON.parse(dbInv.itemsJson);
-          items = Array.isArray(parsed) ? parsed : (parsed.items || []);
-        } catch (e) {
-          items = [];
-        }
-
-        const newItemsJson = JSON.stringify({ items, remarks });
-
-        const updated = await prisma.invoice.update({
-          where: { id: invoiceId },
-          data: {
-            paidAmount: newPaidAmount,
-            status: newStatus,
-            itemsJson: newItemsJson
-          }
-        });
-        syncPersistentStore();
-        return updated;
-      }
-    } catch (e) {
-      logDebug("verifyInvoicePayment failed", e);
-    }
-    syncPersistentStore();
-    return inv;
-  },
-
-  async revertInvoicePayment(invoiceId: string, remarks: string) {
-    const inv = mockState.invoices.find((i: any) => i.id === invoiceId);
-    if (inv) {
-      inv.status = 'PENDING_VERIFICATION';
-      inv.paidAmount = 0;
-      (inv as any).remarks = remarks;
-
-      // also remove from expenses if it was recorded
-      mockState.expenses = mockState.expenses.filter((exp: any) => !exp.title.includes(inv.number));
-    }
-
-    try {
-      const dbInv = await prisma.invoice.findUnique({
-        where: { id: invoiceId },
-        include: { payments: true }
+        include: { payments: true, tenant: { include: { profile: true } } }
       });
 
-      if (dbInv) {
-        // Delete all payments associated with this invoice
-        await prisma.payment.deleteMany({
-          where: { invoiceId }
-        });
+      if (!dbInv) throw new Error('Invoice not found.');
 
-        // Recreate a pending verification payment proof record
-        await prisma.payment.create({
+      const pendingPayment = dbInv.payments.find(p => p.status === 'PENDING');
+      const verifyAmount = pendingPayment ? pendingPayment.amount : (dbInv.amount - dbInv.paidAmount);
+
+      if (pendingPayment) {
+        await tx.payment.update({
+          where: { id: pendingPayment.id },
+          data: { status: 'PAID' }
+        });
+      } else {
+        await tx.payment.create({
           data: {
-            amount: dbInv.amount,
+            amount: verifyAmount,
             type: 'RENT',
             paymentMethod: 'ONLINE',
-            status: 'PENDING',
+            status: 'PAID',
             tenantId: dbInv.tenantId,
             invoiceId: dbInv.id
           }
         });
-
-        // Parse existing itemsJson to append remarks
-        let items = [];
-        try {
-          const parsed = JSON.parse(dbInv.itemsJson);
-          items = Array.isArray(parsed) ? parsed : (parsed.items || []);
-        } catch (e) {
-          items = [];
-        }
-
-        const newItemsJson = JSON.stringify({ items, remarks });
-
-        // Update invoice in database back to PENDING_VERIFICATION
-        const updated = await prisma.invoice.update({
-          where: { id: invoiceId },
-          data: {
-            paidAmount: 0,
-            status: 'PENDING_VERIFICATION',
-            itemsJson: newItemsJson
-          }
-        });
-        return updated;
       }
-    } catch (e) {
-      logDebug("revertInvoicePayment failed", e);
-    }
-    return inv;
-  },
 
-  // --- EMPLOYEES & SALARY ---
-  async getEmployees() {
-    try {
-      const dbEmployees = await prisma.employee.findMany({
-        include: { salaries: true }
-      });
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      startOfMonth.setHours(0, 0, 0, 0);
+      const newPaidAmount = dbInv.paidAmount + verifyAmount;
+      const newStatus = newPaidAmount >= dbInv.amount ? 'PAID' : 'PARTIAL';
 
-      return dbEmployees.map(emp => {
-        const isPaidThisMonth = emp.salaries.some(sal => new Date(sal.date) >= startOfMonth && sal.status === 'PAID');
-        return {
-          ...emp,
-          isPaidThisMonth
-        };
-      });
-    } catch (e) {
-      logDebug("getEmployees failed, using mock", e);
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      startOfMonth.setHours(0, 0, 0, 0);
-
-      return mockState.employees.map((emp: any) => {
-        const hasSalaryExpense = mockState.expenses.some((exp: any) => 
-          exp.category === 'SALARY' && 
-          exp.title.includes(emp.name) && 
-          new Date(exp.date) >= startOfMonth
-        );
-        return {
-          ...emp,
-          isPaidThisMonth: hasSalaryExpense
-        };
-      });
-    }
-  },
-
-  async createEmployee(employeeData: Omit<mock.MockEmployee, 'id' | 'pendingSalary' | 'advanceTaken'>) {
-    const newEmp: mock.MockEmployee = {
-      id: `emp-${Date.now()}`,
-      pendingSalary: 0,
-      advanceTaken: 0,
-      ...employeeData
-    };
-    mockState.employees.push(newEmp);
-
-    try {
-      await prisma.employee.create({
+      const tenantName = dbInv.tenant ? `${dbInv.tenant.profile.firstName} ${dbInv.tenant.profile.lastName}`.trim() : 'Tenant';
+      await tx.expense.create({
         data: {
-          name: employeeData.name,
-          phone: employeeData.phone,
-          address: employeeData.address,
-          role: employeeData.role,
-          salary: employeeData.salary,
-          status: 'ACTIVE',
-          bankDetails: employeeData.bankDetails,
-          emergencyContact: employeeData.emergencyContact,
-          photoUrl: employeeData.photoUrl,
-          joiningDate: new Date(employeeData.joiningDate)
+          title: `Rent collection verified - ${tenantName} (${dbInv.number})`,
+          amount: -verifyAmount,
+          category: 'SALARY',
+          date: new Date(),
+          notes: remarks
         }
       });
-    } catch (e) {
-      logDebug("createEmployee Prisma bypassed", e);
+
+      return await tx.invoice.update({
+        where: { id: invoiceId },
+        data: {
+          paidAmount: newPaidAmount,
+          status: newStatus
+        }
+      });
+    });
+  },
+
+  async revertInvoicePayment(invoiceId: string, remarks: string = 'Payment reverted by owner') {
+    return await prisma.$transaction(async (tx) => {
+      const dbInv = await tx.invoice.findUnique({
+        where: { id: invoiceId },
+        include: { payments: true }
+      });
+
+      if (!dbInv) throw new Error('Invoice not found.');
+
+      await tx.payment.deleteMany({
+        where: { invoiceId }
+      });
+
+      return await tx.invoice.update({
+        where: { id: invoiceId },
+        data: {
+          paidAmount: 0,
+          status: 'PENDING'
+        }
+      });
+    });
+  },
+
+  async deleteInvoice(invoiceId: string) {
+    return await prisma.invoice.delete({
+      where: { id: invoiceId }
+    });
+  },
+
+  async updateInvoice(invoiceId: string, data: { amount?: number; dueDate?: string; month?: string; status?: string }) {
+    const updatePayload: any = {};
+    if (data.amount !== undefined) updatePayload.amount = data.amount;
+    if (data.dueDate !== undefined) updatePayload.dueDate = new Date(data.dueDate);
+    if (data.status) {
+      updatePayload.status = data.status;
+      if (data.status === 'PAID') {
+        const inv = await prisma.invoice.findUnique({ where: { id: invoiceId } });
+        if (inv) updatePayload.paidAmount = data.amount !== undefined ? data.amount : inv.amount;
+      } else if (data.status === 'PENDING') {
+        updatePayload.paidAmount = 0;
+      }
     }
-    syncPersistentStore();
-    return newEmp;
+
+    return await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: updatePayload
+    });
+  },
+
+  // --- EMPLOYEES ---
+  async getEmployees() {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const employees = await prisma.employee.findMany({
+      include: { salaries: true },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return employees.map(emp => {
+      const isPaidThisMonth = emp.salaries.some(s => new Date(s.date) >= startOfMonth && s.status === 'PAID');
+      return {
+        id: emp.id,
+        name: emp.name,
+        phone: emp.phone,
+        address: emp.address,
+        role: emp.role as any,
+        salary: emp.salary,
+        status: emp.status as any,
+        joiningDate: emp.joiningDate.toISOString().split('T')[0],
+        bankDetails: emp.bankDetails || '',
+        emergencyContact: emp.emergencyContact || '',
+        photoUrl: emp.photoUrl || '',
+        pendingSalary: isPaidThisMonth ? 0 : emp.salary,
+        advanceTaken: 0,
+        isPaidThisMonth
+      };
+    });
+  },
+
+  async createEmployee(employeeData: any) {
+    return await prisma.employee.create({
+      data: {
+        name: employeeData.name,
+        phone: employeeData.phone,
+        address: employeeData.address || '',
+        role: employeeData.role || 'STAFF',
+        salary: parseFloat(employeeData.salary || 15000),
+        status: 'ACTIVE',
+        bankDetails: employeeData.bankDetails || '',
+        emergencyContact: employeeData.emergencyContact || '',
+        photoUrl: employeeData.photoUrl || '',
+        joiningDate: employeeData.joiningDate ? new Date(employeeData.joiningDate) : new Date()
+      }
+    });
   },
 
   async paySalary(employeeId: string, amount: number, bonus: number, deductions: number, advancePaid: number) {
-    const emp = mockState.employees.find((e: any) => e.id === employeeId);
-    if (emp) {
-      emp.pendingSalary = Math.max(0, emp.pendingSalary - amount);
-      emp.advanceTaken += advancePaid;
-      
-      // record expense
-      mockState.expenses.push({
-        id: `exp-${Date.now()}`,
-        title: `Salary paid to ${emp.name}`,
-        amount: amount + bonus - deductions,
-        category: 'SALARY',
-        date: new Date().toISOString().split('T')[0],
-        notes: `Bonus: ${bonus}, Deductions: ${deductions}, Advance adjustment: ${advancePaid}`
-      });
-    }
+    return await prisma.$transaction(async (tx) => {
+      const emp = await tx.employee.findUnique({ where: { id: employeeId } });
+      if (!emp) throw new Error('Employee not found');
 
-    try {
-      await prisma.salary.create({
+      await tx.salary.create({
         data: {
           employeeId,
           amount,
@@ -1177,567 +880,331 @@ const rawDbService = {
           status: 'PAID'
         }
       });
-    } catch (e) {
-      logDebug("paySalary Prisma bypassed", e);
-    }
-    syncPersistentStore();
+
+      return await tx.expense.create({
+        data: {
+          title: `Salary paid to ${emp.name}`,
+          amount: amount + bonus - deductions,
+          category: 'SALARY',
+          date: new Date(),
+          notes: `Bonus: ${bonus}, Deductions: ${deductions}, Advance adjustment: ${advancePaid}`
+        }
+      });
+    });
   },
 
   async updateEmployee(id: string, data: any) {
-    const emp = mockState.employees.find((e: any) => e.id === id);
-    if (emp) {
-      if (data.name) emp.name = data.name;
-      if (data.phone) emp.phone = data.phone;
-      if (data.role) emp.role = data.role;
-      if (data.salary !== undefined) emp.salary = parseFloat(data.salary);
-      if (data.status) emp.status = data.status;
-      if (data.bankDetails) emp.bankDetails = data.bankDetails;
-    }
-    try {
-      await prisma.employee.update({
-        where: { id },
-        data: {
-          name: data.name,
-          phone: data.phone,
-          role: data.role,
-          salary: data.salary !== undefined ? parseFloat(data.salary) : undefined,
-          status: data.status,
-          bankDetails: data.bankDetails
-        }
-      });
-    } catch (e) {
-      logDebug("updateEmployee Prisma failed", e);
-    }
-    return true;
+    return await prisma.employee.update({
+      where: { id },
+      data: {
+        name: data.name,
+        phone: data.phone,
+        role: data.role,
+        salary: data.salary !== undefined ? parseFloat(data.salary) : undefined,
+        status: data.status,
+        bankDetails: data.bankDetails
+      }
+    });
+  },
+
+  async deleteEmployee(id: string) {
+    return await prisma.employee.delete({ where: { id } });
   },
 
   // --- COMPLAINTS ---
   async getComplaints() {
-    try {
-      const dbComplaints = await prisma.complaint.findMany({
-        include: { tenant: { include: { profile: true } }, assignedEmployee: true }
-      });
-      return dbComplaints.map(comp => ({
-        id: comp.id,
-        title: comp.title,
-        description: comp.description,
-        category: comp.category as any,
-        status: comp.status as any,
-        tenantId: comp.tenantId,
-        tenantName: `${comp.tenant.profile.firstName} ${comp.tenant.profile.lastName}`.trim(),
-        roomNumber: comp.tenant.roomNumber || 'N/A',
-        assignedEmployeeId: comp.assignedEmployeeId,
-        assignedEmployeeName: comp.assignedEmployee ? comp.assignedEmployee.name : undefined,
-        dateCreated: new Date(comp.createdAt).toISOString().split('T')[0]
-      }));
-    } catch (e) {
-      logDebug("getComplaints failed, using mock", e);
-      return mockState.complaints;
-    }
+    const complaints = await prisma.complaint.findMany({
+      include: {
+        tenant: { include: { profile: true } },
+        assignedEmployee: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return complaints.map(comp => ({
+      id: comp.id,
+      title: comp.title,
+      description: comp.description,
+      category: comp.category as any,
+      status: comp.status as any,
+      tenantId: comp.tenantId,
+      tenantName: comp.tenant ? `${comp.tenant.profile.firstName} ${comp.tenant.profile.lastName}`.trim() : 'Resident',
+      roomNumber: comp.tenant?.roomNumber || 'N/A',
+      assignedEmployeeId: comp.assignedEmployeeId,
+      assignedEmployeeName: comp.assignedEmployee ? comp.assignedEmployee.name : undefined,
+      dateCreated: comp.createdAt.toISOString().split('T')[0]
+    }));
   },
 
   async createComplaint(tenantId: string, title: string, description: string, category: string) {
-    let resolvedTenantId = tenantId;
-    let resolvedTenantName = 'Unknown Tenant';
-    let resolvedRoomNumber = 'N/A';
-
-    const tenant = mockState.tenants.find((t: any) => t.id === tenantId || t.userId === tenantId);
-    if (tenant) {
-      resolvedTenantId = tenant.id;
-      resolvedTenantName = tenant.name;
-      resolvedRoomNumber = tenant.roomNumber;
-    }
-
-    try {
-      const dbTenant = await prisma.tenant.findFirst({
-        where: {
-          OR: [
-            { id: tenantId },
-            { profile: { userId: tenantId } }
-          ]
-        },
-        include: { profile: true }
-      });
-      if (dbTenant) {
-        resolvedTenantId = dbTenant.id;
-        resolvedTenantName = `${dbTenant.profile.firstName} ${dbTenant.profile.lastName}`.trim();
-        resolvedRoomNumber = dbTenant.roomNumber || 'N/A';
+    const dbTenant = await prisma.tenant.findFirst({
+      where: {
+        OR: [
+          { id: tenantId },
+          { profile: { userId: tenantId } }
+        ]
       }
-    } catch (e) {
-      logDebug("createComplaint database lookup failed", e);
-    }
+    });
 
-    const newComp: mock.MockComplaint = {
-      id: `comp-${Date.now()}`,
-      title,
-      description,
-      category: category as any,
-      status: 'PENDING',
-      tenantId: resolvedTenantId,
-      tenantName: resolvedTenantName,
-      roomNumber: resolvedRoomNumber,
-      assignedEmployeeId: null,
-      dateCreated: new Date().toISOString().split('T')[0]
-    };
-    mockState.complaints.unshift(newComp);
+    if (!dbTenant) throw new Error('Tenant not found for complaint submission.');
 
-    try {
-      await prisma.complaint.create({
-        data: {
-          id: newComp.id,
-          title,
-          description,
-          category,
-          tenantId: resolvedTenantId,
-          status: 'PENDING'
-        }
-      });
-    } catch (e) {
-      logDebug("createComplaint Prisma bypassed", e);
-    }
-    syncPersistentStore();
-    return newComp;
+    return await prisma.complaint.create({
+      data: {
+        title,
+        description,
+        category,
+        tenantId: dbTenant.id,
+        status: 'PENDING'
+      }
+    });
   },
 
   async updateComplaintStatus(complaintId: string, status: string, employeeId?: string) {
-    const comp = mockState.complaints.find((c: any) => c.id === complaintId);
-    let assignedEmployeeName: string | undefined = undefined;
-    
-    if (comp) {
-      comp.status = status as any;
-      if (employeeId) {
-        comp.assignedEmployeeId = employeeId;
-        const emp = mockState.employees.find((e: any) => e.id === employeeId);
-        comp.assignedEmployeeName = emp ? emp.name : undefined;
-        assignedEmployeeName = comp.assignedEmployeeName;
-      }
-    }
-
-    try {
-      if (employeeId && !assignedEmployeeName) {
-        const emp = await prisma.employee.findUnique({
-          where: { id: employeeId }
-        });
-        if (emp) assignedEmployeeName = emp.name;
-      }
-
-      await prisma.complaint.update({
-        where: { id: complaintId },
-        data: {
-          status,
-          assignedEmployeeId: employeeId || undefined
-        }
-      });
-    } catch (e) {
-      logDebug("updateComplaintStatus Prisma bypassed", e);
-    }
-
-    syncPersistentStore();
-    return comp ? {
-      ...comp,
-      status,
-      assignedEmployeeId: employeeId || null,
-      assignedEmployeeName
-    } : null;
+    return await prisma.complaint.update({
+      where: { id: complaintId },
+      data: {
+        status,
+        assignedEmployeeId: employeeId || undefined
+      },
+      include: { assignedEmployee: true }
+    });
   },
 
   async deleteComplaint(complaintId: string) {
-    mockState.complaints = mockState.complaints.filter((c: any) => c.id !== complaintId);
-    try {
-      await prisma.complaint.delete({
-        where: { id: complaintId }
-      });
-    } catch (e) {
-      logDebug("deleteComplaint Prisma failed", e);
-    }
-    syncPersistentStore();
-    return true;
+    return await prisma.complaint.delete({ where: { id: complaintId } });
   },
 
   // --- LEAVE REQUESTS ---
   async getLeaveRequests() {
-    return mockState.leaveRequests;
+    const leaves = await prisma.leaveRequest.findMany({
+      include: { tenant: { include: { profile: true } } },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return leaves.map(l => ({
+      id: l.id,
+      tenantId: l.tenantId,
+      tenantName: l.tenant ? `${l.tenant.profile.firstName} ${l.tenant.profile.lastName}`.trim() : 'Resident',
+      roomNumber: l.tenant?.roomNumber || 'N/A',
+      startDate: l.startDate.toISOString().split('T')[0],
+      endDate: l.endDate.toISOString().split('T')[0],
+      reason: l.reason,
+      status: l.status as any,
+      dateCreated: l.createdAt.toISOString().split('T')[0]
+    }));
   },
 
   async createLeaveRequest(tenantId: string, startDate: string, endDate: string, reason: string) {
-    const tenant = mockState.tenants.find((t: any) => t.id === tenantId || t.userId === tenantId);
-    const newLeave: mock.MockLeaveRequest = {
-      id: `l-${Date.now()}`,
-      tenantId: tenant ? tenant.id : tenantId,
-      tenantName: tenant ? tenant.name : 'Unknown Tenant',
-      roomNumber: tenant ? tenant.roomNumber : 'N/A',
-      startDate,
-      endDate,
-      reason,
-      status: 'PENDING',
-      dateCreated: new Date().toISOString().split('T')[0]
-    };
-    mockState.leaveRequests.unshift(newLeave);
-    syncPersistentStore();
-    return newLeave;
+    const dbTenant = await prisma.tenant.findFirst({
+      where: {
+        OR: [
+          { id: tenantId },
+          { profile: { userId: tenantId } }
+        ]
+      }
+    });
+
+    if (!dbTenant) throw new Error('Tenant not found for leave request.');
+
+    return await prisma.leaveRequest.create({
+      data: {
+        tenantId: dbTenant.id,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        reason,
+        status: 'PENDING'
+      }
+    });
   },
 
   async approveLeaveRequest(leaveId: string, status: 'APPROVED' | 'REJECTED') {
-    const l = mockState.leaveRequests.find((x: any) => x.id === leaveId);
-    if (l) l.status = status;
-    syncPersistentStore();
-    return l;
+    return await prisma.leaveRequest.update({
+      where: { id: leaveId },
+      data: { status }
+    });
   },
 
-  // --- VISITOR LOGS ---
+  // --- VISITORS ---
   async getVisitors() {
-    return mockState.visitors;
+    const visitors = await prisma.visitor.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return visitors.map(v => ({
+      id: v.id,
+      name: v.name,
+      phone: v.phone,
+      personVisiting: v.personVisiting,
+      checkIn: v.checkIn.toISOString().replace('T', ' ').slice(0, 16),
+      checkOut: v.checkOut ? v.checkOut.toISOString().replace('T', ' ').slice(0, 16) : null,
+      approvalStatus: v.approvalStatus as any,
+      tenantId: v.tenantId
+    }));
   },
 
   async createVisitorRequest(tenantId: string, name: string, phone: string, personVisiting: string, checkIn: string) {
-    const newVisitor: mock.MockVisitor = {
-      id: `vis-${Date.now()}`,
-      name,
-      phone,
-      personVisiting,
-      checkIn,
-      checkOut: null,
-      approvalStatus: 'PENDING',
-      tenantId
-    };
-    mockState.visitors.unshift(newVisitor);
-    syncPersistentStore();
-    return newVisitor;
+    const dbTenant = await prisma.tenant.findFirst({
+      where: {
+        OR: [
+          { id: tenantId },
+          { profile: { userId: tenantId } }
+        ]
+      }
+    });
+
+    if (!dbTenant) throw new Error('Tenant not found for visitor request.');
+
+    return await prisma.visitor.create({
+      data: {
+        name,
+        phone,
+        personVisiting,
+        checkIn: new Date(checkIn),
+        tenantId: dbTenant.id,
+        approvalStatus: 'PENDING'
+      }
+    });
   },
 
   async updateVisitorStatus(visitorId: string, status: 'APPROVED' | 'REJECTED' | 'CHECKOUT') {
-    const v = mockState.visitors.find((x: any) => x.id === visitorId);
-    if (v) {
-      if (status === 'CHECKOUT') {
-        v.checkOut = new Date().toISOString().replace('T', ' ').slice(0, 16);
-      } else {
-        v.approvalStatus = status;
-      }
+    const dataPayload: any = {};
+    if (status === 'CHECKOUT') {
+      dataPayload.checkOut = new Date();
+    } else {
+      dataPayload.approvalStatus = status;
     }
-    syncPersistentStore();
-    return v;
+
+    return await prisma.visitor.update({
+      where: { id: visitorId },
+      data: dataPayload
+    });
   },
 
   // --- EXPENSES ---
   async getExpenses() {
-    return mockState.expenses;
+    const expenses = await prisma.expense.findMany({
+      orderBy: { date: 'desc' }
+    });
+
+    return expenses.map(e => ({
+      id: e.id,
+      title: e.title,
+      amount: e.amount,
+      category: e.category as any,
+      date: e.date.toISOString().split('T')[0],
+      notes: e.notes || ''
+    }));
   },
 
   async createExpense(title: string, amount: number, category: string, date: string, notes: string) {
-    const newExpense: mock.MockExpense = {
-      id: `exp-${Date.now()}`,
-      title,
-      amount,
-      category: category as any,
-      date,
-      notes
-    };
-    mockState.expenses.unshift(newExpense);
-    syncPersistentStore();
-    return newExpense;
+    return await prisma.expense.create({
+      data: {
+        title,
+        amount,
+        category,
+        date: new Date(date),
+        notes
+      }
+    });
+  },
+
+  async deleteExpense(id: string) {
+    return await prisma.expense.delete({ where: { id } });
   },
 
   // --- INVENTORY ---
   async getInventory() {
-    return mockState.inventory;
+    const inventory = await prisma.inventory.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return inventory.map(i => ({
+      id: i.id,
+      name: i.name,
+      category: i.category,
+      quantity: i.quantity,
+      condition: i.condition,
+      purchaseDate: i.purchaseDate.toISOString().split('T')[0],
+      cost: i.cost,
+      warrantyYears: i.warrantyYears,
+      vendor: i.vendor || '',
+      replacementDate: i.replacementDate ? i.replacementDate.toISOString().split('T')[0] : null
+    }));
   },
 
   async createInventoryItem(name: string, category: string, quantity: number, condition: string, purchaseDate: string, cost: number, warrantyYears: number, vendor: string) {
-    const newItem: mock.MockInventory = {
-      id: `inv-item-${Date.now()}`,
-      name,
-      category,
-      quantity,
-      condition,
-      purchaseDate,
-      cost,
-      warrantyYears,
-      vendor,
-      replacementDate: null
-    };
-    mockState.inventory.unshift(newItem);
-    syncPersistentStore();
-    return newItem;
+    return await prisma.inventory.create({
+      data: {
+        name,
+        category,
+        quantity,
+        condition,
+        purchaseDate: new Date(purchaseDate),
+        cost,
+        warrantyYears,
+        vendor
+      }
+    });
   },
 
   async updateInventoryItem(itemId: string, quantity: number, condition: string) {
-    const item = mockState.inventory.find((i: any) => i.id === itemId);
-    if (item) {
-      item.quantity = quantity;
-      item.condition = condition;
-    }
-    syncPersistentStore();
-    return item;
+    return await prisma.inventory.update({
+      where: { id: itemId },
+      data: { quantity, condition }
+    });
+  },
+
+  async deleteInventory(id: string) {
+    return await prisma.inventory.delete({ where: { id } });
   },
 
   // --- NOTICES ---
   async getNotices() {
-    return mockState.notices;
+    const notices = await prisma.notice.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return notices.map(n => ({
+      id: n.id,
+      title: n.title,
+      content: n.content,
+      target: n.target as any,
+      isEmergency: n.isEmergency,
+      scheduleDate: n.scheduleDate ? n.scheduleDate.toISOString().split('T')[0] : n.createdAt.toISOString().split('T')[0]
+    }));
   },
 
   async createNotice(title: string, content: string, target: string, isEmergency: boolean) {
-    const newNotice: mock.MockNotice = {
-      id: `n-${Date.now()}`,
-      title,
-      content,
-      target: target as any,
-      isEmergency,
-      scheduleDate: new Date().toISOString().split('T')[0]
-    };
-    mockState.notices.unshift(newNotice);
-    syncPersistentStore();
-    return newNotice;
+    return await prisma.notice.create({
+      data: {
+        title,
+        content,
+        target,
+        isEmergency,
+        scheduleDate: new Date()
+      }
+    });
   },
 
   async deleteNotice(id: string) {
-    mockState.notices = mockState.notices.filter((n: any) => n.id !== id);
-    try {
-      await prisma.notice.delete({ where: { id } });
-    } catch (e) {
-      logDebug("deleteNotice failed", e);
-    }
-    syncPersistentStore();
+    return await prisma.notice.delete({ where: { id } });
   },
 
-  async deleteExpense(id: string) {
-    mockState.expenses = mockState.expenses.filter((e: any) => e.id !== id);
-    try {
-      await prisma.expense.delete({ where: { id } });
-    } catch (e) {
-      logDebug("deleteExpense failed", e);
-    }
-    syncPersistentStore();
-  },
-
-  async deleteInventory(id: string) {
-    mockState.inventory = mockState.inventory.filter((i: any) => i.id !== id);
-    try {
-      await prisma.inventory.delete({ where: { id } });
-    } catch (e) {
-      logDebug("deleteInventory failed", e);
-    }
-    syncPersistentStore();
-  },
-
-  async deleteEmployee(id: string) {
-    mockState.employees = mockState.employees.filter((e: any) => e.id !== id);
-    try {
-      await prisma.employee.delete({ where: { id } });
-    } catch (e) {
-      logDebug("deleteEmployee failed", e);
-    }
-    syncPersistentStore();
-  },
-
-  async deleteTenant(id: string) {
-    deletedTenantIdsSet.add(id);
-    const tenant = mockState.tenants.find((t: any) => t.id === id);
-    if (tenant) {
-      mockState.tenants = mockState.tenants.filter((t: any) => t.id !== id);
-      // Mark bed as available
-      mockState.buildings.forEach((b: any) => {
-        b.floors.forEach((f: any) => {
-          f.rooms.forEach((r: any) => {
-            r.beds.forEach((bed: any) => {
-              if (bed.tenantId === id) {
-                bed.isAvailable = true;
-                bed.tenantId = null;
-              }
-            });
-          });
-        });
-      });
-    }
-
-    try {
-      const dbTenant = await prisma.tenant.findUnique({
-        where: { id },
-        include: { profile: true }
-      });
-      if (dbTenant) {
-        // Cascade delete User -> Profile -> Tenant
-        await prisma.user.delete({
-          where: { id: dbTenant.profile.userId }
-        });
-        await prisma.bed.updateMany({
-          where: { tenantId: id },
-          data: { isAvailable: true, tenantId: null }
-        });
-      }
-    } catch (e) {
-      logDebug("deleteTenant failed", e);
-    }
-    syncPersistentStore();
-  },
-
-  async deleteInvoice(invoiceId: string) {
-    mockState.invoices = mockState.invoices.filter((i: any) => i.id !== invoiceId);
-    try {
-      await prisma.payment.deleteMany({
-        where: { invoiceId }
-      });
-      const deleted = await prisma.invoice.delete({
-        where: { id: invoiceId }
-      });
-      syncPersistentStore();
-      return deleted;
-    } catch (e) {
-      logDebug("deleteInvoice failed", e);
-    }
-    syncPersistentStore();
-    return null;
-  },
-
-  async updateInvoice(invoiceId: string, data: { amount?: number; dueDate?: string; month?: string; status?: string }) {
-    const inv = mockState.invoices.find((i: any) => i.id === invoiceId);
-    if (inv) {
-      if (data.amount !== undefined) inv.amount = data.amount;
-      if (data.dueDate !== undefined) inv.dueDate = data.dueDate;
-      if (data.status) {
-        inv.status = data.status as any;
-        if (data.status === 'PAID') {
-          inv.paidAmount = inv.amount || 8500;
-        } else if (data.status === 'PENDING') {
-          inv.paidAmount = 0;
-        }
-      }
-    }
-    try {
-      const dbInv = await prisma.invoice.findUnique({
-        where: { id: invoiceId }
-      });
-      if (dbInv) {
-        const updatePayload: any = {};
-        if (data.amount !== undefined) updatePayload.amount = data.amount;
-        if (data.dueDate !== undefined) updatePayload.dueDate = new Date(data.dueDate);
-        if (data.status) {
-          updatePayload.status = data.status;
-          if (data.status === 'PAID') {
-            updatePayload.paidAmount = data.amount !== undefined ? data.amount : dbInv.amount;
-          } else if (data.status === 'PENDING') {
-            updatePayload.paidAmount = 0;
-          }
-        }
-
-        const updated = await prisma.invoice.update({
-          where: { id: invoiceId },
-          data: updatePayload
-        });
-        syncPersistentStore();
-        return updated;
-      }
-    } catch (e) {
-      logDebug("updateInvoice failed", e);
-    }
-    syncPersistentStore();
-    return inv;
-  },
-
+  // --- RESET UTILITIES ---
   async resetAnalytics() {
-    mockState.invoices = [];
-    mockState.expenses = [];
-    mockState.complaints = [];
-    mockState.visitors = [];
-    mockState.leaveRequests = [];
-
-    try {
-      await prisma.payment.deleteMany();
-      await prisma.invoice.deleteMany();
-      await prisma.expense.deleteMany();
-      await prisma.complaint.deleteMany();
-      await prisma.visitor.deleteMany();
-      await prisma.leaveRequest.deleteMany();
-      await prisma.salary.deleteMany();
-      syncPersistentStore();
-      return true;
-    } catch (e) {
-      logDebug("resetAnalytics failed", e);
-    }
-    syncPersistentStore();
-    return false;
+    await prisma.payment.deleteMany();
+    await prisma.invoice.deleteMany();
+    await prisma.expense.deleteMany();
+    await prisma.complaint.deleteMany();
+    await prisma.visitor.deleteMany();
+    await prisma.leaveRequest.deleteMany();
+    await prisma.salary.deleteMany();
+    return true;
   },
 
   async resetTenants() {
-    mockState.users = mockState.users.filter((u: any) => u.role === 'OWNER');
-    mockState.tenants = [];
-    mockState.invoices = [];
-    
-    mockState.buildings.forEach((b: any) => {
-      b.floors.forEach((f: any) => {
-        f.rooms.forEach((r: any) => {
-          r.beds.forEach((bed: any) => {
-            bed.isAvailable = true;
-            bed.tenantId = null;
-            bed.tenantName = undefined;
-          });
-        });
-      });
-    });
-
-    try {
-      await prisma.user.deleteMany({
-        where: {
-          role: 'TENANT'
-        }
-      });
-      await prisma.bed.updateMany({
-        data: {
-          isAvailable: true,
-          tenantId: null
-        }
-      });
-      syncPersistentStore();
-      return true;
-    } catch (e) {
-      logDebug("resetTenants failed", e);
-    }
-    syncPersistentStore();
-    return false;
+    await prisma.user.deleteMany({ where: { role: 'TENANT' } });
+    await prisma.bed.updateMany({ data: { isAvailable: true, tenantId: null } });
+    return true;
   }
 };
-
-const readMethods = new Set([
-  'getUserByEmail',
-  'getBuildings',
-  'getTenants',
-  'getInvoices',
-  'getEmployees',
-  'getComplaints',
-  'getLeaveRequests',
-  'getVisitors',
-  'getExpenses',
-  'getInventory',
-  'getNotices'
-]);
-
-const cacheStore: Record<string, any> = {};
-
-export const dbService = new Proxy(rawDbService, {
-  get(target: any, prop: string) {
-    const originalMethod = target[prop];
-    if (typeof originalMethod !== 'function') {
-      return originalMethod;
-    }
-
-    return async function (...args: any[]) {
-      // If it's a read method, check cache first
-      if (readMethods.has(prop)) {
-        const cacheKey = `${prop}:${JSON.stringify(args)}`;
-        if (cacheStore[cacheKey] !== undefined) {
-          return cacheStore[cacheKey];
-        }
-
-        const result = await originalMethod.apply(target, args);
-        cacheStore[cacheKey] = result;
-        return result;
-      }
-
-      // If it's a write method, execute original method and clear all caches
-      const result = await originalMethod.apply(target, args);
-      for (const key in cacheStore) {
-        delete cacheStore[key];
-      }
-      return result;
-    };
-  }
-}) as typeof rawDbService;

@@ -34,7 +34,8 @@ export async function POST(request: Request) {
       try {
         const parsedAcc = JSON.parse(decodeURIComponent(userAccCookie));
         if (parsedAcc && parsedAcc.email) {
-          user = await dbService.registerUser(parsedAcc);
+          await dbService.registerUser(parsedAcc);
+          user = await dbService.getUserByEmail(parsedAcc.email);
         }
       } catch (e) {
         console.error('Failed to parse user account cookie', e);
@@ -70,9 +71,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid credentials. Incorrect email or password.' }, { status: 401 });
     }
 
-    const profile = user.profile as any;
-    const profileName = profile ? (profile.firstName ? `${profile.firstName} ${profile.lastName}`.trim() : profile.name) : 'User';
-    const userName = (user as any).name || profileName;
+    const userName = (user as any).name || 'User';
 
     const token = signToken({
       userId: user.id,

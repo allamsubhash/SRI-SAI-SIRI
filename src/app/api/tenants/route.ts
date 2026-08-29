@@ -61,8 +61,6 @@ export async function POST(request: Request) {
       guardianPhone: data.guardianPhone || '',
       occupation: data.occupation || 'Student',
       moveInDate: data.moveInDate || new Date().toISOString().split('T')[0],
-      moveOutDate: null,
-      status: 'ACTIVE',
       roomNumber: data.roomNumber || 'A-101',
       bedNumber: data.bedNumber || 'Bed A',
       rentAmount: parseFloat(data.rentAmount || 8500),

@@ -25,9 +25,9 @@ model Profile {
   firstName             String
   lastName              String
   phone                 String
-  photoUrl              String?
+  photoUrl              String?   @db.Text
   gender                String?
-  address               String?
+  address               String?   @db.Text
   aadhaar               String?
   emergencyContactName  String?
   emergencyContactPhone String?
@@ -49,8 +49,8 @@ model Tenant {
   roomNumber    String?
   bedNumber     String?
   rentAmount    Float          @default(0.0)
-  agreementUrl  String?
-  medicalNotes  String?
+  agreementUrl  String?        @db.Text
+  medicalNotes  String?        @db.Text
   moveInDate    DateTime?
   moveOutDate   DateTime?
   status        String         @default("ACTIVE") // ACTIVE, ARCHIVED, BLACKLISTED
@@ -67,7 +67,7 @@ model Tenant {
 model Building {
   id        String   @id @default(uuid())
   name      String
-  address   String
+  address   String   @db.Text
   floors    Floor[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -90,8 +90,8 @@ model Room {
   rent        Float
   status      String        @default("AVAILABLE") // AVAILABLE, OCCUPIED, MAINTENANCE, RESERVED
   capacity    Int
-  amenities   String        // Comma-separated list e.g., "Wifi, AC, Attached Bathroom"
-  images      String?       // JSON array of image URLs
+  amenities   String        @db.Text // Comma-separated list e.g., "Wifi, AC, Attached Bathroom"
+  images      String?       @db.Text // JSON array of image URLs
   floorId     String
   floor       Floor         @relation(fields: [floorId], references: [id], onDelete: Cascade)
   beds        Bed[]
@@ -136,7 +136,7 @@ model Invoice {
   paidAmount    Float     @default(0.0)
   dueDate       DateTime
   status        String    // PAID, PARTIAL, PENDING, OVERDUE
-  itemsJson     String    // Description of invoice items (rent, wifi, electricity, etc.)
+  itemsJson     String    @db.Text // Description of invoice items (rent, wifi, electricity, etc.)
   payments      Payment[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -146,13 +146,13 @@ model Employee {
   id               String        @id @default(uuid())
   name             String
   phone            String
-  address          String
+  address          String        @db.Text
   role             String        // MANAGER, SECURITY, COOK, CLEANER, ELECTRICIAN, PLUMBER, RECEPTION, WARDEN, MAINTENANCE
   salary           Float
   status           String        @default("ACTIVE") // ACTIVE, INACTIVE
-  bankDetails      String?
+  bankDetails      String?       @db.Text
   emergencyContact String?
-  photoUrl         String?
+  photoUrl         String?       @db.Text
   joiningDate      DateTime      @default(now())
   salaries         Salary[]
   attendance       Attendance[]
@@ -207,7 +207,7 @@ model LeaveRequest {
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   startDate DateTime
   endDate   DateTime
-  reason    String
+  reason    String   @db.Text
   status    String   @default("PENDING") // PENDING, APPROVED, REJECTED
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -216,7 +216,7 @@ model LeaveRequest {
 model Complaint {
   id                 String    @id @default(uuid())
   title              String
-  description        String
+  description        String    @db.Text
   category           String    // ELECTRICITY, WATER, FURNITURE, INTERNET, CLEANING, FOOD, OTHER
   status             String    @default("PENDING") // PENDING, ASSIGNED, IN_PROGRESS, RESOLVED, CLOSED
   tenantId           String
@@ -230,9 +230,9 @@ model Complaint {
 model Maintenance {
   id             String    @id @default(uuid())
   title          String
-  description    String
+  description    String    @db.Text
   cost           Float
-  materialsUsed  String?
+  materialsUsed  String?   @db.Text
   roomId         String
   room           Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
   employeeId     String?
@@ -264,7 +264,7 @@ model Expense {
   amount    Float
   category  String   // ELECTRICITY, WATER, INTERNET, FOOD, REPAIRS, FURNITURE, CLEANING, SALARY, TAXES, MISC
   date      DateTime
-  notes     String?
+  notes     String?  @db.Text
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -272,7 +272,7 @@ model Expense {
 model Notice {
   id           String    @id @default(uuid())
   title        String
-  content      String
+  content      String    @db.Text
   target       String    // EVERYONE, TENANTS, EMPLOYEES
   isEmergency  Boolean   @default(false)
   scheduleDate DateTime?
@@ -283,7 +283,7 @@ model Notice {
 model Setting {
   id        String   @id @default(uuid())
   key       String   @unique
-  value     String
+  value     String   @db.Text
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -293,6 +293,6 @@ model AuditLog {
   action    String
   userId    String?
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  details   String
+  details   String   @db.Text
   createdAt DateTime @default(now())
 }
