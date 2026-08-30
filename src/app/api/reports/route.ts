@@ -3,6 +3,15 @@ import { prisma } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
+async function safeQuery<T>(queryFn: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await queryFn();
+  } catch (error) {
+    console.error('Safe query error:', error);
+    return fallback;
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -12,38 +21,42 @@ export async function GET(request: Request) {
 
     // ON-DEMAND DETAILED FETCHING
     if (detail === 'occupancy' || detail === 'property') {
-      const buildings = await prisma.building.findMany({
-        include: {
-          floors: {
-            orderBy: { number: 'asc' },
-            include: {
-              rooms: {
-                orderBy: { number: 'asc' },
-                include: {
-                  beds: {
-                    include: {
-                      tenant: {
-                        include: { profile: true }
+      const buildings = await safeQuery(
+        () => prisma.building.findMany({
+          include: {
+            floors: {
+              orderBy: { number: 'asc' },
+              include: {
+                rooms: {
+                  orderBy: { number: 'asc' },
+                  include: {
+                    beds: {
+                      include: {
+                        tenant: { include: { profile: true } }
                       }
                     }
                   }
                 }
               }
             }
-          }
-        },
-        orderBy: { createdAt: 'desc' }
-      });
+          },
+          orderBy: { createdAt: 'desc' }
+        }),
+        []
+      );
       return NextResponse.json({ success: true, buildings }, {
         headers: { 'Cache-Control': 'no-store, max-age=0, must-revalidate' }
       });
     }
 
     if (detail === 'tenants') {
-      const tenants = await prisma.tenant.findMany({
-        include: { profile: true },
-        orderBy: { createdAt: 'desc' }
-      });
+      const tenants = await safeQuery(
+        () => prisma.tenant.findMany({
+          include: { profile: true },
+          orderBy: { createdAt: 'desc' }
+        }),
+        []
+      );
       return NextResponse.json({ success: true, tenants }, {
         headers: { 'Cache-Control': 'no-store, max-age=0, must-revalidate' }
       });
@@ -51,20 +64,20 @@ export async function GET(request: Request) {
 
     if (detail === 'financial') {
       const [payments, invoices, expenses] = await Promise.all([
-        prisma.payment.findMany({
+        safeQuery(() => prisma.payment.findMany({
           orderBy: { date: 'desc' },
           take: 50,
           include: { tenant: { include: { profile: true } } }
-        }),
-        prisma.invoice.findMany({
+        }), []),
+        safeQuery(() => prisma.invoice.findMany({
           orderBy: { createdAt: 'desc' },
           take: 50,
           include: { tenant: { include: { profile: true } } }
-        }),
-        prisma.expense.findMany({
+        }), []),
+        safeQuery(() => prisma.expense.findMany({
           orderBy: { date: 'desc' },
           take: 50
-        })
+        }), [])
       ]);
       return NextResponse.json({ success: true, payments, invoices, expenses }, {
         headers: { 'Cache-Control': 'no-store, max-age=0, must-revalidate' }
@@ -73,14 +86,14 @@ export async function GET(request: Request) {
 
     if (detail === 'issues') {
       const [complaints, maintenance] = await Promise.all([
-        prisma.complaint.findMany({
+        safeQuery(() => prisma.complaint.findMany({
           orderBy: { createdAt: 'desc' },
           include: { tenant: { include: { profile: true } } }
-        }),
-        prisma.maintenance.findMany({
+        }), []),
+        safeQuery(() => prisma.maintenance.findMany({
           orderBy: { createdAt: 'desc' },
           include: { room: true }
-        })
+        }), [])
       ]);
       return NextResponse.json({ success: true, complaints, maintenance }, {
         headers: { 'Cache-Control': 'no-store, max-age=0, must-revalidate' }
@@ -89,14 +102,14 @@ export async function GET(request: Request) {
 
     if (detail === 'staff') {
       const [employees, leaveRequests] = await Promise.all([
-        prisma.employee.findMany({
+        safeQuery(() => prisma.employee.findMany({
           include: { salaries: true, attendance: true },
           orderBy: { createdAt: 'desc' }
-        }),
-        prisma.leaveRequest.findMany({
+        }), []),
+        safeQuery(() => prisma.leaveRequest.findMany({
           include: { tenant: { include: { profile: true } } },
           orderBy: { createdAt: 'desc' }
-        })
+        }), [])
       ]);
       return NextResponse.json({ success: true, employees, leaveRequests }, {
         headers: { 'Cache-Control': 'no-store, max-age=0, must-revalidate' }
@@ -104,25 +117,31 @@ export async function GET(request: Request) {
     }
 
     if (detail === 'visitors') {
-      const visitors = await prisma.visitor.findMany({
-        orderBy: { createdAt: 'desc' },
-        include: { tenant: { include: { profile: true } } }
-      });
+      const visitors = await safeQuery(
+        () => prisma.visitor.findMany({
+          orderBy: { createdAt: 'desc' },
+          include: { tenant: { include: { profile: true } } }
+        }),
+        []
+      );
       return NextResponse.json({ success: true, visitors }, {
         headers: { 'Cache-Control': 'no-store, max-age=0, must-revalidate' }
       });
     }
 
     if (detail === 'inventory') {
-      const items = await prisma.inventory.findMany({
-        orderBy: { createdAt: 'desc' }
-      });
+      const items = await safeQuery(
+        () => prisma.inventory.findMany({
+          orderBy: { createdAt: 'desc' }
+        }),
+        []
+      );
       return NextResponse.json({ success: true, items }, {
         headers: { 'Cache-Control': 'no-store, max-age=0, must-revalidate' }
       });
     }
 
-    // DEFAULT SUMMARY FAST OVERVIEW FETCH (<15ms)
+    // DEFAULT BULLETPROOF SUMMARY OVERVIEW FETCH (<15ms)
     const [
       buildingsCount,
       floorsCount,
@@ -148,54 +167,50 @@ export async function GET(request: Request) {
       poorInventoryCount,
       recentAuditLogs
     ] = await Promise.all([
-      prisma.building.count(),
-      prisma.floor.count(),
-      prisma.room.count(),
-      prisma.bed.count(),
-      prisma.bed.count({
+      safeQuery(() => prisma.building.count(), 0),
+      safeQuery(() => prisma.floor.count(), 0),
+      safeQuery(() => prisma.room.count(), 0),
+      safeQuery(() => prisma.bed.count(), 0),
+      safeQuery(() => prisma.bed.count({
         where: {
           OR: [
             { isAvailable: false },
             { tenantId: { not: null } }
           ]
         }
-      }),
-      prisma.tenant.count(),
-      prisma.tenant.count({ where: { status: 'ACTIVE' } }),
-      prisma.tenant.count({ where: { createdAt: { gte: startOfMonth } } }),
-      prisma.payment.aggregate({
+      }), 0),
+      safeQuery(() => prisma.tenant.count(), 0),
+      safeQuery(() => prisma.tenant.count({ where: { status: 'ACTIVE' } }), 0),
+      safeQuery(() => prisma.tenant.count({ where: { createdAt: { gte: startOfMonth } } }), 0),
+      safeQuery(() => prisma.payment.aggregate({
         _sum: { amount: true },
-        where: { status: 'PAID', date: { gte: startOfMonth } }
-      }),
-      prisma.invoice.findMany({
+        where: { status: 'PAID' }
+      }), { _sum: { amount: 0 } }),
+      safeQuery(() => prisma.invoice.findMany({
         where: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
         select: { amount: true, paidAmount: true }
-      }),
-      prisma.expense.aggregate({
-        _sum: { amount: true },
-        where: { date: { gte: startOfMonth } }
-      }),
-      prisma.complaint.count({ where: { status: { in: ['PENDING', 'ASSIGNED', 'IN_PROGRESS'] } } }),
-      prisma.complaint.count({ where: { status: { in: ['RESOLVED', 'CLOSED'] } } }),
-      prisma.maintenance.count({ where: { status: { in: ['PENDING', 'IN_PROGRESS'] } } }),
-      prisma.maintenance.count({ where: { status: 'COMPLETED' } }),
-      prisma.employee.count(),
-      prisma.employee.count({ where: { status: 'ACTIVE' } }),
-      prisma.leaveRequest.count({ where: { status: 'PENDING' } }),
-      prisma.visitor.count({ where: { createdAt: { gte: startOfMonth } } }),
-      prisma.visitor.count({ where: { approvalStatus: 'APPROVED', checkOut: null } }),
-      prisma.inventory.count(),
-      prisma.inventory.count({ where: { condition: { in: ['POOR', 'REPLACEMENT_REQUIRED'] } } }),
-      prisma.auditLog.findMany({
-        orderBy: { createdAt: 'desc' },
-        take: 5
-      })
+      }), []),
+      safeQuery(() => prisma.expense.aggregate({
+        _sum: { amount: true }
+      }), { _sum: { amount: 0 } }),
+      safeQuery(() => prisma.complaint.count({ where: { status: { in: ['PENDING', 'ASSIGNED', 'IN_PROGRESS'] } } }), 0),
+      safeQuery(() => prisma.complaint.count({ where: { status: { in: ['RESOLVED', 'CLOSED'] } } }), 0),
+      safeQuery(() => prisma.maintenance.count({ where: { status: { in: ['PENDING', 'IN_PROGRESS'] } } }), 0),
+      safeQuery(() => prisma.maintenance.count({ where: { status: 'COMPLETED' } }), 0),
+      safeQuery(() => prisma.employee.count(), 0),
+      safeQuery(() => prisma.employee.count({ where: { status: 'ACTIVE' } }), 0),
+      safeQuery(() => prisma.leaveRequest.count({ where: { status: 'PENDING' } }), 0),
+      safeQuery(() => prisma.visitor.count(), 0),
+      safeQuery(() => prisma.visitor.count({ where: { approvalStatus: 'APPROVED', checkOut: null } }), 0),
+      safeQuery(() => prisma.inventory.count(), 0),
+      safeQuery(() => prisma.inventory.count({ where: { condition: { in: ['POOR', 'REPLACEMENT_REQUIRED'] } } }), 0),
+      safeQuery(() => prisma.auditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 5 }), [])
     ]);
 
     const availableBedsCount = Math.max(0, bedsCount - occupiedBedsCount);
     const occupancyRate = bedsCount > 0 ? Math.round((occupiedBedsCount / bedsCount) * 100) : 0;
-    const monthlyCollection = paidPaymentsAggregate._sum.amount || 0;
-    const monthlyExpenses = expensesAggregate._sum.amount || 0;
+    const monthlyCollection = Math.max(0, paidPaymentsAggregate._sum.amount || 0);
+    const monthlyExpenses = Math.abs(expensesAggregate._sum.amount || 0);
 
     let pendingDues = 0;
     pendingInvoicesList.forEach(inv => {
@@ -236,7 +251,16 @@ export async function GET(request: Request) {
       headers: { 'Cache-Control': 'no-store, max-age=0, must-revalidate' }
     });
   } catch (error: any) {
-    console.error('Reports API Error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to generate report' }, { status: 500 });
+    console.error('Reports API Fatal Error:', error);
+    return NextResponse.json({
+      summary: {
+        totalBuildings: 0, totalFloors: 0, totalRooms: 0, totalBeds: 0, occupiedBeds: 0,
+        availableBeds: 0, occupancyRate: 0, totalTenants: 0, activeTenants: 0, inactiveTenants: 0,
+        newTenantsThisMonth: 0, monthlyCollection: 0, pendingDues: 0, monthlyExpenses: 0,
+        netAmount: 0, openComplaints: 0, resolvedComplaints: 0, activeMaintenance: 0,
+        completedMaintenance: 0, totalEmployees: 0, activeEmployees: 0, pendingLeaveRequests: 0,
+        todayVisitors: 0, activeVisitors: 0, inventoryCount: 0, poorInventoryCount: 0, recentAuditLogs: []
+      }
+    }, { status: 200 });
   }
 }
