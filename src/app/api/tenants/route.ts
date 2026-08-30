@@ -67,7 +67,7 @@ export async function POST(request: Request) {
       moveInDate: data.moveInDate || new Date().toISOString().split('T')[0],
       roomNumber: data.roomNumber || 'A-101',
       bedNumber: data.bedNumber || 'Bed A',
-      rentAmount: parseFloat(data.rentAmount || 8500),
+      rentAmount: data.rentAmount !== undefined ? parseFloat(String(data.rentAmount)) : 0,
       agreementUrl: data.agreementUrl || '/docs/default_agreement.pdf',
       medicalNotes: data.medicalNotes || '',
       photoUrl: data.photoUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop',
