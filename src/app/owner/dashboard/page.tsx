@@ -99,74 +99,47 @@ export default function OwnerDashboard() {
   const [errorPopup, setErrorPopup] = useState<{ isOpen: boolean; title: string; subtitle?: string } | null>(null);
   const [confirmPopup, setConfirmPopup] = useState<{ isOpen: boolean; title: string; subtitle?: string; onConfirm?: () => void } | null>(null);
 
-  const defaultFallbackData = {
+  const emptyMetrics = {
     metrics: {
-      buildings: 1,
-      floors: 4,
-      rooms: 48,
-      occupiedRooms: 36,
-      vacantRooms: 10,
-      beds: 48,
-      occupiedBeds: 36,
-      vacantBeds: 10,
-      tenants: 48,
-      monthlyIncome: 125000,
-      pendingRent: 68450,
-      monthlyExpenses: 56550,
+      buildings: 0,
+      floors: 0,
+      rooms: 0,
+      occupiedRooms: 0,
+      vacantRooms: 0,
+      beds: 0,
+      occupiedBeds: 0,
+      vacantBeds: 0,
+      occupancyRate: 0,
+      tenants: 0,
+      monthlyIncome: 0,
+      pendingRent: 0,
+      overdueDues: 0,
+      unpaidInvoicesCount: 0,
+      monthlyExpenses: 0,
+      netProfit: 0,
       employeeSalaryDue: 0,
-      maintenanceRequests: 6,
-      todayCheckIns: 1,
+      maintenanceRequests: 0,
+      todayCheckIns: 0,
       todayCheckOuts: 0
     },
     charts: {
       financials: [
-        { name: 'Jan', income: 98000, expenses: 42000 },
-        { name: 'Feb', income: 105000, expenses: 45000 },
-        { name: 'Mar', income: 112000, expenses: 48000 },
-        { name: 'Apr', income: 118000, expenses: 51000 },
-        { name: 'May', income: 122000, expenses: 53000 },
-        { name: 'Jun', income: 124000, expenses: 55000 },
-        { name: 'Aug', income: 125000, expenses: 56550 }
+        { name: new Date().toLocaleString('en-IN', { month: 'short' }), income: 0, expenses: 0, profit: 0 }
       ],
       occupancy: [
-        { name: 'Occupied Beds', value: 36 },
-        { name: 'Vacant Beds', value: 10 }
+        { name: 'Occupied Beds', value: 0 },
+        { name: 'Vacant Beds', value: 0 }
       ],
-      roomTypes: [{ name: 'Standard', value: 48 }]
+      roomTypes: []
     },
     settings: { hostelName: 'Sri Sai Siri Boys Hostel' },
-    notices: [
-      { id: 1, title: 'Water Tank Cleaning Scheduled', date: '14 Aug 2026', category: 'Maintenance', priority: 'HIGH' },
-      { id: 2, title: 'Independence Day Special Lunch', date: '15 Aug 2026', category: 'Mess & Dining', priority: 'MEDIUM' },
-      { id: 3, title: 'Wi-Fi Router Upgrade on Floor 3', date: '12 Aug 2026', category: 'IT Support', priority: 'LOW' }
-    ],
-    buildings: [{ id: 1, name: 'Main Campus Building', totalFloors: 4, address: 'Plot 42, Knowledge Park, Cyber City' }],
-    tenants: [
-      { id: 1, name: 'Ananya Roy', roomNumber: 'C-302', bedNumber: '1', phone: '+91 97766 55443', email: 'ananya@gmail.com', status: 'Active', moveInDate: '10 Jan 2026', rent: 8500, deposit: 17000 },
-      { id: 2, name: 'Priya Sharma', roomNumber: 'B-201', bedNumber: '1', phone: '+91 98765 43210', email: 'priya@gmail.com', status: 'Active', moveInDate: '01 Aug 2026', rent: 8500, deposit: 17000 },
-      { id: 3, name: 'Rahul Verma', roomNumber: 'A-101', bedNumber: '1', phone: '+91 91234 56789', email: 'rahul@gmail.com', status: 'Active', moveInDate: '15 Jul 2026', rent: 8500, deposit: 17000 },
-      { id: 4, name: 'Aarav Mehta', roomNumber: 'A-101', bedNumber: '2', phone: '+91 99887 76655', email: 'aarav@gmail.com', status: 'Active', moveInDate: '01 Jun 2026', rent: 8500, deposit: 17000 }
-    ],
-    invoices: [
-      { id: 'TXN123456789', tenantName: 'Ananya Roy', roomNumber: 'C-302', amount: 8500, status: 'Paid', date: '01 May 2026', method: 'UPI' },
-      { id: 'INV-2026-087', tenantName: 'Rahul Verma', roomNumber: 'A-101', amount: 8500, status: 'Paid', date: '05 Aug 2026', method: 'UPI' },
-      { id: 'INV-2026-088', tenantName: 'Priya Sharma', roomNumber: 'B-201', amount: 8500, status: 'Pending', date: '10 Aug 2026', method: 'Cash' }
-    ],
-    employees: [
-      { id: 1, name: 'Ram Singh', role: 'Warden & Supervisor', salary: 25000, pendingSalary: 0, phone: '+91 98111 22233' },
-      { id: 2, name: 'Sunil Kumar', role: 'Housekeeping Lead', salary: 18000, pendingSalary: 0, phone: '+91 98222 33344' },
-      { id: 3, name: 'Ramesh Chand', role: 'Security Guard', salary: 16000, pendingSalary: 0, phone: '+91 98333 44455' },
-      { id: 4, name: 'Deepak Verma', role: 'Maintenance Technician', salary: 20000, pendingSalary: 0, phone: '+91 98444 55566' }
-    ],
-    complaints: [
-      { id: 1, title: 'AC not cooling', roomNumber: 'C-302', tenantName: 'Ananya Roy', category: 'AC Repair', priority: 'HIGH', status: 'In Progress', reportedDate: '10 May 2026 10:30 AM', assignedStaff: 'Raj Kumar' },
-      { id: 2, title: 'Bathroom Tap Leakage', roomNumber: 'B-203', tenantName: 'Under Repair', category: 'Plumbing', priority: 'MEDIUM', status: 'Open', reportedDate: '12 Aug 2026 09:00 AM', assignedStaff: 'Deepak Verma' }
-    ],
-    expenses: [
-      { id: 1, title: 'Electricity Utility Bill', amount: 28500, category: 'Utilities', date: '05 Aug 2026' },
-      { id: 2, title: 'High-Speed Wi-Fi Internet', amount: 12000, category: 'Internet', date: '02 Aug 2026' },
-      { id: 3, title: 'Water Supply Tanker', amount: 16050, category: 'Maintenance', date: '01 Aug 2026' }
-    ]
+    notices: [],
+    buildings: [],
+    tenants: [],
+    invoices: [],
+    employees: [],
+    complaints: [],
+    expenses: []
   };
 
   useEffect(() => {
@@ -177,13 +150,13 @@ export default function OwnerDashboard() {
         if (resData && resData.metrics) {
           setData(resData);
         } else {
-          setData(defaultFallbackData);
+          setData(emptyMetrics);
         }
         setLoading(false);
       })
       .catch(err => {
         console.error('Dashboard fetch error:', err);
-        setData(defaultFallbackData);
+        setData(emptyMetrics);
         setLoading(false);
       });
   }, []);
@@ -201,17 +174,41 @@ export default function OwnerDashboard() {
     );
   }
 
-  const activeData = data || defaultFallbackData;
+  const activeData = data || emptyMetrics;
   const { metrics, charts } = activeData;
 
   const DONUT_COLORS = ['#8B5CF6', '#06B6D4', '#F97316', '#10B981'];
 
   const donutData = [
-    { name: 'Occupied', value: metrics.occupiedRooms || 36, color: '#8B5CF6', percentage: '75%' },
-    { name: 'Vacant', value: metrics.vacantRooms || 10, color: '#06B6D4', percentage: '20%' },
-    { name: 'Maintenance', value: 2, color: '#F97316', percentage: '4%' },
-    { name: 'Reserved', value: 0, color: '#10B981', percentage: '0%' },
+    { name: 'Occupied', value: metrics.occupiedBeds || 0, color: '#8B5CF6', percentage: `${metrics.occupancyRate || 0}%` },
+    { name: 'Vacant', value: metrics.vacantBeds || 0, color: '#06B6D4', percentage: `${metrics.beds > 0 ? Math.round((metrics.vacantBeds / metrics.beds) * 100) : 0}%` },
+    { name: 'Maintenance', value: metrics.maintenanceRequests || 0, color: '#F97316', percentage: '0%' }
   ];
+
+  const allRooms = React.useMemo(() => {
+    const list: any[] = [];
+    if (activeData.buildings && Array.isArray(activeData.buildings)) {
+      activeData.buildings.forEach((b: any) => {
+        b.floors?.forEach((f: any) => {
+          f.rooms?.forEach((r: any) => {
+            const occupiedBed = r.beds?.find((bed: any) => bed.tenantName || bed.tenantId);
+            list.push({
+              number: r.number,
+              floor: f.number,
+              status: r.status === 'OCCUPIED' ? 'Occupied' : (r.status === 'MAINTENANCE' ? 'Maintenance' : 'Vacant'),
+              beds: r.capacity || r.beds?.length || 2,
+              tenantName: occupiedBed?.tenantName || (r.status === 'OCCUPIED' ? 'Occupied Room' : (r.status === 'MAINTENANCE' ? 'Under Repair' : 'Vacant Room')),
+              phone: occupiedBed ? '+91 Resident' : '-',
+              email: occupiedBed ? 'Resident Account' : '-',
+              rent: r.rent || 8500,
+              paymentStatus: r.status === 'OCCUPIED' ? 'Active' : 'Ready'
+            });
+          });
+        });
+      });
+    }
+    return list;
+  }, [activeData.buildings]);
 
   return (
     <div className="space-y-7 page-entrance text-left font-sans transition-colors duration-200 pb-16 select-none relative">
@@ -225,7 +222,7 @@ export default function OwnerDashboard() {
             </span>
             <span className="flex items-center gap-1.5 text-[10px] font-extrabold tenant-text-accent tenant-bg-soft px-3 py-1 rounded-full border tenant-border-accent">
               <span className="w-1.5 h-1.5 rounded-full tenant-bg-accent-raw animate-pulse" />
-              SYSTEM ACTIVE • {metrics.rooms || 48} ROOMS
+              SYSTEM ACTIVE • {metrics.rooms || 0} ROOMS
             </span>
           </div>
 
@@ -243,11 +240,11 @@ export default function OwnerDashboard() {
         <div className="flex items-center gap-3 z-10 w-full md:w-auto">
           <div className="flex-1 md:flex-none p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] text-center">
             <span className="text-[10px] font-extrabold text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider block mb-0.5">TOTAL ROOMS</span>
-            <span className="text-xl font-black tenant-text-accent">{metrics.rooms || 48}</span>
+            <span className="text-xl font-black tenant-text-accent">{metrics.rooms || 0}</span>
           </div>
           <div className="flex-1 md:flex-none p-4 rounded-2xl tenant-bg-soft border tenant-border-accent text-center">
             <span className="text-[10px] font-extrabold tenant-text-accent uppercase tracking-wider block mb-0.5">OCCUPANCY</span>
-            <span className="text-xl font-black tenant-text-accent">75% ({metrics.occupiedRooms || 36} Beds)</span>
+            <span className="text-xl font-black tenant-text-accent">{metrics.occupancyRate || 0}% ({metrics.occupiedBeds || 0} Beds)</span>
           </div>
         </div>
       </div>
@@ -262,14 +259,14 @@ export default function OwnerDashboard() {
           <div className="flex justify-between items-center text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4]">
             <span>OCCUPANCY RATE</span>
             <span className="px-2 py-0.5 rounded-full text-[9px] tenant-bg-soft tenant-text-accent border tenant-border-accent font-black">
-              75% Occupied
+              {metrics.occupancyRate || 0}% Occupied
             </span>
           </div>
           <div className="text-xl font-black text-[#1C2522] dark:text-[#F2F5F2] group-hover:tenant-text-accent transition-colors">
-            {metrics.occupiedRooms || 36} / {metrics.rooms || 48} Rooms
+            {metrics.occupiedBeds || 0} / {metrics.beds || 0} Beds
           </div>
           <p className="text-[10px] text-[#68736E] dark:text-[#9BAAA4] font-medium flex items-center justify-between">
-            <span>{metrics.vacantRooms || 10} Rooms available</span>
+            <span>{metrics.vacantBeds || 0} Beds available</span>
             <ChevronRight className="w-3.5 h-3.5 text-[#929B96] group-hover:translate-x-0.5 transition-transform" />
           </p>
         </div>
@@ -286,7 +283,7 @@ export default function OwnerDashboard() {
             </span>
           </div>
           <div className="text-xl font-black text-[#1C2522] dark:text-[#F2F5F2] group-hover:tenant-text-accent transition-colors">
-            ₹{(metrics.monthlyIncome || 125000).toLocaleString()}
+            ₹{(metrics.monthlyIncome || 0).toLocaleString()}
           </div>
           <p className="text-[10px] text-[#68736E] dark:text-[#9BAAA4] font-medium flex items-center justify-between">
             <span>Collections this month</span>
@@ -306,10 +303,10 @@ export default function OwnerDashboard() {
             </span>
           </div>
           <div className="text-xl font-black text-[#1C2522] dark:text-[#F2F5F2] group-hover:tenant-text-accent transition-colors">
-            ₹{(metrics.pendingRent || 68450).toLocaleString()}
+            ₹{(metrics.pendingRent || 0).toLocaleString()}
           </div>
           <p className="text-[10px] text-[#68736E] dark:text-[#9BAAA4] font-medium flex items-center justify-between">
-            <span>12 Unpaid Invoices</span>
+            <span>{metrics.unpaidInvoicesCount || 0} Unpaid Invoices</span>
             <ChevronRight className="w-3.5 h-3.5 text-[#929B96] group-hover:translate-x-0.5 transition-transform" />
           </p>
         </div>
@@ -322,11 +319,11 @@ export default function OwnerDashboard() {
           <div className="flex justify-between items-center text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4]">
             <span>MAINTENANCE</span>
             <span className="px-2 py-0.5 rounded-full text-[9px] bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800 font-black">
-              {metrics.maintenanceRequests || 6} Active
+              {metrics.maintenanceRequests || 0} Active
             </span>
           </div>
           <div className="text-xl font-black text-[#1C2522] dark:text-[#F2F5F2] group-hover:tenant-text-accent transition-colors">
-            {metrics.maintenanceRequests || 6} Tickets
+            {metrics.maintenanceRequests || 0} Tickets
           </div>
           <p className="text-[10px] text-[#68736E] dark:text-[#9BAAA4] font-medium flex items-center justify-between">
             <span>Assigned to staff</span>
@@ -367,7 +364,7 @@ export default function OwnerDashboard() {
         {/* Financial Area Chart Visual */}
         <div className="h-60 w-full pt-1">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={charts.financials || defaultFallbackData.charts.financials} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <AreaChart data={charts.financials || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="tenantOwnerIncomeGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="var(--tenant-accent-color, #0891B2)" stopOpacity={0.4}/>
@@ -394,19 +391,19 @@ export default function OwnerDashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
           <div className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] space-y-1">
             <span className="text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider block">MONTHLY COLLECTIONS</span>
-            <div className="text-xl font-black text-[#1C2522] dark:text-[#F2F5F2]">₹{(metrics.monthlyIncome || 125000).toLocaleString()}</div>
+            <div className="text-xl font-black text-[#1C2522] dark:text-[#F2F5F2]">₹{(metrics.monthlyIncome || 0).toLocaleString()}</div>
             <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] font-medium">Settled to bank account</p>
           </div>
 
           <div className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] space-y-1">
             <span className="text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider block">OPERATIONAL EXPENSES</span>
-            <div className="text-xl font-black text-orange-600 dark:text-orange-400">₹{(metrics.monthlyExpenses || 56550).toLocaleString()}</div>
+            <div className="text-xl font-black text-orange-600 dark:text-orange-400">₹{(metrics.monthlyExpenses || 0).toLocaleString()}</div>
             <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] font-medium">Utilities, Wi-Fi & Maintenance</p>
           </div>
 
           <div className="p-4 rounded-2xl tenant-bg-soft border tenant-border-accent space-y-1">
             <span className="text-[10px] font-black tenant-text-accent uppercase tracking-wider block">NET OPERATING SURPLUS</span>
-            <div className="text-xl font-black tenant-text-accent">₹{((metrics.monthlyIncome || 125000) - (metrics.monthlyExpenses || 56550)).toLocaleString()}</div>
+            <div className="text-xl font-black tenant-text-accent">₹{((metrics.monthlyIncome || 0) - (metrics.monthlyExpenses || 0)).toLocaleString()}</div>
             <p className="text-xs tenant-text-accent font-medium">Positive cashflow margin</p>
           </div>
         </div>
@@ -452,16 +449,7 @@ export default function OwnerDashboard() {
 
         {/* ROOM CARDS MATRIX */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-          {[
-            { number: 'A-101', floor: 1, status: 'Occupied', beds: 2, tenantName: 'Aarav Mehta', phone: '+91 99887 76655', email: 'aarav@gmail.com', rent: 8500, paymentStatus: 'Paid' },
-            { number: 'A-102', floor: 1, status: 'Vacant', beds: 2, tenantName: 'Vacant Room', phone: '-', email: '-', rent: 8500, paymentStatus: 'Ready' },
-            { number: 'B-201', floor: 2, status: 'Occupied', beds: 2, tenantName: 'Priya Sharma', phone: '+91 98765 43210', email: 'priya@gmail.com', rent: 8500, paymentStatus: 'Paid' },
-            { number: 'B-202', floor: 2, status: 'Occupied', beds: 2, tenantName: 'Rahul Verma', phone: '+91 91234 56789', email: 'rahul@gmail.com', rent: 8500, paymentStatus: 'Paid' },
-            { number: 'B-203', floor: 2, status: 'Maintenance', beds: 2, tenantName: 'Under Repair', phone: '-', email: '-', rent: 0, paymentStatus: 'Pending AC Repair' },
-            { number: 'C-301', floor: 3, status: 'Vacant', beds: 2, tenantName: 'Vacant Room', phone: '-', email: '-', rent: 8500, paymentStatus: 'Ready' },
-            { number: 'C-302', floor: 3, status: 'Occupied', beds: 3, tenantName: 'Ananya Roy', phone: '+91 97766 55443', email: 'ananya@gmail.com', rent: 8500, paymentStatus: 'Paid' },
-            { number: 'C-303', floor: 3, status: 'Vacant', beds: 2, tenantName: 'Vacant Room', phone: '-', email: '-', rent: 8500, paymentStatus: 'Ready' }
-          ]
+          {allRooms
           .filter(r => selectedFloor === null || r.floor === selectedFloor)
           .map((rm) => (
             <motion.div

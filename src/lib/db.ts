@@ -1206,5 +1206,193 @@ export const dbService = {
     await prisma.user.deleteMany({ where: { role: 'TENANT' } });
     await prisma.bed.updateMany({ data: { isAvailable: true, tenantId: null } });
     return true;
+  },
+
+  // --- HIGH-PERFORMANCE DASHBOARD METRICS ---
+  async getDashboardMetrics() {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [
+      buildingsCount,
+      floorsCount,
+      roomsCount,
+      bedsCount,
+      occupiedBedsCount,
+      maintenanceRoomsCount,
+      activeTenantsCount,
+      paidPaymentsAggregate,
+      pendingInvoices,
+      unpaidInvoicesCount,
+      monthlyExpensesAggregate,
+      employees,
+      openComplaintsCount,
+      openMaintenanceCount,
+      notices,
+      buildingsData
+    ] = await Promise.all([
+      prisma.building.count(),
+      prisma.floor.count(),
+      prisma.room.count(),
+      prisma.bed.count(),
+      prisma.bed.count({
+        where: {
+          OR: [
+            { isAvailable: false },
+            { tenantId: { not: null } }
+          ]
+        }
+      }),
+      prisma.room.count({ where: { status: 'MAINTENANCE' } }),
+      prisma.tenant.count({ where: { status: 'ACTIVE' } }),
+      prisma.payment.aggregate({
+        _sum: { amount: true },
+        where: { status: 'PAID', date: { gte: startOfMonth } }
+      }),
+      prisma.invoice.findMany({
+        where: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
+        select: { amount: true, paidAmount: true, status: true, dueDate: true }
+      }),
+      prisma.invoice.count({
+        where: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } }
+      }),
+      prisma.expense.aggregate({
+        _sum: { amount: true },
+        where: { date: { gte: startOfMonth } }
+      }),
+      prisma.employee.findMany({
+        where: { status: 'ACTIVE' },
+        include: { salaries: true }
+      }),
+      prisma.complaint.count({
+        where: { status: { in: ['PENDING', 'ASSIGNED', 'IN_PROGRESS'] } }
+      }),
+      prisma.maintenance.count({
+        where: { status: { in: ['PENDING', 'IN_PROGRESS'] } }
+      }),
+      prisma.notice.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 5
+      }),
+      prisma.building.findMany({
+        include: {
+          floors: {
+            orderBy: { number: 'asc' },
+            include: {
+              rooms: {
+                orderBy: { number: 'asc' },
+                include: {
+                  beds: {
+                    include: {
+                      tenant: {
+                        include: { profile: true }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      })
+    ]);
+
+    const vacantBedsCount = Math.max(0, bedsCount - occupiedBedsCount);
+    const monthlyIncome = paidPaymentsAggregate._sum.amount || 0;
+    const monthlyExpenses = monthlyExpensesAggregate._sum.amount || 0;
+
+    let pendingRent = 0;
+    let overdueDues = 0;
+
+    pendingInvoices.forEach(inv => {
+      const balance = Math.max(0, (inv.amount || 0) - (inv.paidAmount || 0));
+      pendingRent += balance;
+      if (inv.status === 'OVERDUE' || (inv.dueDate && new Date(inv.dueDate) < now)) {
+        overdueDues += balance;
+      }
+    });
+
+    const netProfit = monthlyIncome - monthlyExpenses;
+    const isPaidThisMonth = (emp: any) => emp.salaries.some((s: any) => new Date(s.date) >= startOfMonth && s.status === 'PAID');
+    const employeeSalaryDue = employees.reduce((sum, emp) => sum + (isPaidThisMonth(emp) ? 0 : emp.salary), 0);
+
+    const occupiedRoomsCount = buildingsData.reduce((sum, b) => 
+      sum + (b.floors?.reduce((fSum, f) => 
+        fSum + (f.rooms?.filter(r => r.status === 'OCCUPIED' || r.beds?.some(bed => !bed.isAvailable || bed.tenantId)).length || 0)
+      , 0) || 0)
+    , 0);
+
+    const vacantRoomsCount = Math.max(0, roomsCount - occupiedRoomsCount - maintenanceRoomsCount);
+    const occupancyPercentage = bedsCount > 0 ? Math.round((occupiedBedsCount / bedsCount) * 100) : 0;
+
+    return {
+      metrics: {
+        buildings: buildingsCount,
+        floors: floorsCount,
+        rooms: roomsCount,
+        occupiedRooms: occupiedRoomsCount,
+        vacantRooms: vacantRoomsCount,
+        beds: bedsCount,
+        occupiedBeds: occupiedBedsCount,
+        vacantBeds: vacantBedsCount,
+        occupancyRate: occupancyPercentage,
+        tenants: activeTenantsCount,
+        monthlyIncome,
+        pendingRent,
+        overdueDues,
+        unpaidInvoicesCount,
+        monthlyExpenses,
+        netProfit,
+        employeeSalaryDue,
+        maintenanceRequests: openComplaintsCount + openMaintenanceCount + maintenanceRoomsCount,
+        todayCheckIns: 0,
+        todayCheckOuts: 0
+      },
+      charts: {
+        financials: [
+          { name: now.toLocaleString('en-IN', { month: 'short' }), income: monthlyIncome, expenses: monthlyExpenses, profit: Math.max(0, netProfit) }
+        ],
+        occupancy: [
+          { name: 'Occupied Beds', value: occupiedBedsCount },
+          { name: 'Vacant Beds', value: vacantBedsCount }
+        ],
+        roomTypes: []
+      },
+      notices: notices.map(n => ({
+        id: n.id,
+        title: n.title,
+        content: n.content,
+        target: n.target,
+        isEmergency: n.isEmergency,
+        scheduleDate: n.scheduleDate ? n.scheduleDate.toISOString().split('T')[0] : n.createdAt.toISOString().split('T')[0]
+      })),
+      buildings: buildingsData.map(b => ({
+        id: b.id,
+        name: b.name,
+        address: b.address,
+        floors: b.floors.map(f => ({
+          id: f.id,
+          number: f.number,
+          rooms: f.rooms.map(r => ({
+            id: r.id,
+            number: r.number,
+            type: r.type,
+            rent: r.rent,
+            status: r.status,
+            capacity: r.capacity,
+            amenities: r.amenities ? r.amenities.split(',').map(a => a.trim()) : [],
+            beds: r.beds.map(bed => ({
+              id: bed.id,
+              number: bed.number,
+              roomId: bed.roomId,
+              tenantId: bed.tenantId,
+              isAvailable: bed.isAvailable,
+              tenantName: bed.tenant?.profile ? `${bed.tenant.profile.firstName} ${bed.tenant.profile.lastName}`.trim() : undefined
+            }))
+          }))
+        }))
+      }))
+    };
   }
 };
