@@ -402,7 +402,7 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
         </AnimatePresence>
 
         {/* WORKSPACE CONTENT */}
-        <div className="flex-1 flex flex-col min-w-0 min-h-screen md:max-h-screen md:overflow-y-auto overflow-x-hidden">
+        <div className="flex-1 flex flex-col min-w-0 min-h-screen w-full overflow-y-auto overflow-x-hidden">
           
           {/* HEADER TOOLBAR */}
           <header className="relative z-30 bg-[#FFFDF9] dark:bg-[#141D19] border border-[#DDD8CE] dark:border-[#293832] shadow-sm rounded-[28px] p-3.5 sm:p-4 mb-6 flex items-center justify-between gap-4 transition-all">
@@ -536,7 +536,7 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
 
           </header>
 
-          <main className="flex-1 pb-20 md:pb-8">
+          <main className="flex-1 w-full min-h-0 pb-20 md:pb-8">
             {children}
           </main>
 
