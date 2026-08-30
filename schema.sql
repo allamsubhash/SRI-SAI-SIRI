@@ -3,8 +3,8 @@
 -- Compatible with MySQL 5.7+ / 8.0+ & MySQL Workbench
 -- ============================================================================
 
-CREATE DATABASE IF NOT EXISTS `srisaisiri_db` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE `srisaisiri_db`;
+CREATE DATABASE IF NOT EXISTS `defaultdb` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE `defaultdb`;
 
 SET FOREIGN_KEY_CHECKS = 0;
 
