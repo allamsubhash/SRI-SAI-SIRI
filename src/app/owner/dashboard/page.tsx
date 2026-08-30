@@ -175,7 +175,8 @@ export default function OwnerDashboard() {
   }
 
   const activeData = data || emptyMetrics;
-  const { metrics, charts } = activeData;
+  const metrics = activeData?.metrics || emptyMetrics.metrics;
+  const charts = activeData?.charts || emptyMetrics.charts;
 
   const DONUT_COLORS = ['#8B5CF6', '#06B6D4', '#F97316', '#10B981'];
 

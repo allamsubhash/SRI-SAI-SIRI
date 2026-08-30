@@ -95,6 +95,11 @@ export default function BuildingsManagement() {
   const [regEmail, setRegEmail] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regPassword, setRegPassword] = useState('password123');
+  const [regRent, setRegRent] = useState<number>(8500);
+  const [regDeposit, setRegDeposit] = useState<number>(17000);
+  const [regMoveInDate, setRegMoveInDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [regEmergencyPhone, setRegEmergencyPhone] = useState<string>('');
+  const [regAadhar, setRegAadhar] = useState<string>('');
   const [targetRoomNumber, setTargetRoomNumber] = useState('');
   const [targetBedNumber, setTargetBedNumber] = useState('');
   const [registering, setRegistering] = useState(false);
@@ -116,8 +121,11 @@ export default function BuildingsManagement() {
           gender: 'Male',
           roomNumber: targetRoomNumber || 'A-101',
           bedNumber: targetBedNumber || 'Bed A',
-          rentAmount: selectedRoomDetail?.rent || 8500,
-          moveInDate: new Date().toISOString().split('T')[0],
+          rentAmount: Number(regRent) || 8500,
+          depositAmount: Number(regDeposit) || 17000,
+          moveInDate: regMoveInDate || new Date().toISOString().split('T')[0],
+          emergencyContact: regEmergencyPhone,
+          idProofNumber: regAadhar,
           status: 'ACTIVE'
         })
       });
@@ -1424,15 +1432,75 @@ export default function BuildingsManagement() {
               </div>
             </div>
 
-            <div>
-              <label className="text-xs font-black text-slate-700 dark:text-zinc-300 uppercase tracking-wider block mb-1">Account Initial Password</label>
-              <input
-                type="text"
-                required
-                value={regPassword}
-                onChange={(e) => setRegPassword(e.target.value)}
-                className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-black text-slate-700 dark:text-zinc-300 uppercase tracking-wider block mb-1">Monthly Rent (₹)</label>
+                <input
+                  type="number"
+                  required
+                  placeholder="8500"
+                  value={regRent}
+                  onChange={(e) => setRegRent(Number(e.target.value))}
+                  className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-black text-slate-700 dark:text-zinc-300 uppercase tracking-wider block mb-1">Security Deposit (₹)</label>
+                <input
+                  type="number"
+                  required
+                  placeholder="17000"
+                  value={regDeposit}
+                  onChange={(e) => setRegDeposit(Number(e.target.value))}
+                  className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-black text-slate-700 dark:text-zinc-300 uppercase tracking-wider block mb-1">Joining / Move-in Date</label>
+                <input
+                  type="date"
+                  required
+                  value={regMoveInDate}
+                  onChange={(e) => setRegMoveInDate(e.target.value)}
+                  className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-black text-slate-700 dark:text-zinc-300 uppercase tracking-wider block mb-1">Emergency Contact Phone</label>
+                <input
+                  type="text"
+                  placeholder="+91 Parent / Guardian"
+                  value={regEmergencyPhone}
+                  onChange={(e) => setRegEmergencyPhone(e.target.value)}
+                  className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-black text-slate-700 dark:text-zinc-300 uppercase tracking-wider block mb-1">Aadhar / ID Proof No.</label>
+                <input
+                  type="text"
+                  placeholder="12-digit Aadhar No."
+                  value={regAadhar}
+                  onChange={(e) => setRegAadhar(e.target.value)}
+                  className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-black text-slate-700 dark:text-zinc-300 uppercase tracking-wider block mb-1">Account Initial Password</label>
+                <input
+                  type="text"
+                  required
+                  value={regPassword}
+                  onChange={(e) => setRegPassword(e.target.value)}
+                  className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
             </div>
 
             <div className="flex gap-3 pt-3 border-t border-slate-100 dark:border-zinc-800">
