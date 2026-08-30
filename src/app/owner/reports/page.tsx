@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Component, ErrorInfo, ReactNode } from 'react';
 import { 
   BarChart3, 
   Building2, 
@@ -27,10 +27,70 @@ import {
   FileText,
   DollarSign,
   User,
-  Filter,
-  Sparkles
+  Filter
 } from 'lucide-react';
 import NeonModal from '@/components/NeonModal';
+
+// SAFE UTILITIES
+function formatCurrency(val: any): string {
+  const num = typeof val === 'number' && !isNaN(val) ? val : (Number(val) || 0);
+  return num.toLocaleString('en-IN');
+}
+
+function formatDate(val: any): string {
+  if (!val) return 'N/A';
+  try {
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? 'N/A' : d.toLocaleString();
+  } catch {
+    return 'N/A';
+  }
+}
+
+// SAFE REACT ERROR BOUNDARY
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ReportsErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Reports Page Error Boundary caught an error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 rounded-[28px] bg-[#FFFDF9] dark:bg-[#141D19] border border-rose-500/30 text-center space-y-4 max-w-xl mx-auto my-12">
+          <AlertCircle className="w-12 h-12 text-rose-500 mx-auto" />
+          <h2 className="text-lg font-black text-[#1C2522] dark:text-[#F2F5F2]">Reports Overview Recovered</h2>
+          <p className="text-xs text-[#677771] dark:text-[#A3B3AC]">
+            A minor rendering exception was safely intercepted. Click below to reload reports.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-5 py-2.5 rounded-2xl bg-[#2563EB] text-white font-bold text-xs hover:bg-[#1D4ED8] transition-all cursor-pointer"
+          >
+            Reload Reports Page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const defaultSummary = {
   totalBuildings: 1,
@@ -62,7 +122,7 @@ const defaultSummary = {
   recentAuditLogs: []
 };
 
-export default function ReportsAndAnalyticsPage() {
+function ReportsAndAnalyticsContent() {
   const [summary, setSummary] = useState<any>(defaultSummary);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -86,7 +146,7 @@ export default function ReportsAndAnalyticsPage() {
       });
       if (res.ok) {
         const json = await res.json();
-        if (json.summary) {
+        if (json && json.summary) {
           setSummary(json.summary);
         }
       }
@@ -113,9 +173,7 @@ export default function ReportsAndAnalyticsPage() {
       detailParam = 'occupancy';
     } else if (type === 'TENANTS') {
       detailParam = 'tenants';
-    } else if (type === 'FINANCIAL' || type === 'PAYMENTS') {
-      detailParam = 'financial';
-    } else if (type === 'EXPENSES') {
+    } else if (type === 'FINANCIAL' || type === 'PAYMENTS' || type === 'EXPENSES') {
       detailParam = 'financial';
     } else if (type === 'ISSUES') {
       detailParam = 'issues';
@@ -147,32 +205,31 @@ export default function ReportsAndAnalyticsPage() {
   };
 
   const s = summary || defaultSummary;
-  const totalBuildings = s.totalBuildings ?? 1;
-  const totalRooms = s.totalRooms ?? 1;
-  const totalBeds = s.totalBeds ?? 4;
-  const occupiedBeds = s.occupiedBeds ?? 1;
-  const availableBeds = s.availableBeds ?? Math.max(0, totalBeds - occupiedBeds);
-  const occupancyRate = s.occupancyRate ?? (totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 25);
+  const totalBuildings = Number(s.totalBuildings) || 1;
+  const totalRooms = Number(s.totalRooms) || 1;
+  const totalBeds = Number(s.totalBeds) || 4;
+  const occupiedBeds = Number(s.occupiedBeds) || 1;
+  const availableBeds = Number(s.availableBeds) || Math.max(0, totalBeds - occupiedBeds);
+  const occupancyRate = Number(s.occupancyRate) || (totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 25);
 
-  const totalTenants = s.totalTenants ?? 1;
-  const activeTenants = s.activeTenants ?? 1;
-  const inactiveTenants = s.inactiveTenants ?? 0;
-  const newTenantsThisMonth = s.newTenantsThisMonth ?? 1;
+  const totalTenants = Number(s.totalTenants) || 1;
+  const activeTenants = Number(s.activeTenants) || 1;
+  const newTenantsThisMonth = Number(s.newTenantsThisMonth) || 1;
 
-  const monthlyCollection = s.monthlyCollection ?? 19500;
-  const pendingDues = s.pendingDues ?? 0;
-  const monthlyExpenses = s.monthlyExpenses ?? 0;
-  const netAmount = s.netAmount ?? (monthlyCollection - monthlyExpenses);
+  const monthlyCollection = Number(s.monthlyCollection) || 19500;
+  const pendingDues = Number(s.pendingDues) || 0;
+  const monthlyExpenses = Number(s.monthlyExpenses) || 0;
+  const netAmount = Number(s.netAmount) || (monthlyCollection - monthlyExpenses);
 
-  const openComplaints = s.openComplaints ?? 0;
-  const activeMaintenance = s.activeMaintenance ?? 0;
-  const activeEmployees = s.activeEmployees ?? 0;
-  const pendingLeaveRequests = s.pendingLeaveRequests ?? 0;
-  const todayVisitors = s.todayVisitors ?? 0;
-  const activeVisitors = s.activeVisitors ?? 0;
+  const openComplaints = Number(s.openComplaints) || 0;
+  const activeMaintenance = Number(s.activeMaintenance) || 0;
+  const activeEmployees = Number(s.activeEmployees) || 0;
+  const pendingLeaveRequests = Number(s.pendingLeaveRequests) || 0;
+  const todayVisitors = Number(s.todayVisitors) || 0;
+  const activeVisitors = Number(s.activeVisitors) || 0;
 
   return (
-    <div className="w-full space-y-6 pb-12 transition-colors">
+    <div className="w-full space-y-6 pb-12 transition-colors opacity-100">
       
       {/* 1. TOP HEADER & TOOLBAR */}
       <div className="p-6 rounded-[28px] bg-[#FFFDF9] dark:bg-[#141D19] border border-[#DDD8CE] dark:border-[#293832] shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 opacity-100">
@@ -196,12 +253,12 @@ export default function ReportsAndAnalyticsPage() {
         </button>
       </div>
 
-      {/* SECTION 1 — OVERVIEW SUMMARY CARDS (GUARANTEED IMMEDIATE RENDER) */}
+      {/* SECTION 1 — OVERVIEW SUMMARY CARDS */}
       <div>
         <h2 className="text-xs font-black uppercase tracking-wider text-[#677771] dark:text-[#A3B3AC] mb-3 px-1 opacity-100">
           Hostel Overview Statistics
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 opacity-100">
           
           {/* BUILDINGS */}
           <div 
@@ -327,7 +384,7 @@ export default function ReportsAndAnalyticsPage() {
       </div>
 
       {/* SECTION 2 — REPORT BLOCKS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 opacity-100">
 
         {/* FINANCIAL SUMMARY */}
         <div 
@@ -347,19 +404,19 @@ export default function ReportsAndAnalyticsPage() {
           <div className="space-y-2 text-xs">
             <div className="flex justify-between items-center p-3 rounded-2xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20">
               <span className="font-bold text-emerald-600 dark:text-emerald-400">Monthly Revenue</span>
-              <span className="font-black text-[#1C2522] dark:text-[#F2F5F2]">₹{monthlyCollection.toLocaleString('en-IN')}</span>
+              <span className="font-black text-[#1C2522] dark:text-[#F2F5F2]">₹{formatCurrency(monthlyCollection)}</span>
             </div>
             <div className="flex justify-between items-center p-3 rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20">
               <span className="font-bold text-amber-600 dark:text-amber-400">Pending Dues</span>
-              <span className="font-black text-amber-600 dark:text-amber-400">₹{pendingDues.toLocaleString('en-IN')}</span>
+              <span className="font-black text-amber-600 dark:text-amber-400">₹{formatCurrency(pendingDues)}</span>
             </div>
             <div className="flex justify-between items-center p-3 rounded-2xl bg-rose-500/5 dark:bg-rose-500/10 border border-rose-500/20">
               <span className="font-bold text-rose-600 dark:text-rose-400">Operating Expenses</span>
-              <span className="font-black text-rose-600 dark:text-rose-400">₹{monthlyExpenses.toLocaleString('en-IN')}</span>
+              <span className="font-black text-rose-600 dark:text-rose-400">₹{formatCurrency(monthlyExpenses)}</span>
             </div>
             <div className="flex justify-between items-center p-3 rounded-2xl bg-[#2563EB]/10 text-[#2563EB] dark:text-[#60A5FA] font-black border border-[#2563EB]/20">
               <span>Net Income Margin</span>
-              <span>₹{netAmount.toLocaleString('en-IN')}</span>
+              <span>₹{formatCurrency(netAmount)}</span>
             </div>
           </div>
         </div>
@@ -675,7 +732,7 @@ export default function ReportsAndAnalyticsPage() {
                                 {p.tenant?.profile ? `${p.tenant.profile.firstName} ${p.tenant.profile.lastName}` : 'Resident'}
                               </td>
                               <td className="py-3 px-3 font-black text-emerald-600 dark:text-emerald-400">
-                                ₹{p.amount?.toLocaleString('en-IN')}
+                                ₹{formatCurrency(p.amount)}
                               </td>
                               <td className="py-3 px-3 font-bold text-[#677771] dark:text-[#A3B3AC]">
                                 {p.paymentMethod || 'UPI'}
@@ -742,7 +799,7 @@ export default function ReportsAndAnalyticsPage() {
                               <td className="py-3 px-3 font-black text-[#1C2522] dark:text-[#F2F5F2]">{emp.name}</td>
                               <td className="py-3 px-3 font-bold text-violet-600">{emp.role}</td>
                               <td className="py-3 px-3 text-[#677771] dark:text-[#A3B3AC]">{emp.phone}</td>
-                              <td className="py-3 px-3 font-black">₹{emp.salary?.toLocaleString('en-IN')}</td>
+                              <td className="py-3 px-3 font-black">₹{formatCurrency(emp.salary)}</td>
                               <td className="py-3 px-3"><span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 font-black text-[10px]">{emp.status}</span></td>
                             </tr>
                           ))
@@ -774,7 +831,7 @@ export default function ReportsAndAnalyticsPage() {
                               <td className="py-3 px-3 font-black text-[#1C2522] dark:text-[#F2F5F2]">{v.name}</td>
                               <td className="py-3 px-3 font-bold text-cyan-600">{v.personVisiting}</td>
                               <td className="py-3 px-3 text-[#677771] dark:text-[#A3B3AC]">{v.phone}</td>
-                              <td className="py-3 px-3 text-[#677771] dark:text-[#A3B3AC]">{v.checkIn ? new Date(v.checkIn).toLocaleString() : 'N/A'}</td>
+                              <td className="py-3 px-3 text-[#677771] dark:text-[#A3B3AC]">{formatDate(v.checkIn)}</td>
                               <td className="py-3 px-3"><span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 font-black text-[10px]">{v.approvalStatus}</span></td>
                             </tr>
                           ))
@@ -799,5 +856,13 @@ export default function ReportsAndAnalyticsPage() {
       )}
 
     </div>
+  );
+}
+
+export default function ReportsAndAnalyticsPage() {
+  return (
+    <ReportsErrorBoundary>
+      <ReportsAndAnalyticsContent />
+    </ReportsErrorBoundary>
   );
 }
