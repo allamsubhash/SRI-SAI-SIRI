@@ -538,13 +538,7 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
           </header>
 
           <main className="flex-1 pb-20 md:pb-8">
-            {loading ? (
-              <div className="min-h-[40vh] flex items-center justify-center">
-                <Loader className="w-8 h-8 animate-spin text-cyan-400" />
-              </div>
-            ) : (
-              children
-            )}
+            {children}
           </main>
 
           {/* DEDICATED MOBILE NATIVE BOTTOM NAVIGATION BAR */}

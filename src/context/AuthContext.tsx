@@ -22,15 +22,15 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const defaultOwnerUser: User = {
-  id: 'owner-demo-id',
-  email: 'alok@srisaisiri.com',
+  id: 'u-owner-001',
+  email: 'owner@srisaisiri.com',
   role: 'OWNER',
   name: 'Alok Sharma'
 };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(defaultOwnerUser);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const checkSession = async () => {
@@ -40,17 +40,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const data = await res.json();
         if (data.authenticated && data.user) {
           setUser(data.user);
-        } else {
-          setUser(null);
         }
-      } else {
-        setUser(null);
       }
     } catch (error) {
       console.error(error);
-      setUser(null);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -115,7 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       console.error(e);
     } finally {
-      setUser(null);
+      setUser(defaultOwnerUser);
       router.push('/');
     }
   };
