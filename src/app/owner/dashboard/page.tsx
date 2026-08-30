@@ -364,8 +364,9 @@ export default function OwnerDashboard() {
 
         {/* Financial Area Chart Visual */}
         <div className="h-60 w-full pt-1">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={charts.financials || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          {mounted && (
+            <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={200}>
+              <AreaChart data={charts.financials || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="tenantOwnerIncomeGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="var(--tenant-accent-color, #0891B2)" stopOpacity={0.4}/>
@@ -387,6 +388,7 @@ export default function OwnerDashboard() {
               <Area type="monotone" dataKey="expenses" stroke="#F97316" strokeWidth={2.5} fillOpacity={1} fill="url(#tenantOwnerExpenseGrad)" />
             </AreaChart>
           </ResponsiveContainer>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">

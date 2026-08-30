@@ -235,7 +235,7 @@ export default function ReportsPage() {
             </div>
           ) : (
             <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={200}>
                 <BarChart data={monthlyFinancials} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" opacity={0.2} />
                   <XAxis dataKey="month" stroke="#9CA3AF" fontSize={11} tickLine={false} />
@@ -269,7 +269,7 @@ export default function ReportsPage() {
             </div>
           ) : (
             <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={200}>
                 <AreaChart data={occupancyHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorOcc" x1="0" y1="0" x2="0" y2="1">

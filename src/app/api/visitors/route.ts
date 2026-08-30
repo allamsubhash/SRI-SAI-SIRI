@@ -8,7 +8,7 @@ export async function GET() {
     const visitors = await dbService.getVisitors();
     return NextResponse.json(visitors, {
       headers: {
-        'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=30'
+        'Cache-Control': 'no-store, max-age=0, must-revalidate'
       }
     });
   } catch (error: any) {

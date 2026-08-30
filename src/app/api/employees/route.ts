@@ -6,7 +6,11 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const employees = await dbService.getEmployees();
-    return NextResponse.json(employees);
+    return NextResponse.json(employees, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0, must-revalidate'
+      }
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
