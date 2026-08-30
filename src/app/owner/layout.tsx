@@ -133,7 +133,7 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
   }
 
   const menuItems = [
-    { label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" />, href: '/owner/dashboard' },
+    { label: 'Reports & Analytics', icon: <BarChart3 className="w-4 h-4" />, href: '/owner/reports' },
     { label: 'Buildings & Rooms', icon: <Building className="w-4 h-4" />, href: '/owner/buildings' },
     { label: 'Tenant Registry', icon: <Users className="w-4 h-4" />, href: '/owner/tenants' },
     { label: 'Gate Passes & Visitors', icon: <UserCheck className="w-4 h-4" />, href: '/owner/visitors' },
@@ -143,12 +143,11 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
     { label: 'Inventory Stock', icon: <Warehouse className="w-4 h-4" />, href: '/owner/inventory' },
     { label: 'Expenses', icon: <DollarSign className="w-4 h-4" />, href: '/owner/expenses' },
     { label: 'Notice Board', icon: <Megaphone className="w-4 h-4" />, href: '/owner/notices' },
-    { label: 'Reports & Analytics', icon: <BarChart3 className="w-4 h-4" />, href: '/owner/reports' },
     { label: 'Settings', icon: <Settings className="w-4 h-4" />, href: '/owner/settings' },
   ];
 
   const dockItems = [
-    { label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, href: '/owner/dashboard' },
+    { label: 'Overview', icon: <BarChart3 className="w-5 h-5" />, href: '/owner/reports' },
     { label: 'Buildings', icon: <Building className="w-5 h-5" />, href: '/owner/buildings' },
     { label: 'Tenants', icon: <Users className="w-5 h-5" />, href: '/owner/tenants' },
     { label: 'Rent', icon: <Receipt className="w-5 h-5" />, href: '/owner/rent' },
@@ -188,7 +187,7 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
           <div className="space-y-6">
             {/* Logo Brand Header */}
             <div className="flex items-center justify-between px-1">
-              <Link href="/owner/dashboard" className="flex items-center gap-3 overflow-hidden">
+              <Link href="/owner/reports" className="flex items-center gap-3 overflow-hidden">
                 <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center shrink-0 shadow-md transition-transform hover:scale-105">
                   <Building className="w-5 h-5 text-white" />
                 </div>
@@ -544,13 +543,13 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
           {/* DEDICATED MOBILE NATIVE BOTTOM NAVIGATION BAR */}
           <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/95 dark:bg-[#121826]/95 backdrop-blur-xl border-t border-slate-200 dark:border-zinc-800 flex items-center justify-around z-40 px-2 shadow-lg">
             <Link
-              href="/owner/dashboard"
+              href="/owner/reports"
               className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
-                pathname === '/owner/dashboard' ? 'text-blue-600 dark:text-cyan-400 scale-105' : 'text-slate-400 dark:text-zinc-500'
+                pathname === '/owner/reports' ? 'text-blue-600 dark:text-cyan-400 scale-105' : 'text-slate-400 dark:text-zinc-500'
               }`}
             >
-              <LayoutDashboard className="w-5 h-5" />
-              <span>Home</span>
+              <BarChart3 className="w-5 h-5" />
+              <span>Overview</span>
             </Link>
             <Link
               href="/owner/buildings"
