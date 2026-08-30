@@ -1234,8 +1234,14 @@ export const dbService = {
       employees,
       openComplaintsCount,
       openMaintenanceCount,
+      openLeaveRequestsCount,
+      totalTenantsCount,
+      newTenantsThisMonthCount,
       notices,
-      buildingsData
+      buildingsData,
+      recentPaymentsList,
+      recentTenantsList,
+      recentComplaintsList
     ] = await Promise.all([
       prisma.building.count(),
       prisma.floor.count(),
@@ -1276,6 +1282,13 @@ export const dbService = {
       prisma.maintenance.count({
         where: { status: { in: ['PENDING', 'IN_PROGRESS'] } }
       }),
+      prisma.leaveRequest.count({
+        where: { status: 'PENDING' }
+      }),
+      prisma.tenant.count(),
+      prisma.tenant.count({
+        where: { createdAt: { gte: startOfMonth } }
+      }),
       prisma.notice.findMany({
         orderBy: { createdAt: 'desc' },
         take: 5
@@ -1301,6 +1314,21 @@ export const dbService = {
           }
         },
         orderBy: { createdAt: 'desc' }
+      }),
+      prisma.payment.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 3,
+        include: { tenant: { include: { profile: true } } }
+      }),
+      prisma.tenant.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 3,
+        include: { profile: true }
+      }),
+      prisma.complaint.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 3,
+        include: { tenant: { include: { profile: true } } }
       })
     ]);
 
@@ -1332,29 +1360,78 @@ export const dbService = {
     const vacantRoomsCount = Math.max(0, roomsCount - occupiedRoomsCount - maintenanceRoomsCount);
     const occupancyPercentage = bedsCount > 0 ? Math.round((occupiedBedsCount / bedsCount) * 100) : 0;
 
+    // Build unified recent activities feed
+    const recentActivities: any[] = [];
+    recentTenantsList.forEach(t => {
+      const name = t.profile ? `${t.profile.firstName} ${t.profile.lastName}`.trim() : 'Resident';
+      recentActivities.push({
+        id: `act-t-${t.id}`,
+        title: 'New Resident Registered',
+        desc: `${name} assigned to Room ${t.roomNumber || 'A-101'}`,
+        time: t.createdAt ? new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently',
+        type: 'TENANT'
+      });
+    });
+
+    recentPaymentsList.forEach(p => {
+      const name = p.tenant?.profile ? `${p.tenant.profile.firstName} ${p.tenant.profile.lastName}`.trim() : 'Resident';
+      recentActivities.push({
+        id: `act-p-${p.id}`,
+        title: 'Payment Received',
+        desc: `₹${p.amount.toLocaleString()} received via ${p.paymentMethod || 'UPI'} from ${name}`,
+        time: p.date ? new Date(p.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently',
+        type: 'PAYMENT'
+      });
+    });
+
+    recentComplaintsList.forEach(c => {
+      const name = c.tenant?.profile ? `${c.tenant.profile.firstName} ${c.tenant.profile.lastName}`.trim() : 'Resident';
+      recentActivities.push({
+        id: `act-c-${c.id}`,
+        title: 'Ticket Raised',
+        desc: `${c.title} logged by ${name}`,
+        time: c.createdAt ? new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently',
+        type: 'COMPLAINT'
+      });
+    });
+
     return {
       metrics: {
+        totalBuildings: buildingsCount,
         buildings: buildingsCount,
         floors: floorsCount,
+        totalRooms: roomsCount,
         rooms: roomsCount,
         occupiedRooms: occupiedRoomsCount,
         vacantRooms: vacantRoomsCount,
+        totalBeds: bedsCount,
         beds: bedsCount,
         occupiedBeds: occupiedBedsCount,
+        availableBeds: vacantBedsCount,
         vacantBeds: vacantBedsCount,
+        occupancyPercentage,
         occupancyRate: occupancyPercentage,
+        totalTenants: totalTenantsCount,
+        activeTenants: activeTenantsCount,
         tenants: activeTenantsCount,
+        newTenantsThisMonth: newTenantsThisMonthCount,
+        monthlyCollection: monthlyIncome,
         monthlyIncome,
         pendingRent,
+        pendingDues: pendingRent,
         overdueDues,
         unpaidInvoicesCount,
         monthlyExpenses,
         netProfit,
         employeeSalaryDue,
+        pendingComplaints: openComplaintsCount,
+        activeMaintenance: openMaintenanceCount + maintenanceRoomsCount,
+        pendingLeaveRequests: openLeaveRequestsCount,
         maintenanceRequests: openComplaintsCount + openMaintenanceCount + maintenanceRoomsCount,
         todayCheckIns: 0,
         todayCheckOuts: 0
       },
+      recentActivities: recentActivities.slice(0, 5),
       charts: {
         financials: [
           { name: now.toLocaleString('en-IN', { month: 'short' }), income: monthlyIncome, expenses: monthlyExpenses, profit: Math.max(0, netProfit) }

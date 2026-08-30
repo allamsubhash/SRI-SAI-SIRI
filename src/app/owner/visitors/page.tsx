@@ -406,36 +406,36 @@ export default function OwnerVisitorsPage() {
                     <tr 
                       key={vis.id} 
                       onClick={() => setSelectedVisitor(vis)}
-                      className="hover:bg-[#F1EEE7]/80 dark:hover:bg-[#1A2621]/80 transition-colors cursor-pointer group"
+                      className="hover:bg-[#F1EEE7] dark:hover:bg-[#1A2621] transition-colors cursor-pointer group border-b border-slate-200/60 dark:border-zinc-800/60"
                     >
                       
                       {/* Visitor Name & Phone */}
                       <td className="py-3.5 px-4">
-                        <div className="font-black text-[#1C2522] dark:text-[#F2F5F2] flex items-center gap-2 group-hover:text-[#2563EB] dark:group-hover:text-[#60A5FA] transition-colors">
-                          <User className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA]" />
-                          <span>{vis.name}</span>
+                        <div className="font-black text-slate-900 dark:text-white flex items-center gap-2 group-hover:text-[#2563EB] dark:group-hover:text-[#60A5FA] transition-colors">
+                          <User className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA] shrink-0" />
+                          <span className="opacity-100 text-slate-900 dark:text-white">{vis.name}</span>
                         </div>
-                        <div className="text-[11px] font-bold text-[#677771] dark:text-[#A3B3AC] flex items-center gap-1.5 mt-0.5">
-                          <Phone className="w-3 h-3" />
+                        <div className="text-[11px] font-bold text-slate-600 dark:text-zinc-300 flex items-center gap-1.5 mt-0.5 opacity-100">
+                          <Phone className="w-3 h-3 text-slate-500 dark:text-zinc-400 shrink-0" />
                           <span>{vis.phone}</span>
                         </div>
                       </td>
 
                       {/* Resident & Room */}
                       <td className="py-3.5 px-4">
-                        <div className="font-black text-[#1C2522] dark:text-[#F2F5F2]">
+                        <div className="font-black text-slate-900 dark:text-white opacity-100">
                           {vis.personVisiting}
                         </div>
-                        <div className="text-[10px] font-bold text-[#2563EB] dark:text-[#60A5FA]">
+                        <div className="text-[10px] font-bold text-[#2563EB] dark:text-[#60A5FA] opacity-100">
                           {tenantInfo.room} • {tenantInfo.building}
                         </div>
                       </td>
 
                       {/* Check-in Schedule */}
-                      <td className="py-3.5 px-4 text-[#677771] dark:text-[#A3B3AC] font-bold">
+                      <td className="py-3.5 px-4 text-slate-700 dark:text-zinc-200 font-bold opacity-100">
                         <div className="flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-[#2563EB]" />
-                          <span>{vis.checkIn}</span>
+                          <Clock className="w-3.5 h-3.5 text-[#2563EB] shrink-0" />
+                          <span className="text-slate-900 dark:text-white font-bold">{vis.checkIn}</span>
                         </div>
                       </td>
 
