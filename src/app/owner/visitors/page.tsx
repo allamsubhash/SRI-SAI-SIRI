@@ -48,18 +48,10 @@ export default function OwnerVisitorsPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [visRes, tenRes] = await Promise.all([
-        fetch('/api/visitors'),
-        fetch('/api/tenants')
-      ]);
-
+      const visRes = await fetch('/api/visitors');
       if (visRes.ok) {
         const visData = await visRes.json();
         setVisitors(Array.isArray(visData) ? visData : []);
-      }
-      if (tenRes.ok) {
-        const tenData = await tenRes.json();
-        setTenants(Array.isArray(tenData) ? tenData : []);
       }
     } catch (err) {
       console.error('Failed to load visitor data:', err);
@@ -67,6 +59,14 @@ export default function OwnerVisitorsPage() {
     } finally {
       setLoading(false);
     }
+
+    // Fetch tenant list asynchronously in the background for modal selection
+    fetch('/api/tenants')
+      .then(res => res.json())
+      .then(tenData => {
+        if (Array.isArray(tenData)) setTenants(tenData);
+      })
+      .catch(err => console.error('Background tenant fetch error:', err));
   };
 
   useEffect(() => {

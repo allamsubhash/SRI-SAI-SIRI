@@ -42,7 +42,7 @@ async function ensureDbInitialized() {
   }
 }
 
-ensureDbInitialized();
+// ensureDbInitialized is called on demand during user login if needed
 
 export const dbService = {
   // --- AUTHENTICATION ---
@@ -1027,6 +1027,11 @@ export const dbService = {
   // --- VISITORS ---
   async getVisitors() {
     const visitors = await prisma.visitor.findMany({
+      include: {
+        tenant: {
+          include: { profile: true }
+        }
+      },
       orderBy: { createdAt: 'desc' }
     });
 
@@ -1034,7 +1039,8 @@ export const dbService = {
       id: v.id,
       name: v.name,
       phone: v.phone,
-      personVisiting: v.personVisiting,
+      personVisiting: v.personVisiting || (v.tenant ? `${v.tenant.profile.firstName} ${v.tenant.profile.lastName}`.trim() : 'Resident'),
+      roomNumber: v.tenant?.roomNumber || 'N/A',
       checkIn: v.checkIn.toISOString().replace('T', ' ').slice(0, 16),
       checkOut: v.checkOut ? v.checkOut.toISOString().replace('T', ' ').slice(0, 16) : null,
       approvalStatus: v.approvalStatus as any,
