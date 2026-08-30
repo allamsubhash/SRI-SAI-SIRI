@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 // Avoid multiple PrismaClient instances in development / serverless executions
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 export const prisma = globalForPrisma.prisma || new PrismaClient();
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+globalForPrisma.prisma = prisma;
 
 function logDebug(message: string, error?: any) {
   console.log(`[Sri Sai Siri DB Service] ${message}`, error ? error.message || error : '');
