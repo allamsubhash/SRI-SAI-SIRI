@@ -329,7 +329,7 @@ export const dbService = {
         phone: t.profile.phone,
         roomNumber: t.roomNumber || 'N/A',
         bedNumber: assignedBed ? assignedBed.number : (t.bedNumber || 'N/A'),
-        rentAmount: t.rentAmount ?? 0,
+        rentAmount: t.rentAmount || 8500,
         status: t.status as any,
         moveInDate: t.moveInDate ? t.moveInDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         gender: t.profile.gender || 'Male',
@@ -428,15 +428,13 @@ export const dbService = {
         }
       });
 
-      const finalRent = typeof data.rentAmount === 'number' && !isNaN(data.rentAmount) ? data.rentAmount : (parseFloat(String(data.rentAmount || 0)) || 0);
-
       const createdTenant = await tx.tenant.create({
         data: {
           id: tenantId,
           profileId: createdProfile.id,
           roomNumber: data.roomNumber || 'N/A',
           bedNumber: data.bedNumber || 'N/A',
-          rentAmount: finalRent,
+          rentAmount: data.rentAmount || 8500,
           agreementUrl: data.agreementUrl || '',
           medicalNotes: data.medicalNotes || '',
           moveInDate: data.moveInDate ? new Date(data.moveInDate) : new Date(),
@@ -451,27 +449,6 @@ export const dbService = {
           data: {
             tenantId: createdTenant.id,
             isAvailable: false
-          }
-        });
-      }
-
-      // 5. Automatically create initial Invoice matching fixed rent
-      if (finalRent > 0) {
-        const invId = `inv-${Date.now()}`;
-        const invNumber = `INV-2026-${String(Date.now()).slice(-4)}`;
-        const dueDate = new Date();
-        dueDate.setDate(dueDate.getDate() + 30);
-
-        await tx.invoice.create({
-          data: {
-            id: invId,
-            number: invNumber,
-            tenantId: createdTenant.id,
-            amount: finalRent,
-            paidAmount: 0,
-            dueDate,
-            status: 'PENDING',
-            itemsJson: JSON.stringify([{ description: 'Monthly Fixed Rent', amount: finalRent }])
           }
         });
       }
@@ -683,37 +660,55 @@ export const dbService = {
 
       if (!dbInv) throw new Error('Invoice record not found.');
 
-      const newPaid = dbInv.paidAmount + amount;
-      const status = newPaid >= dbInv.amount ? 'PAID' : 'PARTIAL';
-
-      // Record income expense entry
-      const tenantName = dbInv.tenant ? `${dbInv.tenant.profile.firstName} ${dbInv.tenant.profile.lastName}`.trim() : 'Tenant';
-      await tx.expense.create({
-        data: {
-          title: `Rent collection - ${tenantName} (${dbInv.number})`,
-          amount: -Math.abs(amount), // Negative expense = income/collection
-          category: 'RENT',
-          date: new Date(),
-          notes: `Payment of ₹${amount} received via ${method}`
-        }
-      });
-
-      return await tx.invoice.update({
-        where: { id: invoiceId },
-        data: {
-          paidAmount: newPaid,
-          status,
-          payments: {
-            create: {
-              amount,
-              type: 'RENT',
-              paymentMethod: method,
-              status: 'PAID',
-              tenantId: dbInv.tenantId
+      if (isTenantPayment) {
+        return await tx.invoice.update({
+          where: { id: invoiceId },
+          data: {
+            status: 'PENDING_VERIFICATION',
+            payments: {
+              create: {
+                amount,
+                type: 'RENT',
+                paymentMethod: method,
+                status: 'PENDING',
+                tenantId: dbInv.tenantId
+              }
             }
           }
-        }
-      });
+        });
+      } else {
+        const newPaid = dbInv.paidAmount + amount;
+        const status = newPaid >= dbInv.amount ? 'PAID' : 'PARTIAL';
+
+        // Record income expense entry
+        const tenantName = dbInv.tenant ? `${dbInv.tenant.profile.firstName} ${dbInv.tenant.profile.lastName}`.trim() : 'Tenant';
+        await tx.expense.create({
+          data: {
+            title: `Rent collection - ${tenantName} (${dbInv.number})`,
+            amount: -amount, // negative expense = income
+            category: 'SALARY',
+            date: new Date(),
+            notes: `Rent received via ${method}`
+          }
+        });
+
+        return await tx.invoice.update({
+          where: { id: invoiceId },
+          data: {
+            paidAmount: newPaid,
+            status,
+            payments: {
+              create: {
+                amount,
+                type: 'RENT',
+                paymentMethod: method,
+                status: 'PAID',
+                tenantId: dbInv.tenantId
+              }
+            }
+          }
+        });
+      }
     });
   },
 

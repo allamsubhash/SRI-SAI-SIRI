@@ -69,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (res.ok && data.success) {
         setUser(data.user);
         if (data.user.role === 'OWNER') {
-          router.push('/owner/reports');
+          router.push('/owner/dashboard');
         } else {
           router.push('/tenant/dashboard');
         }
@@ -92,7 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json();
       if (res.ok && data.success) {
         setUser(data.user);
-        router.push('/owner/reports');
+        router.push('/owner/dashboard');
         return { success: true };
       } else {
         return { success: false, error: data.error || 'Owner registration failed' };

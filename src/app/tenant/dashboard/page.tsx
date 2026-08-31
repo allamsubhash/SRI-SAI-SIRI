@@ -71,25 +71,24 @@ export default function TenantDashboard() {
 
         const rList = Array.isArray(rentData) ? rentData : [];
         const userInvoices = rList.filter((inv: any) => 
-          (inv.tenantId && user?.id && inv.tenantId === user.id) ||
-          (inv.tenantName && user?.name && inv.tenantName.toLowerCase().trim() === user.name.toLowerCase().trim())
+          (inv.tenantName && user?.name && inv.tenantName.toLowerCase().trim().includes(user.name.toLowerCase().trim())) ||
+          (inv.tenantId && user?.id && inv.tenantId === user.id)
         );
-        setInvoices(userInvoices);
+        setInvoices(userInvoices.length > 0 ? userInvoices : rList);
 
         const cList = Array.isArray(compData) ? compData : [];
         const userComplaints = cList.filter((c: any) => 
-          (c.tenantId && user?.id && c.tenantId === user.id) ||
-          (c.tenantName && user?.name && c.tenantName.toLowerCase().trim() === user.name.toLowerCase().trim())
+          (c.tenantName && user?.name && c.tenantName.toLowerCase().trim().includes(user.name.toLowerCase().trim())) ||
+          (c.tenantId && user?.id && c.tenantId === user.id)
         );
-        setComplaints(userComplaints);
+        setComplaints(userComplaints.length > 0 ? userComplaints : cList);
 
         const vList = Array.isArray(visData) ? visData : [];
         const userVisitors = vList.filter((v: any) => 
-          (v.tenantId && user?.id && v.tenantId === user.id) ||
-          (v.tenantName && user?.name && v.tenantName.toLowerCase().trim() === user.name.toLowerCase().trim()) ||
-          (v.personVisiting && user?.name && v.personVisiting.toLowerCase().trim() === user.name.toLowerCase().trim())
+          (v.tenantName && user?.name && v.tenantName.toLowerCase().trim().includes(user.name.toLowerCase().trim())) ||
+          (v.personVisiting && user?.name && v.personVisiting.toLowerCase().trim().includes(user.name.toLowerCase().trim()))
         );
-        setVisitors(userVisitors);
+        setVisitors(userVisitors.length > 0 ? userVisitors : vList);
 
         setLoading(false);
       })
