@@ -895,13 +895,13 @@ export default function BuildingsManagement() {
                     setEditingRoom(selectedRoomDetail);
                     setEditRNumber(selectedRoomDetail.number);
                     setEditRType(selectedRoomDetail.type || 'AC Double');
-                    setEditRRent(selectedRoomDetail.rent?.toString() || '8500');
+                    setEditRRent(selectedRoomDetail.rent?.toString() || '6500');
                     setEditRCapacity(selectedRoomDetail.capacity?.toString() || '2');
                     setEditRStatus(selectedRoomDetail.status || 'AVAILABLE');
                     setSelectedRoomDetail(null);
                     setShowEditRModal(true);
                   }}
-                  className="py-3 rounded-2xl bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 font-bold text-xs hover:bg-slate-200 transition-colors cursor-pointer"
+                  className="py-3 rounded-2xl bg-slate-800 dark:bg-zinc-900 text-white dark:text-zinc-200 font-bold text-xs border border-slate-700 dark:border-zinc-800 hover:bg-slate-700 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
                 >
                   Edit Room Config
                 </button>
