@@ -622,6 +622,71 @@ export const dbService = {
     });
   },
 
+  async getTenantFinancialSummary(tenantIdentifier: string) {
+    const dbTenant = await prisma.tenant.findFirst({
+      where: {
+        OR: [
+          { id: tenantIdentifier },
+          { profile: { userId: tenantIdentifier } },
+          { profile: { user: { email: tenantIdentifier } } }
+        ]
+      },
+      include: {
+        profile: true,
+        invoices: { include: { payments: true } }
+      }
+    });
+
+    if (!dbTenant) {
+      return {
+        monthlyRent: 0,
+        currentInvoiceAmount: 0,
+        totalInvoiced: 0,
+        totalPaid: 0,
+        outstandingAmount: 0,
+        lastPaymentAmount: 0,
+        lastPaymentDate: null,
+        paymentStatus: 'PAID'
+      };
+    }
+
+    const monthlyRent = dbTenant.rentAmount;
+
+    const allInvoices = dbTenant.invoices || [];
+    const totalInvoiced = allInvoices.reduce((sum, inv) => sum + inv.amount, 0);
+
+    const allPaidPayments = await prisma.payment.findMany({
+      where: {
+        tenantId: dbTenant.id,
+        status: 'PAID'
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const totalPaid = allPaidPayments.reduce((sum, p) => sum + p.amount, 0);
+    const outstandingAmount = Math.max(0, totalInvoiced - totalPaid);
+
+    const mostRecentPayment = allPaidPayments[0] || null;
+    const lastPaymentAmount = mostRecentPayment ? mostRecentPayment.amount : 0;
+    const lastPaymentDate = mostRecentPayment ? mostRecentPayment.createdAt.toISOString().split('T')[0] : null;
+
+    let paymentStatus: 'PAID' | 'PARTIAL' | 'PENDING' = 'PAID';
+    if (outstandingAmount > 0) {
+      paymentStatus = totalPaid > 0 ? 'PARTIAL' : 'PENDING';
+    }
+
+    return {
+      tenantId: dbTenant.id,
+      monthlyRent,
+      totalInvoiced,
+      totalPaid,
+      outstandingAmount,
+      lastPaymentAmount,
+      lastPaymentDate,
+      paymentStatus
+    };
+  },
+
   async createInvoice(tenantId: string, amount: number, items: { description: string; amount: number }[], dueDate: string) {
     const dbTenant = await prisma.tenant.findFirst({
       where: {

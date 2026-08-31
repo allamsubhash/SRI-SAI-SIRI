@@ -116,7 +116,7 @@ export default function TenantDashboard() {
   const userRoom = currentTenant?.roomNumber || 'A-101';
   const userBed = currentTenant?.bedNumber || 'A';
   const moveInDate = currentTenant?.moveInDate ? formatDate(currentTenant.moveInDate) : '15 Jan 2026';
-  const rentAmount = currentTenant?.rentAmount || 8500;
+  const rentAmount = currentTenant?.rentAmount ? currentTenant.rentAmount : (invoices[0]?.amount || 6500);
 
   // Active roommates sharing exact same room
   const roommates = useMemo(() => {
