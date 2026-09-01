@@ -50,25 +50,126 @@ export default function OfficialPaymentReceiptModal({
   };
 
   const handleDownloadPDF = async () => {
-    if (!receiptRef.current || downloading) return;
+    if (downloading) return;
     setDownloading(true);
 
     try {
-      const html2canvas = (await import('html2canvas')).default;
       const { jsPDF } = await import('jspdf');
+      
+      // Attempt 1: Try HTML Canvas Capture if ref exists
+      if (receiptRef.current) {
+        try {
+          const html2canvas = (await import('html2canvas')).default;
+          const canvas = await html2canvas(receiptRef.current, {
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff',
+            logging: false
+          });
 
-      const canvas = await html2canvas(receiptRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff'
+          const imgData = canvas.toDataURL('image/png');
+          const pdf = new jsPDF('p', 'mm', 'a4');
+          const pdfWidth = 190;
+          const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+          pdf.addImage(imgData, 'PNG', 10, 12, pdfWidth, pdfHeight);
+          pdf.save(`Official_Receipt_${receiptData.receiptNo}.pdf`);
+          setDownloading(false);
+          return;
+        } catch (canvasErr) {
+          console.warn('Canvas export fallback triggered:', canvasErr);
+        }
+      }
+
+      // Fallback: Reliable Pure jsPDF Vector Document Generator
+      const pdf = new jsPDF('p', 'mm', 'a4');
+
+      // Title & Header
+      pdf.setTextColor(112, 36, 52); // #702434
+      pdf.setFont('Helvetica', 'bold');
+      pdf.setFontSize(18);
+      pdf.text('SRI SAI SIRI BOYS HOSTEL', 105, 20, { align: 'center' });
+
+      pdf.setFontSize(13);
+      pdf.text('Online Payment Receipt', 105, 28, { align: 'center' });
+
+      // Tenant Info Box
+      pdf.setDrawColor(208, 215, 222);
+      pdf.rect(14, 35, 182, 22);
+
+      pdf.setTextColor(30, 41, 59);
+      pdf.setFontSize(10);
+      pdf.setFont('Helvetica', 'bold');
+      pdf.text(`Tenant ID        : ${receiptData.tenantId || 'TEN-001'}`, 18, 43);
+      pdf.text(`Tenant Name     : ${receiptData.tenantName || 'SUBHASH'}`, 18, 51);
+
+      pdf.text(`Room Number    : ${receiptData.roomNumber || 'A-101'}`, 110, 43);
+      pdf.text(`Mobile Number  : ${receiptData.mobileNumber || '9876543210'}`, 110, 51);
+
+      // Receipt Info Bar
+      pdf.setFillColor(248, 250, 252);
+      pdf.rect(14, 61, 182, 10, 'F');
+      pdf.rect(14, 61, 182, 10, 'S');
+
+      pdf.text(`Receipt No : ${receiptData.receiptNo}`, 18, 67.5);
+      pdf.text(`Date : ${formatDate(receiptData.date)}`, 150, 67.5);
+
+      // Table Header
+      pdf.setFillColor(241, 245, 249);
+      pdf.rect(14, 75, 182, 10, 'F');
+      pdf.rect(14, 75, 182, 10, 'S');
+
+      pdf.text('S.NO', 20, 81.5);
+      pdf.text('Account Head', 45, 81.5);
+      pdf.text('Amount (INR)', 165, 81.5);
+
+      // Table Body
+      let y = 92;
+      const items = receiptData.items && receiptData.items.length > 0 ? receiptData.items : [{ accountHead: 'HOSTEL RENT COLLECTION', amount: totalAmount }];
+      items.forEach((item, idx) => {
+        pdf.rect(14, y - 7, 182, 10, 'S');
+        pdf.setFont('Helvetica', 'normal');
+        pdf.text(String(idx + 1), 22, y);
+        pdf.text(item.accountHead, 45, y);
+        pdf.setFont('Helvetica', 'bold');
+        pdf.text(item.amount.toLocaleString('en-IN'), 185, y, { align: 'right' });
+        y += 10;
       });
 
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = 190;
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      // Total Row
+      pdf.setFillColor(248, 250, 252);
+      pdf.rect(14, y - 7, 182, 10, 'F');
+      pdf.rect(14, y - 7, 182, 10, 'S');
+      pdf.setFont('Helvetica', 'bold');
+      pdf.text('Total :', 135, y);
+      pdf.text(totalAmount.toLocaleString('en-IN'), 185, y, { align: 'right' });
+      y += 14;
 
-      pdf.addImage(imgData, 'PNG', 10, 12, pdfWidth, pdfHeight);
+      // In Words Box
+      pdf.setFillColor(220, 231, 249);
+      pdf.setDrawColor(184, 211, 248);
+      pdf.rect(14, y - 5, 182, 12, 'FD');
+      pdf.setTextColor(30, 58, 138);
+      pdf.text(`In Words : *** ${amountInWords} ***`, 18, y + 2);
+      y += 16;
+
+      // Terms
+      pdf.setDrawColor(208, 215, 222);
+      pdf.setTextColor(100, 116, 139);
+      pdf.setFontSize(9);
+      pdf.text('*Terms & Conditions Apply', 14, y);
+      pdf.text('*Payment subject to realization', 196, y, { align: 'right' });
+      y += 6;
+
+      // Footer
+      pdf.setFillColor(254, 246, 216);
+      pdf.setDrawColor(247, 231, 169);
+      pdf.rect(14, y, 182, 14, 'FD');
+      pdf.setTextColor(113, 63, 18);
+      pdf.text('This is a Computer Generated Receipt. No signature is Required.', 105, y + 5, { align: 'center' });
+      pdf.text(`Generated On : ${generatedTime}`, 105, y + 10, { align: 'center' });
+
       pdf.save(`Official_Receipt_${receiptData.receiptNo}.pdf`);
     } catch (e) {
       console.error('Failed to export receipt PDF:', e);
@@ -79,7 +180,7 @@ export default function OfficialPaymentReceiptModal({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 overflow-y-auto font-sans">
+      <div className="fixed inset-0 z-[999999] overflow-y-auto font-sans bg-slate-950/75 backdrop-blur-sm flex justify-center items-start p-2 sm:p-6 py-6 sm:py-10 no-print">
         
         {/* Printable CSS Rules */}
         <style jsx global>{`
@@ -108,22 +209,13 @@ export default function OfficialPaymentReceiptModal({
           }
         `}</style>
 
-        {/* Modal Overlay */}
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm cursor-pointer no-print"
-        />
-
         {/* Modal Outer Container */}
         <motion.div 
           initial={{ scale: 0.94, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.94, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-          className="relative w-full max-w-[760px] bg-white rounded-3xl shadow-2xl overflow-hidden z-10 my-auto text-slate-900 border border-slate-200 text-left"
+          className="relative w-full max-w-[780px] bg-white rounded-3xl shadow-2xl overflow-hidden z-10 text-slate-900 border border-slate-200 text-left my-auto sm:my-4"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Modal Header Bar with Close Button */}
@@ -142,14 +234,14 @@ export default function OfficialPaymentReceiptModal({
             </button>
           </div>
 
-          {/* Scrollable Receipt Body */}
-          <div className="p-6 sm:p-8 max-h-[80vh] overflow-y-auto space-y-5 bg-white">
+          {/* Receipt Body Container (Full Viewable) */}
+          <div className="p-4 sm:p-8 space-y-5 bg-white">
             
             {/* 📄 THE EXACT OFFICIAL RECEIPT BOX (MATCHING REFERENCE IMAGE) */}
             <div 
               id="printable-official-receipt"
               ref={receiptRef}
-              className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-300 shadow-sm space-y-4 text-slate-900 font-sans"
+              className="bg-white p-5 sm:p-8 rounded-2xl border border-slate-300 shadow-sm space-y-4 text-slate-900 font-sans"
             >
               
               {/* TOP HEADER WITH EMBLEM & TITLE */}

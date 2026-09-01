@@ -94,7 +94,7 @@ export default function TenantBilling() {
       tenantId: inv.tenantId || 'TEN-001',
       tenantName: user?.name || inv.tenantName || 'SUBHASH',
       roomNumber: inv.roomNumber || 'A-101',
-      mobileNumber: inv.mobileNumber || user?.email || '9876543210',
+      mobileNumber: (user as any)?.phone || inv.mobileNumber || inv.tenantPhone || '9876543210',
       items,
       totalAmount: Number(inv.paidAmount || inv.amount || 6500),
       paymentType: inv.status === 'PARTIAL' ? 'Partial Payment' : 'Full Payment',
