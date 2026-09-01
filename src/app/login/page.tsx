@@ -428,14 +428,13 @@ function LoginContent() {
                         <label className={`text-[9px] font-black uppercase tracking-wider block ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>
                           🔑 OWNER SECURITY PASSKEY
                         </label>
-                        <span className="text-[9px] font-extrabold text-purple-400">Default: SRISIRI-OWNER-2026</span>
                       </div>
                       <input
-                        type="text"
+                        type="password"
                         required
                         value={ownerKey}
                         onChange={(e) => setOwnerKey(e.target.value)}
-                        placeholder="e.g. SRISIRI-OWNER-2026"
+                        placeholder="••••••••••••"
                         className={`w-full border-b py-2 px-2 text-xs font-bold focus:outline-none transition-colors rounded-none cursor-text tracking-wider ${
                           isDarkMode 
                             ? 'bg-purple-950/20 border-purple-500/40 text-purple-200 placeholder-purple-400/50 focus:border-purple-400' 
