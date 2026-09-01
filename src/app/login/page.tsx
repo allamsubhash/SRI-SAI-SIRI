@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useState, useEffect, useRef, Suspense } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -15,15 +15,8 @@ import {
   ArrowRight, 
   Check, 
   AlertCircle, 
-  Key, 
-  User, 
-  CheckCircle2, 
-  Compass, 
   Sun, 
-  Moon, 
-  X,
-  Sparkles,
-  ArrowLeft
+  Moon
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import LiveBackground from '@/components/backgrounds/LiveBackground';
@@ -38,7 +31,6 @@ function LoginContent() {
 
   // Primary State
   const [selectedRole, setSelectedRole] = useState<PortalRole>('OWNER');
-  const [hoveredRole, setHoveredRole] = useState<PortalRole | null>(null);
   
   // Auth Form State
   const [email, setEmail] = useState('');
@@ -54,7 +46,6 @@ function LoginContent() {
   const [authSuccess, setAuthSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [expiredMsg, setExpiredMsg] = useState(false);
-  const [portalExpanding, setPortalExpanding] = useState(false);
 
   // Welcome Screen Overlay State
   const [showWelcomeOverlay, setShowWelcomeOverlay] = useState(false);
@@ -66,19 +57,23 @@ function LoginContent() {
   const [forgotSubmitting, setForgotSubmitting] = useState(false);
   const [forgotSuccess, setForgotSuccess] = useState(false);
 
-  // Theme State (Default Dark, synced with localStorage and HTML class)
+  // Theme State
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
 
-  // Mouse Parallax State
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-
-  // Auto-redirect logged-in users directly to portal without showing login page or welcome loop
+  // Session Check & Welcome Screen Triggering Logic
   useEffect(() => {
     if (!loading && user) {
-      if (user.role === 'OWNER') {
-        router.replace('/owner/reports');
+      const welcomeSeen = typeof window !== 'undefined' ? sessionStorage.getItem('welcomeSeen') : null;
+      if (welcomeSeen === 'true') {
+        if (user.role === 'OWNER') {
+          router.replace('/owner/reports');
+        } else {
+          router.replace('/tenant/dashboard');
+        }
       } else {
-        router.replace('/tenant/dashboard');
+        // Show Full-Screen Welcome Experience after login until user clicks ENTER PORTAL!
+        setWelcomeUser({ name: user.name, role: user.role });
+        setShowWelcomeOverlay(true);
       }
     }
   }, [user, loading, router]);
@@ -109,15 +104,6 @@ function LoginContent() {
       localStorage.setItem('theme', 'light');
     }
   }, [isDarkMode]);
-
-  // Mouse move handler
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePos({ x: e.clientX, y: e.clientY });
-    };
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
 
   // Handle Form Submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -184,9 +170,13 @@ function LoginContent() {
     }
   };
 
+  // Called ONLY when user explicitly clicks "ENTER MANAGEMENT PORTAL →" or "ENTER MY PORTAL →" or "Skip for now"
   const handleEnterPortal = () => {
-    if (!welcomeUser) return;
-    if (welcomeUser.role === 'OWNER') {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('welcomeSeen', 'true');
+    }
+    const role = welcomeUser?.role || user?.role;
+    if (role === 'OWNER') {
       router.push('/owner/reports');
     } else {
       router.push('/tenant/dashboard');
@@ -220,12 +210,12 @@ function LoginContent() {
       isDarkMode ? 'bg-[#020306] text-[#F8FAFC]' : 'bg-[#F1F5F9] text-[#0F172A]'
     }`}>
       
-      {/* Welcome Screen Overlay */}
-      {welcomeUser && (
+      {/* 🌟 FULL-SCREEN WELCOME EXPERIENCE OVERLAY (SHOWS AFTER LOGIN UNTIL USER CLICKS ENTER PORTAL) */}
+      {(showWelcomeOverlay || (user && welcomeUser)) && (
         <WelcomeScreenOverlay
-          isOpen={showWelcomeOverlay}
-          userRole={welcomeUser.role}
-          userName={welcomeUser.name}
+          isOpen={true}
+          userRole={welcomeUser?.role || user?.role || 'OWNER'}
+          userName={welcomeUser?.name || user?.name || 'User'}
           onEnter={handleEnterPortal}
         />
       )}
@@ -275,7 +265,7 @@ function LoginContent() {
         </button>
       </header>
 
-      {/* Main Container */}
+      {/* Main Form Container */}
       <main className="w-full max-w-7xl mx-auto px-4 py-6 my-auto relative z-20 flex flex-col items-center justify-center">
         
         <div className={`w-full max-w-[420px] sm:max-w-[460px] rounded-[36px] sm:rounded-[44px] p-6 sm:p-10 backdrop-blur-3xl border transition-all duration-500 flex flex-col justify-center items-center text-center relative overflow-hidden shadow-2xl ${
