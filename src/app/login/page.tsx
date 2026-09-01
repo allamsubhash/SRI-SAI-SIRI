@@ -76,7 +76,7 @@ function LoginContent() {
   useEffect(() => {
     if (!loading && user) {
       if (user.role === 'OWNER') {
-        router.replace('/owner/buildings');
+        router.replace('/owner/reports');
       } else {
         router.replace('/tenant/dashboard');
       }
@@ -187,7 +187,7 @@ function LoginContent() {
   const handleEnterPortal = () => {
     if (!welcomeUser) return;
     if (welcomeUser.role === 'OWNER') {
-      router.push('/owner/buildings');
+      router.push('/owner/reports');
     } else {
       router.push('/tenant/dashboard');
     }
