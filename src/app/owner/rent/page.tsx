@@ -37,6 +37,7 @@ import {
 import NeonModal from '@/components/NeonModal';
 import { useToast } from '@/components/ToastProvider';
 import { formatINR, formatDate } from '@/utils/formatters';
+import OfficialPaymentReceiptModal, { OfficialReceiptData } from '@/components/OfficialPaymentReceiptModal';
 import QuickInvoiceModal from '@/components/QuickInvoiceModal';
 
 export default function RentPage() {
@@ -102,6 +103,55 @@ export default function RentPage() {
   const [showRevertModal, setShowRevertModal] = useState(false);
   const [revertInvoice, setRevertInvoice] = useState<any>(null);
   const [revertRemarks, setRevertRemarks] = useState('');
+
+  // Official Payment Receipt Modal
+  const [selectedReceipt, setSelectedReceipt] = useState<OfficialReceiptData | null>(null);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+
+  const handleViewReceipt = (inv: any) => {
+    const rawNumber = inv.number ? inv.number.replace(/[^A-Za-z0-9]/g, '') : String(inv.id).slice(-6);
+    const receiptNo = `HST-RCP-2026-${rawNumber.padStart(6, '0')}`;
+
+    let parsedItems: any[] = [];
+    try {
+      if (Array.isArray(inv.items)) parsedItems = inv.items;
+      else if (typeof inv.itemsJson === 'string') parsedItems = JSON.parse(inv.itemsJson);
+    } catch (e) {
+      parsedItems = [];
+    }
+
+    const items = parsedItems.length > 0
+      ? parsedItems.map((it: any, idx: number) => ({
+          sNo: idx + 1,
+          accountHead: it.description || 'HOSTEL RENT COLLECTION',
+          amount: Number(it.amount || inv.paidAmount || inv.amount)
+        }))
+      : [
+          {
+            sNo: 1,
+            accountHead: `HOSTEL RENT – ${formatDate(inv.dueDate || inv.dateCreated)}`,
+            amount: Number(inv.paidAmount || inv.amount || 6500)
+          }
+        ];
+
+    const matchedTenant = tenants.find(t => t.id === inv.tenantId || t.name === inv.tenantName);
+
+    const data: OfficialReceiptData = {
+      receiptNo,
+      date: inv.dateCreated || inv.dueDate || new Date().toISOString(),
+      tenantId: matchedTenant?.id || inv.tenantId || 'TEN-001',
+      tenantName: inv.tenantName || matchedTenant?.name || 'SUBHASH',
+      roomNumber: inv.roomNumber || matchedTenant?.roomNumber || 'A-101',
+      mobileNumber: matchedTenant?.phone || '9876543210',
+      items,
+      totalAmount: Number(inv.paidAmount || inv.amount || 6500),
+      paymentType: inv.status === 'PARTIAL' ? 'Partial Payment' : 'Full Payment',
+      remainingDue: inv.status === 'PARTIAL' ? (inv.amount - (inv.paidAmount || 0)) : 0
+    };
+
+    setSelectedReceipt(data);
+    setShowReceiptModal(true);
+  };
 
   // Quick Action Floating Radial Menu State
   const [radialMenuOpen, setRadialMenuOpen] = useState(false);
@@ -839,11 +889,11 @@ export default function RentPage() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setSelectedSideInvoice(inv);
+                            handleViewReceipt(inv);
                           }}
                           className="text-purple-600 font-extrabold text-xs hover:underline cursor-pointer"
                         >
-                          View →
+                          View Receipt →
                         </button>
                       </td>
                     </tr>
@@ -1342,6 +1392,15 @@ export default function RentPage() {
         onClose={() => setShowQuickIssuer(false)}
         onInvoiceCreated={fetchInitialData}
       />
+
+      {/* Official Payment Receipt Modal */}
+      {selectedReceipt && (
+        <OfficialPaymentReceiptModal
+          isOpen={showReceiptModal}
+          onClose={() => setShowReceiptModal(false)}
+          receiptData={selectedReceipt}
+        />
+      )}
 
     </div>
   );

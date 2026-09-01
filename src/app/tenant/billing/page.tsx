@@ -19,6 +19,7 @@ import {
 import { jsPDF } from 'jspdf';
 import NeonModal from '@/components/NeonModal';
 import { formatINR, formatDate } from '@/utils/formatters';
+import OfficialPaymentReceiptModal, { OfficialReceiptData } from '@/components/OfficialPaymentReceiptModal';
 
 export default function TenantBilling() {
   const { user } = useAuth();
@@ -31,6 +32,10 @@ export default function TenantBilling() {
   const [activeInvoice, setActiveInvoice] = useState<any>(null);
   const [showModal, setShowModal] = useState(false);
   const [paying, setPaying] = useState(false);
+
+  // Official Receipt Modal
+  const [selectedReceipt, setSelectedReceipt] = useState<OfficialReceiptData | null>(null);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
 
   const fetchTenantInvoices = () => {
     setLoading(true);
@@ -57,39 +62,47 @@ export default function TenantBilling() {
     }
   }, [user]);
 
-  const handleDownloadPDF = (inv: any) => {
+  const handleViewReceipt = (inv: any) => {
+    const rawNumber = inv.number ? inv.number.replace(/[^A-Za-z0-9]/g, '') : String(inv.id).slice(-6);
+    const receiptNo = `HST-RCP-2026-${rawNumber.padStart(6, '0')}`;
+
+    let parsedItems: any[] = [];
     try {
-      const doc = new jsPDF();
-      doc.setFillColor(23, 107, 91);
-      doc.rect(0, 0, 210, 45, 'F');
-      
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(20);
-      doc.setFont('Helvetica', 'bold');
-      doc.text('SRI SAI SIRI BOYS HOSTEL', 14, 25);
-      doc.setFontSize(10);
-      doc.setFont('Helvetica', 'normal');
-      doc.text('OFFICIAL RESIDENT RENT RECEIPT', 14, 34);
-
-      doc.setTextColor(28, 37, 34);
-      doc.setFontSize(12);
-      doc.setFont('Helvetica', 'bold');
-      doc.text(`Receipt #: ${inv.number}`, 14, 60);
-
-      doc.setFontSize(10);
-      doc.setFont('Helvetica', 'normal');
-      doc.text(`Tenant Name: ${user?.name || inv.tenantName}`, 14, 70);
-      doc.text(`Billing Date: ${formatDate(inv.dateCreated)}`, 14, 78);
-      doc.text(`Due Date: ${formatDate(inv.dueDate)}`, 14, 86);
-      doc.text(`Payment Status: ${inv.status}`, 14, 94);
-
-      doc.setFont('Helvetica', 'bold');
-      doc.text(`Total Amount: INR ${(inv.paidAmount || inv.amount).toLocaleString('en-IN')}`, 14, 110);
-
-      doc.save(`Receipt_${inv.number}.pdf`);
+      if (Array.isArray(inv.items)) parsedItems = inv.items;
+      else if (typeof inv.itemsJson === 'string') parsedItems = JSON.parse(inv.itemsJson);
     } catch (e) {
-      console.error(e);
+      parsedItems = [];
     }
+
+    const items = parsedItems.length > 0
+      ? parsedItems.map((it: any, idx: number) => ({
+          sNo: idx + 1,
+          accountHead: it.description || 'HOSTEL RENT COLLECTION',
+          amount: Number(it.amount || inv.paidAmount || inv.amount)
+        }))
+      : [
+          {
+            sNo: 1,
+            accountHead: `HOSTEL RENT – ${formatDate(inv.dueDate || inv.dateCreated)}`,
+            amount: Number(inv.paidAmount || inv.amount || 6500)
+          }
+        ];
+
+    const data: OfficialReceiptData = {
+      receiptNo,
+      date: inv.dateCreated || inv.dueDate || new Date().toISOString(),
+      tenantId: inv.tenantId || 'TEN-001',
+      tenantName: user?.name || inv.tenantName || 'SUBHASH',
+      roomNumber: inv.roomNumber || 'A-101',
+      mobileNumber: inv.mobileNumber || user?.email || '9876543210',
+      items,
+      totalAmount: Number(inv.paidAmount || inv.amount || 6500),
+      paymentType: inv.status === 'PARTIAL' ? 'Partial Payment' : 'Full Payment',
+      remainingDue: inv.status === 'PARTIAL' ? (inv.amount - (inv.paidAmount || 0)) : 0
+    };
+
+    setSelectedReceipt(data);
+    setShowReceiptModal(true);
   };
 
   const handlePaySubmit = async (e: React.FormEvent) => {
@@ -250,11 +263,11 @@ export default function TenantBilling() {
                     <span className="text-lg font-black text-[#1C2522] dark:text-[#F2F5F2]">{formatINR(inv.amount)}</span>
                     {isPaid ? (
                       <button
-                        onClick={() => handleDownloadPDF(inv)}
+                        onClick={() => handleViewReceipt(inv)}
                         className="px-3.5 py-2 rounded-xl tenant-bg-soft tenant-text-accent border tenant-border-accent text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
                       >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>Receipt</span>
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>View Receipt</span>
                       </button>
                     ) : (
                       <button
@@ -324,6 +337,15 @@ export default function TenantBilling() {
             </div>
           </form>
         </NeonModal>
+      )}
+
+      {/* 📄 OFFICIAL PAYMENT RECEIPT MODAL */}
+      {selectedReceipt && (
+        <OfficialPaymentReceiptModal
+          isOpen={showReceiptModal}
+          onClose={() => setShowReceiptModal(false)}
+          receiptData={selectedReceipt}
+        />
       )}
 
     </div>
