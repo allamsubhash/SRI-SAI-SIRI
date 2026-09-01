@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -25,13 +25,16 @@ import {
   Sparkles,
   ArrowLeft
 } from 'lucide-react';
-import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import LiveBackground from '@/components/backgrounds/LiveBackground';
+import WelcomeScreenOverlay from '@/components/WelcomeScreenOverlay';
 
 export type PortalRole = 'OWNER' | 'TENANT' | 'WARDEN';
 
-export default function LoginPage() {
-  const { login, registerOwner } = useAuth();
+function LoginContent() {
+  const { user, loading, login, registerOwner } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   // Primary State
   const [selectedRole, setSelectedRole] = useState<PortalRole>('OWNER');
@@ -50,7 +53,12 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [authSuccess, setAuthSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [expiredMsg, setExpiredMsg] = useState(false);
   const [portalExpanding, setPortalExpanding] = useState(false);
+
+  // Welcome Screen Overlay State
+  const [showWelcomeOverlay, setShowWelcomeOverlay] = useState(false);
+  const [welcomeUser, setWelcomeUser] = useState<{ name: string; role: 'OWNER' | 'TENANT' } | null>(null);
 
   // Forgot Password In-Orb View State
   const [viewState, setViewState] = useState<'LOGIN' | 'FORGOT_PASSWORD'>('LOGIN');
@@ -61,12 +69,26 @@ export default function LoginPage() {
   // Theme State (Default Dark, synced with localStorage and HTML class)
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
 
-  // Mouse Parallax & Ambient Aura Follower State
+  // Mouse Parallax State
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [cursorHovered, setCursorHovered] = useState(false);
-  
-  // Canvas Ref for 3D Flowing Silk Mesh Ribbons
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Auto-redirect logged-in users directly to portal without showing login page or welcome loop
+  useEffect(() => {
+    if (!loading && user) {
+      if (user.role === 'OWNER') {
+        router.replace('/owner/buildings');
+      } else {
+        router.replace('/tenant/dashboard');
+      }
+    }
+  }, [user, loading, router]);
+
+  // Check if redirected due to session expiration
+  useEffect(() => {
+    if (searchParams?.get('expired') === 'true') {
+      setExpiredMsg(true);
+    }
+  }, [searchParams]);
 
   // Sync theme with localStorage & document element
   useEffect(() => {
@@ -88,7 +110,7 @@ export default function LoginPage() {
     }
   }, [isDarkMode]);
 
-  // Mouse move handler for parallax and ambient glow ring
+  // Mouse move handler
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       setMousePos({ x: e.clientX, y: e.clientY });
@@ -97,102 +119,13 @@ export default function LoginPage() {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-  // 🎨 60 FPS HTML5 CANVAS 3D VOLUMETRIC SILK RIBBON SIMULATOR
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    let animationFrameId: number;
-    let width = (canvas.width = window.innerWidth);
-    let height = (canvas.height = window.innerHeight);
-
-    const handleResize = () => {
-      if (!canvas) return;
-      width = canvas.width = window.innerWidth;
-      height = canvas.height = window.innerHeight;
-    };
-    window.addEventListener('resize', handleResize);
-
-    let step = 0;
-
-    // Render 4 Volumetric Fluid Silk Ribbons
-    const render = () => {
-      step += 0.006;
-      ctx.clearRect(0, 0, width, height);
-
-      // Ribbon Configs (Adaptive to Dark vs Light Mode)
-      const ribbons = [
-        {
-          yOffset: height * 0.4,
-          amplitude: 90,
-          frequency: 0.002,
-          color1: isDarkMode ? 'rgba(37, 99, 235, 0.45)' : 'rgba(37, 99, 235, 0.2)', 
-          color2: isDarkMode ? 'rgba(56, 199, 217, 0.35)' : 'rgba(56, 199, 217, 0.2)', 
-          speed: step * 0.8,
-        },
-        {
-          yOffset: height * 0.55,
-          amplitude: 110,
-          frequency: 0.0015,
-          color1: isDarkMode ? 'rgba(139, 92, 246, 0.4)' : 'rgba(139, 92, 246, 0.18)', 
-          color2: isDarkMode ? 'rgba(217, 70, 239, 0.3)' : 'rgba(217, 70, 239, 0.15)', 
-          speed: step * 1.1,
-        },
-        {
-          yOffset: height * 0.7,
-          amplitude: 80,
-          frequency: 0.0025,
-          color1: isDarkMode ? 'rgba(245, 158, 11, 0.3)' : 'rgba(245, 158, 11, 0.15)', 
-          color2: isDarkMode ? 'rgba(52, 211, 153, 0.25)' : 'rgba(52, 211, 153, 0.15)', 
-          speed: step * 0.6,
-        },
-      ];
-
-      ribbons.forEach((r) => {
-        ctx.beginPath();
-        const grad = ctx.createLinearGradient(0, 0, width, height);
-        grad.addColorStop(0, r.color1);
-        grad.addColorStop(1, r.color2);
-        ctx.fillStyle = grad;
-
-        ctx.moveTo(0, height);
-        for (let x = 0; x <= width; x += 15) {
-          const y =
-            r.yOffset +
-            Math.sin(x * r.frequency + r.speed) * r.amplitude +
-            Math.cos(x * 0.001 + r.speed * 0.5) * (r.amplitude * 0.5);
-          ctx.lineTo(x, y);
-        }
-        ctx.lineTo(width, height);
-        ctx.closePath();
-        ctx.fill();
-      });
-
-      animationFrameId = requestAnimationFrame(render);
-    };
-
-    render();
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      cancelAnimationFrame(animationFrameId);
-    };
-  }, [isDarkMode]);
-
-  // Role Selection Handler
-  const handleSelectRole = (role: PortalRole) => {
-    setSelectedRole(role);
-    setErrorMsg('');
-  };
-
-  // Handle Form Submission with Passkey Registration Support
+  // Handle Form Submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting || authSuccess) return;
 
     setErrorMsg('');
+    setExpiredMsg(false);
 
     if (!email || !email.includes('@')) {
       setErrorMsg('Please enter a valid email address.');
@@ -216,9 +149,10 @@ export default function LoginPage() {
       setSubmitting(true);
       try {
         const res = await registerOwner(fullName, email, password, ownerKey);
-        if (res.success) {
+        if (res.success && res.user) {
           setAuthSuccess(true);
-          setPortalExpanding(true);
+          setWelcomeUser({ name: res.user.name, role: res.user.role });
+          setShowWelcomeOverlay(true);
         } else {
           setErrorMsg(res.error || 'Owner registration failed.');
           setSubmitting(false);
@@ -234,12 +168,12 @@ export default function LoginPage() {
 
     try {
       const targetRole = selectedRole === 'WARDEN' ? 'OWNER' : selectedRole;
-      const res = await login(email, password, targetRole);
+      const res = await login(email, password, targetRole, rememberMe);
       
-      if (res.success) {
+      if (res.success && res.user) {
         setAuthSuccess(true);
-        // Cinematic Portal Entry Expansion Transition (600ms)
-        setPortalExpanding(true);
+        setWelcomeUser({ name: res.user.name, role: res.user.role });
+        setShowWelcomeOverlay(true);
       } else {
         setErrorMsg(res.error || 'Authentication failed. Please verify credentials.');
         setSubmitting(false);
@@ -247,6 +181,15 @@ export default function LoginPage() {
     } catch (err) {
       setErrorMsg('An unexpected error occurred.');
       setSubmitting(false);
+    }
+  };
+
+  const handleEnterPortal = () => {
+    if (!welcomeUser) return;
+    if (welcomeUser.role === 'OWNER') {
+      router.push('/owner/buildings');
+    } else {
+      router.push('/tenant/dashboard');
     }
   };
 
@@ -261,47 +204,38 @@ export default function LoginPage() {
     }, 1000);
   };
 
-  // Parallax Calculation
-  const parallaxX = (mousePos.x - (typeof window !== 'undefined' ? window.innerWidth / 2 : 0)) * 0.015;
-  const parallaxY = (mousePos.y - (typeof window !== 'undefined' ? window.innerHeight / 2 : 0)) * 0.015;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#020306] flex items-center justify-center text-slate-300 font-sans">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-bold tracking-wider text-slate-400">Verifying session...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`min-h-screen w-full relative overflow-hidden flex flex-col justify-between transition-colors duration-700 font-sans selection:bg-[#3B82F6]/30 select-none ${
       isDarkMode ? 'bg-[#020306] text-[#F8FAFC]' : 'bg-[#F1F5F9] text-[#0F172A]'
     }`}>
       
-      {/* ================================================== */}
-      {/* 🔮 1. HIGH-VISIBILITY GLOWING CURSOR FOLLOWER RING */}
-      {/* ================================================== */}
-      <motion.div
-        animate={{
-          x: mousePos.x - 16,
-          y: mousePos.y - 16,
-          scale: cursorHovered ? 1.6 : 1,
-        }}
-        transition={{ type: 'spring', stiffness: 450, damping: 25 }}
-        className={`fixed w-8 h-8 rounded-full border-2 pointer-events-none z-[9999] hidden sm:block ${
-          isDarkMode 
-            ? 'border-[#38C7D9] bg-[#38C7D9]/15 shadow-[0_0_15px_#38C7D9]' 
-            : 'border-[#2563EB] bg-[#2563EB]/15 shadow-[0_0_15px_rgba(37,99,235,0.4)]'
-        }`}
-      />
+      {/* Welcome Screen Overlay */}
+      {welcomeUser && (
+        <WelcomeScreenOverlay
+          isOpen={showWelcomeOverlay}
+          userRole={welcomeUser.role}
+          userName={welcomeUser.name}
+          onEnter={handleEnterPortal}
+        />
+      )}
 
-      {/* ================================================== */}
-      {/* 🌊 2. UNIVERSAL LIVE BACKGROUND SYSTEM            */}
-      {/* ================================================== */}
+      {/* Universal Live Background */}
       <LiveBackground variant={selectedRole === 'WARDEN' ? 'warden' : selectedRole === 'TENANT' ? 'tenant' : 'portal'} />
 
-      {/* ================================================== */}
-      {/* 🏛️ 3. MINIMAL BRAND HEADER                         */}
-      {/* ================================================== */}
+      {/* Header */}
       <header className="w-full max-w-7xl mx-auto px-8 py-8 flex justify-between items-center relative z-20">
-        <div 
-          onMouseEnter={() => setCursorHovered(true)}
-          onMouseLeave={() => setCursorHovered(false)}
-          className="flex items-center gap-3 cursor-pointer"
-        >
-          {/* Minimalist Architectural Symbol Icon */}
+        <div className="flex items-center gap-3">
           <div className={`w-8 h-8 rounded-full border flex items-center justify-center backdrop-blur-md ${
             isDarkMode ? 'bg-white/10 border-white/20 text-[#3B82F6]' : 'bg-white border-slate-300 text-[#2563EB] shadow-sm'
           }`}>
@@ -314,22 +248,18 @@ export default function LoginPage() {
               SRI SAI SIRI BOYS HOSTEL
             </span>
             <span className={`text-[9px] font-black block uppercase tracking-[3px] ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-              BOYS HOSTEL OPERATIONS
+              MANAGEMENT & RESIDENT PORTAL
             </span>
           </div>
         </div>
 
-        {/* Theme Button */}
         <button
           onClick={() => setIsDarkMode(!isDarkMode)}
-          onMouseEnter={() => setCursorHovered(true)}
-          onMouseLeave={() => setCursorHovered(false)}
           className={`p-2.5 rounded-full border backdrop-blur-md text-xs transition-all cursor-pointer flex items-center gap-2 font-bold ${
             isDarkMode 
               ? 'border-white/10 bg-white/5 text-slate-300 hover:text-white' 
               : 'border-slate-300 bg-white text-slate-700 hover:text-slate-900 shadow-sm'
           }`}
-          aria-label="Toggle Color Theme"
         >
           {isDarkMode ? (
             <>
@@ -345,38 +275,15 @@ export default function LoginPage() {
         </button>
       </header>
 
-      {/* ================================================== */}
-      {/* 🔮 4. CENTRAL SUSPENDED FROSTED GLASS PORTAL CONTAINER */}
-      {/* ================================================== */}
+      {/* Main Container */}
       <main className="w-full max-w-7xl mx-auto px-4 py-6 my-auto relative z-20 flex flex-col items-center justify-center">
         
-        {/* 🔮 THE FROSTED GLASS PORTAL CONTAINER */}
-        <motion.div
-          animate={{
-            rotateX: parallaxY * -1.5,
-            rotateY: parallaxX * 1.5,
-            scale: portalExpanding ? 1.08 : 1,
-            opacity: portalExpanding ? 0.9 : 1,
-          }}
-          transition={{ type: 'spring', stiffness: 50, damping: 25 }}
-          style={{ transformStyle: 'preserve-3d' }}
-          className={`w-full max-w-[420px] sm:max-w-[460px] rounded-[36px] sm:rounded-[44px] p-6 sm:p-10 backdrop-blur-3xl border transition-all duration-500 flex flex-col justify-center items-center text-center relative overflow-hidden shadow-2xl ${
-            isDarkMode 
-              ? 'bg-[#020306]/85 border-white/15 text-white shadow-[0_25px_80px_rgba(0,0,0,0.9)]' 
-              : 'bg-white/90 border-slate-300/80 text-[#0F172A] shadow-[0_20px_50px_rgba(0,0,0,0.08)]'
-          }`}
-        >
-          {/* Travelling Specular Rim Glare */}
-          <div className={`absolute inset-0 rounded-[36px] sm:rounded-[44px] border pointer-events-none animate-[spin_16s_linear_infinite] ${
-            isDarkMode ? 'border-white/20 bg-gradient-to-tr from-transparent via-white/10 to-transparent' : 'border-slate-300/50 bg-gradient-to-tr from-transparent via-slate-200/30 to-transparent'
-          }`} />
+        <div className={`w-full max-w-[420px] sm:max-w-[460px] rounded-[36px] sm:rounded-[44px] p-6 sm:p-10 backdrop-blur-3xl border transition-all duration-500 flex flex-col justify-center items-center text-center relative overflow-hidden shadow-2xl ${
+          isDarkMode 
+            ? 'bg-[#020306]/85 border-white/15 text-white shadow-[0_25px_80px_rgba(0,0,0,0.9)]' 
+            : 'bg-white/90 border-slate-300/80 text-[#0F172A] shadow-[0_20px_50px_rgba(0,0,0,0.08)]'
+        }`}>
 
-          {/* DYNAMIC REFRACTION TINT SPILL */}
-          <div className={`absolute inset-0 rounded-[36px] sm:rounded-[44px] blur-3xl pointer-events-none transition-colors duration-700 ${
-            isDarkMode ? 'bg-[#3B82F6]/10' : 'bg-[#2563EB]/08'
-          }`} />
-
-          {/* IN-ORB VIEW STAGES */}
           <AnimatePresence mode="wait">
             {viewState === 'LOGIN' ? (
               <motion.div
@@ -384,10 +291,9 @@ export default function LoginPage() {
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ duration: 0.4 }}
                 className="w-full max-w-xs flex flex-col items-center space-y-4 my-auto relative z-10"
               >
-                {/* Mode Selector Toggle (SIGN IN vs OWNER SIGNUP) */}
+                {/* Mode Selector Toggle */}
                 <div className="flex items-center gap-1.5 p-1 rounded-full bg-white/10 border border-white/15 mb-1">
                   <button
                     type="button"
@@ -423,6 +329,14 @@ export default function LoginPage() {
                   </h2>
                 </div>
 
+                {/* EXPIRED SESSION ALERT */}
+                {expiredMsg && (
+                  <div className="w-full p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-bold flex items-center gap-2">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Your session has expired. Please sign in again.</span>
+                  </div>
+                )}
+
                 {/* ERROR BANNER */}
                 {errorMsg && (
                   <div className="w-full p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-500 text-[10px] font-bold flex items-center gap-2">
@@ -445,8 +359,6 @@ export default function LoginPage() {
                         required
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        onMouseEnter={() => setCursorHovered(true)}
-                        onMouseLeave={() => setCursorHovered(false)}
                         placeholder="e.g. Alok Sharma"
                         className={`w-full border-b py-2 px-2 text-xs font-bold focus:outline-none transition-colors rounded-none cursor-text ${
                           isDarkMode 
@@ -467,9 +379,7 @@ export default function LoginPage() {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      onMouseEnter={() => setCursorHovered(true)}
-                      onMouseLeave={() => setCursorHovered(false)}
-                      placeholder="person@srisaisiri.com"
+                      placeholder="owner@srisaisiri.com or tenant@srisaisiri.com"
                       className={`w-full border-b py-2.5 px-2 text-xs font-bold focus:outline-none transition-colors rounded-none cursor-text ${
                         isDarkMode 
                           ? 'bg-white/5 border-white/20 text-white placeholder-slate-400 focus:border-[#38C7D9]' 
@@ -488,8 +398,6 @@ export default function LoginPage() {
                         <button
                           type="button"
                           onClick={() => setViewState('FORGOT_PASSWORD')}
-                          onMouseEnter={() => setCursorHovered(true)}
-                          onMouseLeave={() => setCursorHovered(false)}
                           className={`text-[10px] transition-colors font-bold cursor-pointer ${
                             isDarkMode ? 'text-[#94A3B8] hover:text-[#38C7D9]' : 'text-[#64748B] hover:text-[#2563EB]'
                           }`}
@@ -504,8 +412,6 @@ export default function LoginPage() {
                         required
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        onMouseEnter={() => setCursorHovered(true)}
-                        onMouseLeave={() => setCursorHovered(false)}
                         placeholder="••••••••••••"
                         className={`w-full border-b py-2.5 pl-2 pr-8 text-xs font-bold focus:outline-none transition-colors rounded-none cursor-text ${
                           isDarkMode 
@@ -516,8 +422,6 @@ export default function LoginPage() {
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        onMouseEnter={() => setCursorHovered(true)}
-                        onMouseLeave={() => setCursorHovered(false)}
                         className={`absolute right-0 top-1/2 -translate-y-1/2 cursor-pointer p-1 ${
                           isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'
                         }`}
@@ -541,40 +445,35 @@ export default function LoginPage() {
                         required
                         value={ownerKey}
                         onChange={(e) => setOwnerKey(e.target.value)}
-                        onMouseEnter={() => setCursorHovered(true)}
-                        onMouseLeave={() => setCursorHovered(false)}
-                        placeholder="e.g. SRISIRI-OWNER-2026 or OWNER2026"
+                        placeholder="e.g. SRISIRI-OWNER-2026"
                         className={`w-full border-b py-2 px-2 text-xs font-bold focus:outline-none transition-colors rounded-none cursor-text tracking-wider ${
                           isDarkMode 
                             ? 'bg-purple-950/20 border-purple-500/40 text-purple-200 placeholder-purple-400/50 focus:border-purple-400' 
                             : 'bg-purple-50/80 border-purple-300 text-purple-900 placeholder-purple-400 focus:border-purple-600'
                         }`}
                       />
-                      <p className="text-[9px] text-slate-400 font-medium">Valid passkeys: <code className="text-purple-400 font-bold">SRISIRI-OWNER-2026</code>, <code className="text-purple-400 font-bold">OWNER2026</code>, <code className="text-purple-400 font-bold">PASSKEY123</code></p>
                     </div>
                   )}
 
-                  {/* REMEMBER DEVICE TOGGLE */}
+                  {/* REMEMBER DEVICE CHECKBOX */}
                   {authMode === 'SIGN_IN' && (
-                    <div className="flex items-center gap-2 pt-1">
+                    <div className="flex items-center gap-2 pt-2">
                       <button
                         type="button"
                         onClick={() => setRememberMe(!rememberMe)}
-                        onMouseEnter={() => setCursorHovered(true)}
-                        onMouseLeave={() => setCursorHovered(false)}
-                        className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors cursor-pointer ${
+                        className={`w-4 h-4 rounded border flex items-center justify-center transition-colors cursor-pointer ${
                           rememberMe 
                             ? (isDarkMode ? 'bg-[#38C7D9] border-[#38C7D9] text-black' : 'bg-[#2563EB] border-[#2563EB] text-white') 
                             : (isDarkMode ? 'border-white/20 bg-transparent' : 'border-slate-300 bg-transparent')
                         }`}
                       >
-                        {rememberMe && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                        {rememberMe && <Check className="w-3 h-3 stroke-[3]" />}
                       </button>
                       <span 
                         onClick={() => setRememberMe(!rememberMe)}
-                        className={`text-[10px] font-bold cursor-pointer select-none ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}
+                        className={`text-xs font-bold cursor-pointer select-none ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}
                       >
-                        Remember device
+                        Remember Device
                       </span>
                     </div>
                   )}
@@ -584,9 +483,7 @@ export default function LoginPage() {
                     <button
                       type="submit"
                       disabled={submitting || authSuccess}
-                      onMouseEnter={() => setCursorHovered(true)}
-                      onMouseLeave={() => setCursorHovered(false)}
-                      className={`w-full py-3 rounded-full border font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 cursor-pointer group shadow-md ${
+                      className={`w-full py-3.5 rounded-full border font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 cursor-pointer group shadow-md ${
                         authMode === 'SIGN_UP'
                           ? 'bg-purple-600 hover:bg-purple-700 border-purple-500 text-white'
                           : isDarkMode 
@@ -597,7 +494,7 @@ export default function LoginPage() {
                       {submitting ? (
                         <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                       ) : authSuccess ? (
-                        <span className="flex items-center gap-1.5"><Check className="w-4 h-4" /> Entry Granted</span>
+                        <span className="flex items-center gap-1.5"><Check className="w-4 h-4" /> Authentication Granted</span>
                       ) : (
                         <>
                           <span>{authMode === 'SIGN_UP' ? 'CREATE OWNER ACCOUNT' : 'ENTER PORTAL'}</span>
@@ -617,7 +514,6 @@ export default function LoginPage() {
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ duration: 0.4 }}
                 className="w-full max-w-xs space-y-4 my-auto text-center relative z-10"
               >
                 <h3 className={`text-xl font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-[#0F172A]'}`}>
@@ -629,8 +525,6 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={() => { setViewState('LOGIN'); setForgotSuccess(false); }}
-                      onMouseEnter={() => setCursorHovered(true)}
-                      onMouseLeave={() => setCursorHovered(false)}
                       className={`text-xs font-black hover:underline cursor-pointer ${isDarkMode ? 'text-[#38C7D9]' : 'text-[#2563EB]'}`}
                     >
                       Return to Portal
@@ -646,12 +540,10 @@ export default function LoginPage() {
                       required
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
-                      onMouseEnter={() => setCursorHovered(true)}
-                      onMouseLeave={() => setCursorHovered(false)}
                       placeholder="person@srisaisiri.com"
                       className={`w-full border-b py-2.5 px-2 text-xs font-bold focus:outline-none transition-colors cursor-text ${
                         isDarkMode 
-                          ? 'bg-white/5 border-white/20 text-white placeholder-slate-400 focus:border-[#38C7D9]' 
+                          ? 'bg-[#020306]/80 border-white/20 text-white placeholder-slate-400 focus:border-[#38C7D9]' 
                           : 'bg-slate-100/90 border-slate-300 text-[#0F172A] placeholder-slate-400 focus:border-[#2563EB]'
                       }`}
                     />
@@ -659,8 +551,6 @@ export default function LoginPage() {
                       <button
                         type="button"
                         onClick={() => setViewState('LOGIN')}
-                        onMouseEnter={() => setCursorHovered(true)}
-                        onMouseLeave={() => setCursorHovered(false)}
                         className={`text-xs font-bold cursor-pointer ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}
                       >
                         Cancel
@@ -668,8 +558,6 @@ export default function LoginPage() {
                       <button
                         type="submit"
                         disabled={forgotSubmitting}
-                        onMouseEnter={() => setCursorHovered(true)}
-                        onMouseLeave={() => setCursorHovered(false)}
                         className={`text-xs font-black hover:underline cursor-pointer ${isDarkMode ? 'text-[#38C7D9]' : 'text-[#2563EB]'}`}
                       >
                         {forgotSubmitting ? 'Dispatching...' : 'SEND LINK &rarr;'}
@@ -681,13 +569,11 @@ export default function LoginPage() {
             )}
           </AnimatePresence>
 
-        </motion.div>
+        </div>
 
       </main>
 
-      {/* ================================================== */}
-      {/* 📜 5. MINIMAL FOOTER                               */}
-      {/* ================================================== */}
+      {/* Footer */}
       <footer className={`w-full max-w-7xl mx-auto px-8 py-6 text-center text-[10px] font-black uppercase tracking-[3px] relative z-20 ${
         isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'
       }`}>
@@ -695,5 +581,20 @@ export default function LoginPage() {
       </footer>
 
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#020306] flex items-center justify-center text-slate-300 font-sans">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-bold tracking-wider text-slate-400">Loading Login...</span>
+        </div>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }

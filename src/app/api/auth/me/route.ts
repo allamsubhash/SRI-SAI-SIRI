@@ -12,15 +12,7 @@ export async function GET(request: Request) {
       ?.split('=')[1];
 
     if (!token) {
-      return NextResponse.json({
-        authenticated: true,
-        user: {
-          id: 'owner-demo-id',
-          email: 'alok@srisaisiri.com',
-          role: 'OWNER',
-          name: 'Alok Sharma'
-        }
-      });
+      return NextResponse.json({ authenticated: false, error: 'No authentication token present' }, { status: 401 });
     }
 
     const payload = verifyToken(token);
@@ -38,6 +30,6 @@ export async function GET(request: Request) {
       }
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ authenticated: false, error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }

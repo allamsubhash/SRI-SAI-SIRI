@@ -13,24 +13,17 @@ export interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string, role?: 'OWNER' | 'TENANT') => Promise<{ success: boolean; error?: string }>;
-  registerOwner: (name: string, email: string, password: string, ownerKey: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string, role?: 'OWNER' | 'TENANT', rememberDevice?: boolean) => Promise<{ success: boolean; user?: User; error?: string }>;
+  registerOwner: (name: string, email: string, password: string, ownerKey: string) => Promise<{ success: boolean; user?: User; error?: string }>;
   logout: () => Promise<void>;
   checkSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const defaultOwnerUser: User = {
-  id: 'u-owner-001',
-  email: 'owner@srisaisiri.com',
-  role: 'OWNER',
-  name: 'Alok Sharma'
-};
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(defaultOwnerUser);
-  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   const checkSession = async () => {
@@ -40,10 +33,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const data = await res.json();
         if (data.authenticated && data.user) {
           setUser(data.user);
+        } else {
+          setUser(null);
         }
+      } else {
+        setUser(null);
       }
     } catch (error) {
       console.error(error);
+      setUser(null);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -51,7 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkSession();
   }, []);
 
-  const login = async (email: string, password: string, role?: 'OWNER' | 'TENANT') => {
+  const login = async (email: string, password: string, role?: 'OWNER' | 'TENANT', rememberDevice: boolean = true) => {
     try {
       const cleanEmail = email.trim().toLowerCase();
       const savedHash = typeof window !== 'undefined' ? (localStorage.getItem(`pwd_hash_${cleanEmail}`) || '') : '';
@@ -63,17 +63,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ email, password, role })
+        body: JSON.stringify({ email, password, role, rememberDevice })
       });
       const data = await res.json();
       if (res.ok && data.success) {
         setUser(data.user);
-        if (data.user.role === 'OWNER') {
-          router.push('/owner/buildings');
-        } else {
-          router.push('/tenant/dashboard');
-        }
-        return { success: true };
+        return { success: true, user: data.user };
       } else {
         return { success: false, error: data.error || 'Authentication failed' };
       }
@@ -92,8 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json();
       if (res.ok && data.success) {
         setUser(data.user);
-        router.push('/owner/buildings');
-        return { success: true };
+        return { success: true, user: data.user };
       } else {
         return { success: false, error: data.error || 'Owner registration failed' };
       }
@@ -108,8 +102,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       console.error(e);
     } finally {
-      setUser(defaultOwnerUser);
-      router.push('/');
+      setUser(null);
+      if (typeof window !== 'undefined') {
+        sessionStorage.clear();
+      }
+      router.push('/login');
     }
   };
 

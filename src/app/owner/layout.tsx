@@ -110,24 +110,18 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!loading) {
       if (!user) {
-        router.push('/login');
+        router.replace('/login');
       } else if (user.role !== 'OWNER') {
-        router.push('/tenant/dashboard');
+        router.replace('/tenant/dashboard');
       }
     }
   }, [user, loading, router]);
 
-  // Redirect if not logged in
-  useEffect(() => {
-    if (!loading && (!user || user.role !== 'OWNER')) {
-      router.push('/login');
-    }
-  }, [user, loading, router]);
-
-  if (!loading && (!user || user.role !== 'OWNER')) {
+  if (loading || !user || user.role !== 'OWNER') {
     return (
-      <div className="min-h-screen bg-transparent flex items-center justify-center text-slate-550">
-        <Loader className="w-6 h-6 animate-spin text-[#D4A64A]" />
+      <div className="min-h-screen bg-[#0D1411] flex flex-col items-center justify-center space-y-3 text-slate-200">
+        <Loader className="w-8 h-8 animate-spin text-cyan-400" />
+        <span className="text-xs font-bold text-slate-400">Authenticating Session...</span>
       </div>
     );
   }

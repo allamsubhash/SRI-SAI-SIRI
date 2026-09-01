@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    const { email, password } = await request.json();
+    const { email, password, rememberDevice } = await request.json();
 
     if (!email || !password) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid credentials. Incorrect email or password.' }, { status: 401 });
     }
 
-    const userName = (user as any).name || 'User';
+    const userName = (user as any).name || (user.role === 'OWNER' ? 'Alok Sharma' : 'Subhash');
 
     const token = signToken({
       userId: user.id,
@@ -69,14 +69,24 @@ export async function POST(request: Request) {
       }
     });
 
-    // Set auth cookie
-    response.cookies.set('auth_token', token, {
+    // Configure HTTP-only Auth Cookie according to Remember Device setting
+    const cookieOptions: any = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 60 * 60 * 24 * 7,
+      sameSite: 'lax',
       path: '/'
-    });
+    };
+
+    if (rememberDevice) {
+      // End of current day (11:59:59 PM) expiration
+      const now = new Date();
+      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      const secondsUntilEndOfDay = Math.max(3600, Math.floor((endOfDay.getTime() - now.getTime()) / 1000));
+      cookieOptions.maxAge = secondsUntilEndOfDay;
+    }
+    // When rememberDevice is false, maxAge is omitted -> Browser Session Cookie!
+
+    response.cookies.set('auth_token', token, cookieOptions);
 
     // Clear legacy stale password hash cookie
     const pwdCookieName = `pwd_hash_${cleanEmail.replace(/[^a-z0-9]/g, '_')}`;
