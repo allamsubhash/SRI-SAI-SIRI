@@ -108,7 +108,7 @@ export async function GET(request: Request) {
           monthlyRent: financialSummary.monthlyRent || 6500,
           nextPaymentDate: nextDueDate,
           accountStatus: statusText,
-          joiningDate: formatDate(dbTenant.profile?.moveInDate || dbTenant.createdAt) || '15 Aug 2026',
+          joiningDate: formatDate(dbTenant.profile?.moveInDate || dbTenant.createdAt) || '15 Jan 2026',
           hasPending,
           hasOverdue
         };

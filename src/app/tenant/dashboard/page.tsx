@@ -549,55 +549,9 @@ export default function TenantDashboard() {
 
       </div>
 
-      {/* 📢 5. WARDEN ANNOUNCEMENTS & 🛠️ COMPLAINTS & 🛂 VISITORS GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* 🛠️ COMPLAINTS & 🛂 VISITORS GRID */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
-        {/* Warden Announcements */}
-        <motion.div 
-          whileHover={{ y: -3 }}
-          onClick={() => setShowAnnouncementsModal(true)}
-          className="p-6 rounded-[32px] bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-white/80 dark:border-[#293832] shadow-xl backdrop-blur-2xl hover:tenant-border-accent transition-all space-y-4 cursor-pointer group"
-        >
-          <div className="flex justify-between items-center pb-3 border-b border-[#DDD8CE] dark:border-[#293832]">
-            <div>
-              <h3 className="font-black text-base text-[#1C2522] dark:text-[#F2F5F2] flex items-center gap-2 group-hover:tenant-text-accent transition-colors">
-                <Megaphone className="w-4 h-4 tenant-text-accent" />
-                Announcements
-              </h3>
-              <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] font-medium mt-0.5">Warden broadcasts</p>
-            </div>
-            <span className="text-[11px] tenant-text-accent font-extrabold flex items-center gap-1">
-              Explore →
-            </span>
-          </div>
-
-          <div className="space-y-3">
-            {(!data?.notices || data.notices.length === 0) ? (
-              <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] italic text-center py-6">No announcements published.</p>
-            ) : (
-              data.notices.slice(0, 2).map((note: any) => (
-                <div 
-                  key={note.id} 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedNotice(note);
-                  }}
-                  className="p-4 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832] space-y-2 text-left hover:tenant-border-accent transition-all shadow-sm"
-                >
-                  <div className="flex justify-between items-center text-[10px] font-black">
-                    <span className={note.isEmergency ? 'text-[#C94B4B] dark:text-[#F27676]' : 'tenant-text-accent'}>
-                      {note.isEmergency ? 'EMERGENCY' : 'NOTICE'}
-                    </span>
-                    <span className="text-[#68736E] dark:text-[#9BAAA4]">{formatDate(note.createdAt)}</span>
-                  </div>
-                  <h4 className="font-bold text-xs text-[#1C2522] dark:text-[#F2F5F2]">{note.title}</h4>
-                  <p className="text-[11px] text-[#68736E] dark:text-[#9BAAA4] leading-relaxed line-clamp-2">{note.content}</p>
-                </div>
-              ))
-            )}
-          </div>
-        </motion.div>
-
         {/* Complaints Ticket Status */}
         <motion.div 
           whileHover={{ y: -3 }}

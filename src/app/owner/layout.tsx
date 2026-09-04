@@ -165,6 +165,7 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
   const menuItems = [
     { label: 'Buildings & Rooms', icon: <Building className="w-4 h-4" />, href: '/owner/buildings' },
     { label: 'Tenant Registry', icon: <Users className="w-4 h-4" />, href: '/owner/tenants' },
+    { label: 'Visitors Gate Pass', icon: <UserCheck className="w-4 h-4" />, href: '/owner/visitors' },
     { label: 'Rent & Billing', icon: <Receipt className="w-4 h-4" />, href: '/owner/rent' },
     { label: 'Complaints', icon: <Wrench className="w-4 h-4" />, href: '/owner/complaints', badge: pendingCount },
     { label: 'Staff Management', icon: <Briefcase className="w-4 h-4" />, href: '/owner/employees' },
@@ -433,22 +434,22 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
         <div className="flex-1 flex flex-col min-w-0 min-h-screen md:max-h-screen md:overflow-y-auto overflow-x-hidden">
           
           {/* HEADER TOOLBAR */}
-          <header className="relative z-30 bg-[#FFFDF9] dark:bg-[#141D19] border border-[#DDD8CE] dark:border-[#293832] shadow-sm rounded-[28px] p-3.5 sm:p-4 mb-6 flex items-center justify-between gap-4 transition-all">
+          <header className="relative z-30 bg-[#FFFDF9] dark:bg-[#141D19] border border-[#DDD8CE] dark:border-[#293832] shadow-sm rounded-[28px] p-2.5 sm:p-4 mb-6 flex items-center justify-between gap-2 sm:gap-4 transition-all w-full max-w-full overflow-hidden">
             
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <motion.button 
                 whileTap={{ scale: 0.9 }}
                 onClick={() => setMobileMenuOpen(true)}
-                className="md:hidden p-2.5 rounded-2xl bg-indigo-600 text-white shadow-sm flex items-center justify-center cursor-pointer"
+                className="md:hidden p-2 rounded-xl bg-indigo-600 text-white shadow-sm flex items-center justify-center cursor-pointer shrink-0"
                 title="All Sections Menu"
               >
-                <Menu className="w-5 h-5" />
+                <Menu className="w-4 h-4 sm:w-5 sm:h-5" />
               </motion.button>
 
-              <div className="text-left">
-                <h1 className="text-sm sm:text-xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-1 min-w-0">
-                  <span className="truncate">Good Morning, {user?.name?.split(' ')[0] || 'Alok'}!</span>
-                  <span className="text-base shrink-0">👋</span>
+              <div className="text-left min-w-0">
+                <h1 className="text-xs sm:text-xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-1 min-w-0">
+                  <span className="truncate max-w-[110px] xs:max-w-[180px] sm:max-w-none">Hi, {user?.name?.split(' ')[0] || 'Alok'}</span>
+                  <span className="text-sm sm:text-base shrink-0">👋</span>
                 </h1>
                 <p className="text-xs text-slate-500 dark:text-zinc-400 font-medium hidden sm:block">
                   Here's what's happening in your hostel today.
@@ -473,7 +474,7 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
             </div>
 
             {/* ACTIONS, NOTIFICATION BELL, THEME TOGGLE, & AVATAR */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
               {/* Notification Button with Badge */}
               <div className="relative">
                 <button
@@ -611,58 +612,9 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
 
           </header>
 
-          <main className="flex-1 pb-20 md:pb-8">
+          <main className="flex-1 pb-6">
             {children}
           </main>
-
-          {/* DEDICATED MOBILE NATIVE BOTTOM NAVIGATION BAR */}
-          <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/95 dark:bg-[#121826]/95 backdrop-blur-xl border-t border-slate-200 dark:border-zinc-800 flex items-center justify-around z-40 px-2 shadow-lg">
-            <Link
-              href="/owner/dashboard"
-              className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
-                pathname === '/owner/dashboard' ? 'text-blue-600 dark:text-cyan-400 scale-105' : 'text-slate-400 dark:text-zinc-500'
-              }`}
-            >
-              <LayoutDashboard className="w-5 h-5" />
-              <span>Home</span>
-            </Link>
-            <Link
-              href="/owner/buildings"
-              className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
-                pathname === '/owner/buildings' ? 'text-blue-600 dark:text-cyan-400 scale-105' : 'text-slate-400 dark:text-zinc-500'
-              }`}
-            >
-              <Building className="w-5 h-5" />
-              <span>Rooms</span>
-            </Link>
-            <Link
-              href="/owner/tenants"
-              className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
-                pathname === '/owner/tenants' ? 'text-blue-600 dark:text-cyan-400 scale-105' : 'text-slate-400 dark:text-zinc-500'
-              }`}
-            >
-              <Users className="w-5 h-5" />
-              <span>Tenants</span>
-            </Link>
-            <Link
-              href="/owner/rent"
-              className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
-                pathname === '/owner/rent' ? 'text-blue-600 dark:text-cyan-400 scale-105' : 'text-slate-400 dark:text-zinc-500'
-              }`}
-            >
-              <Receipt className="w-5 h-5" />
-              <span>Billing</span>
-            </Link>
-            <Link
-              href="/owner/profile"
-              className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
-                pathname === '/owner/profile' ? 'text-blue-600 dark:text-cyan-400 scale-105' : 'text-slate-400 dark:text-zinc-500'
-              }`}
-            >
-              <User className="w-5 h-5" />
-              <span>Profile</span>
-            </Link>
-          </nav>
         </div>
 
         {/* REUSABLE FLOATING RADIAL BUBBLE ACTION MENU SYSTEM */}

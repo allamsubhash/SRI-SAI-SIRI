@@ -1,40 +1,26 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { 
   Home, 
   Receipt, 
-  Megaphone, 
   Wrench, 
   UserCheck, 
   Bell, 
-  Sun, 
-  Moon, 
   LogOut, 
   Menu, 
   X, 
-  Sparkles,
-  ChevronRight,
-  User,
-  Building,
-  Bed,
-  CheckCircle2,
-  Calendar,
-  FileText,
-  DollarSign,
-  Palette,
-  ShieldCheck,
-  Search,
+  Building, 
+  User, 
+  Search, 
   ChevronLeft
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import LiveBackground, { BackgroundVariant } from '@/components/backgrounds/LiveBackground';
-import NeonModal from '@/components/NeonModal';
 import ThemeToggleSwitch from '@/components/ThemeToggleSwitch';
-import { formatINR, formatDate } from '@/utils/formatters';
 
 interface TenantLayoutProps {
   children: React.ReactNode;
@@ -48,7 +34,6 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
@@ -122,10 +107,10 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
     }
   };
 
+  // CLEAN NAVIGATION ITEMS (ANNOUNCEMENTS REMOVED)
   const navItems = [
     { label: 'Home', href: '/tenant/dashboard', icon: Home, color: 'text-emerald-500' },
     { label: 'My Billing & Rent', href: '/tenant/billing', icon: Receipt, color: 'text-[#38C7D9]' },
-    { label: 'Announcements', href: '/tenant/announcements', icon: Megaphone, color: 'text-amber-500' },
     { label: 'My Complaints', href: '/tenant/complaints', icon: Wrench, color: 'text-orange-500' },
     { label: 'Visitors Gate Pass', href: '/tenant/visitors', icon: UserCheck, color: 'text-purple-500' },
     { label: 'My Profile & Lease', href: '/tenant/profile', icon: User, color: 'text-cyan-500' },
@@ -133,7 +118,6 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
 
   const getTenantBackgroundVariant = (): BackgroundVariant => {
     if (pathname.includes('/tenant/billing')) return 'payments';
-    if (pathname.includes('/tenant/announcements')) return 'tenant';
     if (pathname.includes('/tenant/complaints')) return 'complaints';
     if (pathname.includes('/tenant/visitors')) return 'warden';
     return 'tenant';
@@ -313,22 +297,22 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
            ======================================================== */}
         <div className="flex-1 flex flex-col min-w-0 min-h-screen md:max-h-screen md:overflow-y-auto overflow-x-hidden">
           
-          {/* HEADER TOOLBAR (MATCHING OWNER PORTAL STYLE) */}
-          <header className="relative z-30 bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-[#DDD8CE] dark:border-[#293832] shadow-sm rounded-[28px] p-3.5 sm:p-4 mb-6 flex items-center justify-between gap-4 backdrop-blur-2xl">
+          {/* HEADER TOOLBAR (RESPONSIVE FOR MOBILE - 0 OVERFLOW) */}
+          <header className="relative z-30 bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-[#DDD8CE] dark:border-[#293832] shadow-sm rounded-[28px] p-2.5 sm:p-4 mb-6 flex items-center justify-between gap-2 sm:gap-4 backdrop-blur-2xl w-full max-w-full overflow-hidden">
             
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <motion.button 
                 whileTap={{ scale: 0.9 }}
                 onClick={() => setMobileMenuOpen(true)}
-                className="md:hidden p-2.5 rounded-2xl tenant-bg-accent text-white shadow-sm flex items-center justify-center cursor-pointer"
+                className="md:hidden p-2 rounded-xl tenant-bg-accent text-white shadow-sm flex items-center justify-center cursor-pointer shrink-0"
               >
-                <Menu className="w-5 h-5" />
+                <Menu className="w-4 h-4 sm:w-5 sm:h-5" />
               </motion.button>
 
-              <div className="text-left">
-                <h1 className="text-sm sm:text-xl font-black tracking-tight text-[#1C2522] dark:text-[#F2F5F2] flex items-center gap-1 min-w-0">
-                  <span className="truncate">Good Morning, {user?.name?.split(' ')[0] || 'Resident'}!</span>
-                  <span className="text-base shrink-0">👋</span>
+              <div className="text-left min-w-0">
+                <h1 className="text-xs sm:text-xl font-black tracking-tight text-[#1C2522] dark:text-[#F2F5F2] flex items-center gap-1 min-w-0">
+                  <span className="truncate max-w-[110px] xs:max-w-[180px] sm:max-w-none">Hi, {user?.name?.split(' ')[0] || 'Resident'}</span>
+                  <span className="text-sm sm:text-base shrink-0">👋</span>
                 </h1>
                 <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] font-medium hidden sm:block">
                   Here's your resident hostel status overview today.
@@ -352,19 +336,19 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
               </button>
             </div>
 
-            {/* ACTIONS: NOTIFICATION BELL, THEME TOGGLE, & PROFILE AVATAR */}
-            <div className="flex items-center gap-3">
+            {/* ACTIONS: NOTIFICATION BELL, THEME TOGGLE, & PROFILE AVATAR (COMPACT ON MOBILE) */}
+            <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
               
               {/* Notification Button with Badge */}
               <div className="relative">
                 <button
                   onClick={() => setShowNotif(!showNotif)}
-                  className="relative p-2.5 rounded-2xl bg-[#F1EEE7]/80 dark:bg-[#1A2621]/80 border border-[#DDD8CE] dark:border-[#293832] text-[#1C2522] dark:text-[#F2F5F2] hover:tenant-border-accent transition-colors cursor-pointer"
+                  className="relative p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-[#F1EEE7]/80 dark:bg-[#1A2621]/80 border border-[#DDD8CE] dark:border-[#293832] text-[#1C2522] dark:text-[#F2F5F2] hover:tenant-border-accent transition-colors cursor-pointer shrink-0"
                   title="Notifications"
                 >
-                  <Bell className="w-4.5 h-4.5" />
+                  <Bell className="w-4 h-4" />
                   {unreadNotifCount > 0 && (
-                    <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-rose-500 text-white font-black text-[9px] flex items-center justify-center border-2 border-white dark:border-[#141D19] animate-pulse">
+                    <span className="absolute top-1 right-1 sm:top-1.5 sm:right-1.5 w-3.5 h-3.5 rounded-full tenant-bg-accent-raw text-white text-[9px] font-black flex items-center justify-center ring-2 ring-white dark:ring-[#141D19]">
                       {unreadNotifCount}
                     </span>
                   )}
@@ -465,12 +449,14 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
               </div>
 
               {/* Theme Switcher */}
-              <ThemeToggleSwitch />
+              <div className="shrink-0 scale-90 sm:scale-100">
+                <ThemeToggleSwitch />
+              </div>
 
-              {/* Profile Avatar Trigger (CLICKING OPENS PROFILE /TENANT/PROFILE) */}
+              {/* Profile Avatar Trigger */}
               <button
                 onClick={() => router.push('/tenant/profile')}
-                className="w-10 h-10 rounded-2xl tenant-bg-accent text-[#1C2522] dark:text-white font-black text-xs flex items-center justify-center shadow-md shrink-0 cursor-pointer transition-transform hover:scale-105"
+                className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl tenant-bg-accent text-[#1C2522] dark:text-white font-black text-xs flex items-center justify-center shadow-md shrink-0 cursor-pointer transition-transform hover:scale-105"
                 title="My Profile & Lease Details"
               >
                 {user?.name ? user.name.charAt(0).toUpperCase() : 'R'}
@@ -480,33 +466,13 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
           </header>
 
           {/* PAGE CONTENT WORKSPACE */}
-          <main className="flex-1 pb-24 md:pb-8">
+          <main className="flex-1 pb-6">
             {children}
           </main>
 
         </div>
 
       </div>
-
-      {/* 📱 MOBILE BOTTOM NAVIGATION BAR */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border-t border-[#DDD8CE] dark:border-[#293832] backdrop-blur-2xl p-2 flex justify-around items-center">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all ${
-                isActive ? 'tenant-text-accent font-black scale-105' : 'text-[#68736E] dark:text-[#9BAAA4]'
-              }`}
-            >
-              <Icon className="w-5 h-5" />
-              <span className="text-[10px] font-bold">{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
 
     </div>
   );

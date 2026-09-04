@@ -497,7 +497,7 @@ function LoginContent() {
 
               </motion.div>
             ) : (
-              /* FORGOT PASSWORD IN-ORB VIEW */
+              /* FORGOT PASSWORD IN-ORB VIEW (CONTACT ADMIN) */
               <motion.div
                 key="orb-forgot"
                 initial={{ opacity: 0, scale: 0.9 }}
@@ -505,55 +505,40 @@ function LoginContent() {
                 exit={{ opacity: 0, scale: 0.9 }}
                 className="w-full max-w-xs space-y-4 my-auto text-center relative z-10"
               >
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/15 text-amber-500 mx-auto flex items-center justify-center font-black shadow-sm">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+
                 <h3 className={`text-xl font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-[#0F172A]'}`}>
-                  Reset Password
+                  Contact Hostel Admin
                 </h3>
-                {forgotSuccess ? (
-                  <div className="space-y-3">
-                    <p className="text-xs text-emerald-500 font-bold">Reset token dispatched to {forgotEmail}.</p>
-                    <button
-                      type="button"
-                      onClick={() => { setViewState('LOGIN'); setForgotSuccess(false); }}
-                      className={`text-xs font-black hover:underline cursor-pointer ${isDarkMode ? 'text-[#38C7D9]' : 'text-[#2563EB]'}`}
-                    >
-                      Return to Portal
-                    </button>
+
+                <div className={`p-4 rounded-2xl border text-xs font-medium space-y-2 text-left shadow-sm ${
+                  isDarkMode 
+                    ? 'bg-amber-950/20 border-amber-500/30 text-amber-200' 
+                    : 'bg-amber-50 border-amber-200 text-amber-900'
+                }`}>
+                  <p className="font-bold text-xs">Password Reset Policy:</p>
+                  <p className="leading-relaxed">
+                    To reset or recover your tenant portal account passkey, please contact your <strong>Hostel Owner or Warden</strong> at the front desk:
+                  </p>
+                  <div className="pt-2 border-t border-current/20 font-mono font-bold text-center text-sm">
+                    📞 +91 98765 43210
                   </div>
-                ) : (
-                  <form onSubmit={handleForgotSubmit} className="space-y-3">
-                    <p className={`text-xs font-medium leading-relaxed ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}>
-                      Enter your email address to generate an instant reset token.
-                    </p>
-                    <input
-                      type="email"
-                      required
-                      value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
-                      placeholder="person@srisaisiri.com"
-                      className={`w-full border-b py-2.5 px-2 text-xs font-bold focus:outline-none transition-colors cursor-text ${
-                        isDarkMode 
-                          ? 'bg-[#020306]/80 border-white/20 text-white placeholder-slate-400 focus:border-[#38C7D9]' 
-                          : 'bg-slate-100/90 border-slate-300 text-[#0F172A] placeholder-slate-400 focus:border-[#2563EB]'
-                      }`}
-                    />
-                    <div className="flex justify-between items-center pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setViewState('LOGIN')}
-                        className={`text-xs font-bold cursor-pointer ${isDarkMode ? 'text-[#94A3B8]' : 'text-[#64748B]'}`}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={forgotSubmitting}
-                        className={`text-xs font-black hover:underline cursor-pointer ${isDarkMode ? 'text-[#38C7D9]' : 'text-[#2563EB]'}`}
-                      >
-                        {forgotSubmitting ? 'Dispatching...' : 'SEND LINK &rarr;'}
-                      </button>
-                    </div>
-                  </form>
-                )}
+                  <p className="text-[10px] opacity-80 text-center">Front Desk Hours: 06:00 AM – 10:00 PM</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setViewState('LOGIN')}
+                  className={`w-full py-3 rounded-full border font-black text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md ${
+                    isDarkMode 
+                      ? 'bg-white/10 hover:bg-[#38C7D9] hover:text-black border-white/20 text-white' 
+                      : 'bg-[#2563EB] hover:bg-[#1D4ED8] border-[#2563EB] text-white'
+                  }`}
+                >
+                  Return to Sign In →
+                </button>
               </motion.div>
             )}
           </AnimatePresence>
