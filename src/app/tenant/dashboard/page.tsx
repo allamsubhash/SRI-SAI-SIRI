@@ -136,6 +136,90 @@ export default function TenantDashboard() {
   const activeComplaint = complaints.find(c => c.status !== 'RESOLVED' && c.status !== 'Resolved');
   const upcomingVisitor = visitors.find(v => v.status === 'APPROVED' || v.approvalStatus === 'APPROVED' || v.status === 'PENDING');
 
+  const handlePayNow = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pendingInvoice) return;
+    setPaying(true);
+    try {
+      const res = await fetch('/api/rent', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceId: pendingInvoice.id,
+          amountPaid: pendingInvoice.amount,
+          method: 'ONLINE',
+          isTenantPayment: true
+        })
+      });
+      if (res.ok) {
+        setShowPayModal(false);
+        fetchDashboardData();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  const handleCreateComplaint = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComplaintTitle || !newComplaintDesc || submittingComplaint) return;
+
+    setSubmittingComplaint(true);
+    try {
+      const res = await fetch('/api/complaints', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: user?.id || 'tenant-id-fallback',
+          title: newComplaintTitle,
+          description: newComplaintDesc,
+          category: newComplaintCategory
+        })
+      });
+      if (res.ok) {
+        setNewComplaintTitle('');
+        setNewComplaintDesc('');
+        setNewComplaintCategory('WIFI');
+        fetchDashboardData();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSubmittingComplaint(false);
+    }
+  };
+
+  const handleCreateVisitor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newVisitorName || !newVisitorPhone || submittingVisitor) return;
+
+    setSubmittingVisitor(true);
+    try {
+      const res = await fetch('/api/visitors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: user?.id || 'tenant-id-fallback',
+          name: newVisitorName,
+          phone: newVisitorPhone,
+          personVisiting: user?.name || 'Resident',
+          checkIn: newVisitorCheckIn
+        })
+      });
+      if (res.ok) {
+        setNewVisitorName('');
+        setNewVisitorPhone('');
+        fetchDashboardData();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSubmittingVisitor(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6 animate-pulse text-left">
@@ -158,7 +242,7 @@ export default function TenantDashboard() {
       className="space-y-7 text-left font-sans transition-colors duration-200"
     >
       
-      {/* 👑 1. HIGH-LIVELINESS RESIDENT IDENTITY HERO CARD */}
+      {/* 👑 1. RESIDENT IDENTITY HERO CARD */}
       <motion.div 
         whileHover={{ y: -3, scale: 1.005 }}
         onClick={() => setShowRoomModal(true)}
@@ -231,10 +315,8 @@ export default function TenantDashboard() {
         </motion.div>
       )}
 
-      {/* 📊 2. HIGH-VIBRANCY SUMMARY CARDS GRID */}
+      {/* 📊 2. SUMMARY METRICS CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        {/* CARD 1: MONTHLY TARIFF */}
         <motion.div 
           whileHover={{ y: -4, scale: 1.02 }}
           onClick={() => setShowRentModal(true)}
@@ -257,7 +339,6 @@ export default function TenantDashboard() {
           </div>
         </motion.div>
 
-        {/* CARD 2: ASSIGNED ROOM */}
         <motion.div 
           whileHover={{ y: -4, scale: 1.02 }}
           onClick={() => setShowRoomModal(true)}
@@ -280,7 +361,6 @@ export default function TenantDashboard() {
           </div>
         </motion.div>
 
-        {/* CARD 3: ACCOUNT STATUS */}
         <motion.div 
           whileHover={{ y: -4, scale: 1.02 }}
           onClick={() => setShowRentModal(true)}
@@ -307,7 +387,6 @@ export default function TenantDashboard() {
           </div>
         </motion.div>
 
-        {/* CARD 4: ROOMMATES */}
         <motion.div 
           whileHover={{ y: -4, scale: 1.02 }}
           onClick={() => setShowRoomModal(true)}
@@ -329,7 +408,6 @@ export default function TenantDashboard() {
             <div className="bg-cyan-500 h-full rounded-full w-2/3" />
           </div>
         </motion.div>
-
       </div>
 
       {/* 💳 3. PROMINENT RENT & PAYMENTS CARD */}
@@ -609,6 +687,448 @@ export default function TenantDashboard() {
         </motion.div>
 
       </div>
+
+      {/* ========================================================
+          📌 ALL INTERACTIVE DASHBOARD POP-UP MODALS 
+         ======================================================== */}
+
+      {/* 1. RENT & BILLING POPUP MODAL */}
+      {showRentModal && (
+        <NeonModal
+          isOpen={true}
+          onClose={() => setShowRentModal(false)}
+          title="Rent & Billing Ledger"
+          subtitle="View active rent invoices and payment history."
+          size="md"
+          accentColor="emerald"
+        >
+          <div className="space-y-4 text-left font-sans">
+            <div className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-[#68736E] dark:text-[#9BAAA4]">Total Outstanding Dues</span>
+                <span className="text-2xl font-black text-[#1C2522] dark:text-[#F2F5F2]">{formatINR(outstandingBalance)}</span>
+              </div>
+              {pendingInvoice && (
+                <div className="flex justify-between items-center pt-2 border-t border-[#DDD8CE] dark:border-[#293832]">
+                  <span className="text-xs font-bold text-[#68736E] dark:text-[#9BAAA4]">Due Date: {formatDate(pendingInvoice.dueDate)}</span>
+                  <button
+                    onClick={() => {
+                      setShowRentModal(false);
+                      setShowPayModal(true);
+                    }}
+                    className="py-2 px-5 rounded-xl tenant-bg-accent font-black text-xs shadow-md cursor-pointer"
+                  >
+                    Pay Invoice Now →
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-xs font-black text-[#1C2522] dark:text-[#F2F5F2] block">Invoice Records</span>
+              {invoices.length === 0 ? (
+                <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] italic py-4 text-center">No invoices logged.</p>
+              ) : (
+                invoices.map((inv) => (
+                  <div key={inv.id} className="p-3.5 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] flex justify-between items-center text-xs font-bold">
+                    <div>
+                      <p className="text-[#1C2522] dark:text-[#F2F5F2]">Invoice #{inv.number || inv.id.slice(0, 8)}</p>
+                      <p className="text-[10px] text-[#68736E] dark:text-[#9BAAA4]">Due: {formatDate(inv.dueDate)}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[#1C2522] dark:text-[#F2F5F2] font-black">{formatINR(inv.amount)}</span>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[9px] ${
+                        inv.status === 'PAID' ? 'tenant-bg-soft tenant-text-accent' : 'bg-amber-50 dark:bg-[#F2C15D]/15 text-[#B7791F] dark:text-[#F2C15D]'
+                      }`}>
+                        {inv.status}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setShowRentModal(false)}
+                className="py-2.5 px-5 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] text-[#1C2522] dark:text-[#F2F5F2] font-bold text-xs cursor-pointer border border-[#DDD8CE] dark:border-[#293832]"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </NeonModal>
+      )}
+
+      {/* 2. ROOM & STAY DETAILS POPUP MODAL */}
+      {showRoomModal && (
+        <NeonModal
+          isOpen={true}
+          onClose={() => setShowRoomModal(false)}
+          title={`Room ${userRoom} Lease Details`}
+          subtitle="Specifications of your room lease allocation."
+          size="md"
+          accentColor="emerald"
+        >
+          <div className="space-y-4 text-left font-sans">
+            <div className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] space-y-2 text-xs font-bold">
+              <div className="flex justify-between">
+                <span className="text-[#68736E] dark:text-[#9BAAA4]">Assigned Room Number</span>
+                <span className="text-[#1C2522] dark:text-[#F2F5F2]">{userRoom}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#68736E] dark:text-[#9BAAA4]">Assigned Bed Spot</span>
+                <span className="tenant-text-accent">Bed {userBed.split('-').pop()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#68736E] dark:text-[#9BAAA4]">Move-in Date</span>
+                <span className="text-[#1C2522] dark:text-[#F2F5F2]">{moveInDate}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#68736E] dark:text-[#9BAAA4]">Hostel Trade Name</span>
+                <span className="tenant-text-accent">{data?.settings?.hostelName || 'Sri Sai Siri Boys Hostel'}</span>
+              </div>
+              <div className="flex justify-between border-t border-[#DDD8CE] dark:border-[#293832] pt-2">
+                <span className="text-[#68736E] dark:text-[#9BAAA4]">Monthly Tariff</span>
+                <span className="tenant-text-accent font-black text-sm">{formatINR(rentAmount)}</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-xs font-black text-[#1C2522] dark:text-[#F2F5F2] block">Roommates Sharing Room {userRoom}</span>
+              {roommates.length === 0 ? (
+                <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] italic p-4 bg-[#F1EEE7] dark:bg-[#1A2621] rounded-2xl text-center">Single occupancy room or no co-residents registered.</p>
+              ) : (
+                roommates.map((rm: any, idx: number) => (
+                  <div key={idx} className="p-3 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] flex justify-between items-center text-xs font-bold">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl tenant-bg-accent font-black flex items-center justify-center text-xs">
+                        {rm.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="text-[#1C2522] dark:text-[#F2F5F2]">{rm.name}</p>
+                        <p className="text-[10px] text-[#68736E] dark:text-[#9BAAA4]">{rm.occupation || 'Resident'} • Bed {rm.bedNumber || 'Assigned'}</p>
+                      </div>
+                    </div>
+                    <span className="text-[9px] px-2.5 py-0.5 rounded-full tenant-bg-soft tenant-text-accent border tenant-border-accent">Active</span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setShowRoomModal(false)}
+                className="py-2.5 px-5 rounded-2xl tenant-bg-accent text-xs font-black cursor-pointer shadow-md"
+              >
+                Close Details
+              </button>
+            </div>
+          </div>
+        </NeonModal>
+      )}
+
+      {/* 3. WARDEN ANNOUNCEMENTS POPUP MODAL */}
+      {showAnnouncementsModal && (
+        <NeonModal
+          isOpen={true}
+          onClose={() => setShowAnnouncementsModal(false)}
+          title="Warden Announcements & Notices"
+          subtitle="Recent hostel updates broadcasted by warden management."
+          size="md"
+          accentColor="emerald"
+        >
+          <div className="space-y-3 text-left font-sans max-h-[60vh] overflow-y-auto pr-1">
+            {(!data?.notices || data.notices.length === 0) ? (
+              <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] italic text-center py-6">No announcements broadcasted.</p>
+            ) : (
+              data.notices.map((note: any) => (
+                <div 
+                  key={note.id} 
+                  className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] space-y-2 text-left"
+                >
+                  <div className="flex justify-between items-center text-[10px] font-black">
+                    <span className={note.isEmergency ? 'text-[#C94B4B] dark:text-[#F27676]' : 'tenant-text-accent'}>
+                      {note.isEmergency ? 'EMERGENCY' : `TARGET: ${note.target || 'ALL'}`}
+                    </span>
+                    <span className="text-[#68736E] dark:text-[#9BAAA4]">{formatDate(note.createdAt)}</span>
+                  </div>
+                  <h4 className="font-bold text-xs text-[#1C2522] dark:text-[#F2F5F2]">{note.title}</h4>
+                  <p className="text-[11px] text-[#68736E] dark:text-[#9BAAA4] leading-relaxed">{note.content}</p>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="pt-3 border-t border-[#DDD8CE] dark:border-[#293832] flex justify-end">
+            <button
+              onClick={() => setShowAnnouncementsModal(false)}
+              className="py-2.5 px-5 rounded-2xl tenant-bg-accent text-xs font-black cursor-pointer shadow-md"
+            >
+              Close Announcements
+            </button>
+          </div>
+        </NeonModal>
+      )}
+
+      {/* 4. COMPLAINTS TICKETS POPUP MODAL */}
+      {showComplaintsModal && (
+        <NeonModal
+          isOpen={true}
+          onClose={() => setShowComplaintsModal(false)}
+          title="My Maintenance Complaints"
+          subtitle="File or track support tickets for room repairs."
+          size="md"
+          accentColor="emerald"
+        >
+          <div className="space-y-4 text-left font-sans">
+            <form onSubmit={handleCreateComplaint} className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] space-y-3">
+              <span className="text-xs font-black text-[#1C2522] dark:text-[#F2F5F2] block">File New Support Ticket</span>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <select
+                  value={newComplaintCategory}
+                  onChange={(e) => setNewComplaintCategory(e.target.value)}
+                  className="px-3 py-2 rounded-xl bg-white dark:bg-[#101916] border border-[#D5D0C7] dark:border-[#30423A] text-xs font-bold text-[#1C2522] dark:text-[#F2F5F2]"
+                >
+                  <option value="WIFI">Wi-Fi & Internet</option>
+                  <option value="PLUMBING">Plumbing / Water Tap</option>
+                  <option value="ELECTRICAL">AC & Electrical Repairs</option>
+                  <option value="CLEANING">Housekeeping & Cleaning</option>
+                  <option value="FOOD">Mess Dining & Food</option>
+                  <option value="OTHER">Other Issue</option>
+                </select>
+
+                <input
+                  type="text"
+                  required
+                  value={newComplaintTitle}
+                  onChange={(e) => setNewComplaintTitle(e.target.value)}
+                  placeholder="Summary Title (e.g. AC tap leaking)"
+                  className="px-3 py-2 rounded-xl bg-white dark:bg-[#101916] border border-[#D5D0C7] dark:border-[#30423A] text-xs font-bold text-[#1C2522] dark:text-[#F2F5F2]"
+                />
+              </div>
+
+              <textarea
+                rows={2}
+                required
+                value={newComplaintDesc}
+                onChange={(e) => setNewComplaintDesc(e.target.value)}
+                placeholder="Details about the issue..."
+                className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#101916] border border-[#D5D0C7] dark:border-[#30423A] text-xs font-bold text-[#1C2522] dark:text-[#F2F5F2]"
+              />
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={submittingComplaint}
+                  className="py-2 px-5 rounded-xl tenant-bg-accent font-black text-xs shadow-md cursor-pointer disabled:opacity-50"
+                >
+                  {submittingComplaint ? 'Submitting...' : 'Submit Support Ticket ✓'}
+                </button>
+              </div>
+            </form>
+
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+              <span className="text-xs font-black text-[#1C2522] dark:text-[#F2F5F2] block">Logged Tickets ({complaints.length})</span>
+              {complaints.length === 0 ? (
+                <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] italic text-center py-4">No active complaint tickets.</p>
+              ) : (
+                complaints.map((c) => (
+                  <div key={c.id} className="p-3 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] flex justify-between items-center text-xs font-bold">
+                    <div>
+                      <p className="text-[#1C2522] dark:text-[#F2F5F2]">{c.title}</p>
+                      <p className="text-[10px] text-[#68736E] dark:text-[#9BAAA4]">{c.category} • {formatDate(c.dateCreated || c.createdAt)}</p>
+                    </div>
+                    <span className="text-[9px] px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-[#F2C15D]/15 text-[#B7791F] dark:text-[#F2C15D]">
+                      {c.status}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setShowComplaintsModal(false)}
+                className="py-2.5 px-5 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] text-[#1C2522] dark:text-[#F2F5F2] font-bold text-xs cursor-pointer border border-[#DDD8CE] dark:border-[#293832]"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </NeonModal>
+      )}
+
+      {/* 5. VISITORS GATE PASS POPUP MODAL */}
+      {showVisitorsModal && (
+        <NeonModal
+          isOpen={true}
+          onClose={() => setShowVisitorsModal(false)}
+          title="Visitor Pre-Approvals & Gate Passes"
+          subtitle="Issue pre-approved entry passes for family & guests."
+          size="md"
+          accentColor="emerald"
+        >
+          <div className="space-y-4 text-left font-sans">
+            <form onSubmit={handleCreateVisitor} className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] space-y-3">
+              <span className="text-xs font-black text-[#1C2522] dark:text-[#F2F5F2] block">Pre-Register Guest</span>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input
+                  type="text"
+                  required
+                  value={newVisitorName}
+                  onChange={(e) => setNewVisitorName(e.target.value)}
+                  placeholder="Guest Full Name"
+                  className="px-3 py-2 rounded-xl bg-white dark:bg-[#101916] border border-[#D5D0C7] dark:border-[#30423A] text-xs font-bold text-[#1C2522] dark:text-[#F2F5F2]"
+                />
+
+                <input
+                  type="text"
+                  required
+                  value={newVisitorPhone}
+                  onChange={(e) => setNewVisitorPhone(e.target.value)}
+                  placeholder="Guest Contact Phone"
+                  className="px-3 py-2 rounded-xl bg-white dark:bg-[#101916] border border-[#D5D0C7] dark:border-[#30423A] text-xs font-bold text-[#1C2522] dark:text-[#F2F5F2]"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-[#68736E] dark:text-[#9BAAA4] block mb-1">Arrival Date & Time</label>
+                <input
+                  type="datetime-local"
+                  required
+                  value={newVisitorCheckIn}
+                  onChange={(e) => setNewVisitorCheckIn(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#101916] border border-[#D5D0C7] dark:border-[#30423A] text-xs font-bold text-[#1C2522] dark:text-[#F2F5F2]"
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={submittingVisitor}
+                  className="py-2 px-5 rounded-xl tenant-bg-accent font-black text-xs shadow-md cursor-pointer disabled:opacity-50"
+                >
+                  {submittingVisitor ? 'Registering...' : 'Issue Gate Pass ✓'}
+                </button>
+              </div>
+            </form>
+
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+              <span className="text-xs font-black text-[#1C2522] dark:text-[#F2F5F2] block">Visitor Gate Passes ({visitors.length})</span>
+              {visitors.length === 0 ? (
+                <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] italic text-center py-4">No visitor gate passes issued.</p>
+              ) : (
+                visitors.map((v) => (
+                  <div key={v.id} className="p-3 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] flex justify-between items-center text-xs font-bold">
+                    <div>
+                      <p className="text-[#1C2522] dark:text-[#F2F5F2]">{v.name} (📞 {v.phone})</p>
+                      <p className="text-[10px] text-[#68736E] dark:text-[#9BAAA4]">Arrival: {v.checkIn || 'Today'}</p>
+                    </div>
+                    <span className="text-[9px] px-2.5 py-0.5 rounded-full tenant-bg-soft tenant-text-accent border tenant-border-accent">
+                      {v.status || v.approvalStatus || 'APPROVED'}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setShowVisitorsModal(false)}
+                className="py-2.5 px-5 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] text-[#1C2522] dark:text-[#F2F5F2] font-bold text-xs cursor-pointer border border-[#DDD8CE] dark:border-[#293832]"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </NeonModal>
+      )}
+
+      {/* 6. PAY RENT NOW POPUP MODAL */}
+      {showPayModal && pendingInvoice && (
+        <NeonModal
+          isOpen={true}
+          onClose={() => setShowPayModal(false)}
+          title={`Settle Rent Invoice #${pendingInvoice.number || pendingInvoice.id.slice(0, 8)}`}
+          subtitle="Instant online rent payment gateway."
+          size="md"
+          accentColor="emerald"
+        >
+          <form onSubmit={handlePayNow} className="space-y-4 text-left font-sans">
+            <div className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] space-y-2">
+              <div className="flex justify-between items-center text-xs font-bold">
+                <span className="text-[#68736E] dark:text-[#9BAAA4]">Total Outstanding Dues</span>
+                <span className="text-2xl font-black text-[#1C2522] dark:text-[#F2F5F2]">{formatINR(pendingInvoice.amount)}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs font-bold border-t border-[#DDD8CE] dark:border-[#293832] pt-2">
+                <span className="text-[#68736E] dark:text-[#9BAAA4]">Due Date</span>
+                <span className="text-[#1C2522] dark:text-[#F2F5F2]">{formatDate(pendingInvoice.dueDate)}</span>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 space-y-1">
+              <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wider block">SECURE ONLINE UPI / BANKING</span>
+              <p className="text-xs text-emerald-300 font-medium">Your payment is processed securely with immediate digital receipt generation.</p>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowPayModal(false)}
+                className="py-2.5 px-5 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] text-[#1C2522] dark:text-[#F2F5F2] font-bold text-xs cursor-pointer border border-[#DDD8CE] dark:border-[#293832]"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={paying}
+                className="py-2.5 px-6 rounded-2xl tenant-bg-accent font-black text-xs cursor-pointer shadow-lg hover:scale-105 transition-all"
+              >
+                {paying ? 'Processing...' : 'CONFIRM & PAY NOW →'}
+              </button>
+            </div>
+          </form>
+        </NeonModal>
+      )}
+
+      {/* 7. NOTICE DETAIL POPUP MODAL */}
+      {selectedNotice && (
+        <NeonModal
+          isOpen={true}
+          onClose={() => setSelectedNotice(null)}
+          title={selectedNotice.title}
+          subtitle={`Published on ${formatDate(selectedNotice.createdAt)}`}
+          size="md"
+          accentColor="emerald"
+        >
+          <div className="space-y-4 text-left font-sans">
+            <div>
+              <span className={`text-[10px] px-3.5 py-1 rounded-full font-black uppercase tracking-wider ${
+                selectedNotice.isEmergency ? 'bg-rose-50 dark:bg-[#F27676]/15 text-[#C94B4B] dark:text-[#F27676]' : 'tenant-bg-soft tenant-text-accent border tenant-border-accent'
+              }`}>
+                {selectedNotice.isEmergency ? 'EMERGENCY' : `Target: ${selectedNotice.target || 'All'}`}
+              </span>
+            </div>
+
+            <div className="p-4.5 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832]">
+              <p className="text-[#1C2522] dark:text-[#F2F5F2] text-xs leading-relaxed whitespace-pre-wrap font-medium">
+                {selectedNotice.content}
+              </p>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setSelectedNotice(null)}
+                className="py-2.5 px-6 rounded-2xl tenant-bg-accent font-black text-xs cursor-pointer shadow-md"
+              >
+                Close Notice
+              </button>
+            </div>
+          </div>
+        </NeonModal>
+      )}
 
     </motion.div>
   );

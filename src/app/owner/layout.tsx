@@ -63,6 +63,42 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
   const [pendingCount, setPendingCount] = useState(0);
   const [hostelName, setHostelName] = useState('Sri Sai Siri Boys Hostel');
 
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+
+  const fetchOwnerNotifications = () => {
+    fetch('/api/notifications')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setNotifications(data.notifications || []);
+          setUnreadNotifCount(data.unreadCount || 0);
+        }
+      })
+      .catch(err => console.error(err));
+  };
+
+  useEffect(() => {
+    fetchOwnerNotifications();
+    const interval = setInterval(fetchOwnerNotifications, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleMarkNotifRead = async (id?: string, markAll: boolean = false) => {
+    try {
+      const res = await fetch('/api/notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, markAll })
+      });
+      if (res.ok) {
+        fetchOwnerNotifications();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     // Dynamically fetch active pending complaints count
     fetch('/api/complaints')
@@ -446,9 +482,11 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
                   title="Notifications"
                 >
                   <Bell className="w-4.5 h-4.5" />
-                  <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-rose-500 text-white font-black text-[9px] flex items-center justify-center border-2 border-white dark:border-zinc-900">
-                    3
-                  </span>
+                  {unreadNotifCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-rose-500 text-white font-black text-[9px] flex items-center justify-center border-2 border-white dark:border-zinc-900 animate-pulse">
+                      {unreadNotifCount}
+                    </span>
+                  )}
                 </button>
 
                 <AnimatePresence>
@@ -463,10 +501,17 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
                         initial={{ opacity: 0, scale: 0.9, y: 10 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.9, y: 10 }}
-                        className="absolute right-0 mt-3 w-80 bg-white/95 dark:bg-[#121826]/95 border border-slate-200 dark:border-zinc-800 rounded-3xl shadow-2xl z-50 p-4 space-y-3 text-left backdrop-blur-2xl"
+                        className="absolute right-0 mt-3 w-80 sm:w-96 bg-white/95 dark:bg-[#121826]/95 border border-slate-200 dark:border-zinc-800 rounded-3xl shadow-2xl z-50 p-4 space-y-3 text-left backdrop-blur-2xl"
                       >
                         <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-zinc-800">
-                          <span className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Notifications</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">Notifications</span>
+                            {unreadNotifCount > 0 && (
+                              <span className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-500 text-[9px] font-black">
+                                {unreadNotifCount} Unread
+                              </span>
+                            )}
+                          </div>
                           <button
                             onClick={() => setShowNotif(false)}
                             className="text-[10px] bg-rose-500/10 text-rose-500 font-bold px-2 py-0.5 rounded-full hover:bg-rose-500 hover:text-white transition-colors cursor-pointer"
@@ -474,28 +519,66 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
                             Close ✕
                           </button>
                         </div>
-                        <div className="space-y-2 text-xs">
-                          <div 
-                            onClick={() => setShowNotif(false)} 
-                            className="p-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 cursor-pointer hover:border-blue-500/50 transition-colors"
+
+                        <div className="space-y-2 text-xs max-h-72 overflow-y-auto pr-1">
+                          {notifications.length === 0 ? (
+                            <p className="text-xs text-slate-400 italic text-center py-6">No notifications found.</p>
+                          ) : (
+                            notifications.map((notif) => (
+                              <div 
+                                key={notif.id}
+                                className={`p-3 rounded-2xl border transition-all space-y-1 relative group ${
+                                  notif.read
+                                    ? 'bg-slate-50/50 dark:bg-zinc-900/50 border-slate-100 dark:border-zinc-800/80 opacity-70'
+                                    : 'bg-indigo-50/40 dark:bg-indigo-950/20 border-indigo-200/50 dark:border-indigo-800/50 shadow-xs'
+                                }`}
+                              >
+                                <div className="flex justify-between items-center text-[10px] font-black">
+                                  <span className="text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">{notif.tag}</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-slate-400">{notif.time}</span>
+                                    {!notif.read && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleMarkNotifRead(notif.id, false);
+                                        }}
+                                        className="text-[9px] text-indigo-500 hover:text-indigo-700 font-bold hover:underline cursor-pointer"
+                                      >
+                                        Mark as Read ✕
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                                <h4 
+                                  onClick={() => {
+                                    handleMarkNotifRead(notif.id, false);
+                                    setShowNotif(false);
+                                    if (notif.link) router.push(notif.link);
+                                  }}
+                                  className="font-bold text-xs text-slate-900 dark:text-white hover:text-indigo-600 cursor-pointer"
+                                >
+                                  {notif.title}
+                                </h4>
+                                <p className="text-[11px] text-slate-500 dark:text-zinc-400 leading-relaxed">{notif.desc}</p>
+                              </div>
+                            ))
+                          )}
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-100 dark:border-zinc-800 flex justify-between items-center">
+                          <button
+                            onClick={() => handleMarkNotifRead(undefined, true)}
+                            className="px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-xs font-bold text-slate-600 dark:text-zinc-300 cursor-pointer transition-colors"
                           >
-                            <p className="font-bold text-slate-900 dark:text-white">Priya Sharma checked in</p>
-                            <p className="text-[10px] text-slate-500">Room B-201 • 10:30 AM</p>
-                          </div>
-                          <div 
-                            onClick={() => setShowNotif(false)} 
-                            className="p-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 cursor-pointer hover:border-blue-500/50 transition-colors"
+                            Mark All as Read
+                          </button>
+                          <button
+                            onClick={() => setShowNotif(false)}
+                            className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold cursor-pointer"
                           >
-                            <p className="font-bold text-slate-900 dark:text-white">Payment received ₹8,500</p>
-                            <p className="text-[10px] text-slate-500">Rahul Verma • 09:15 AM</p>
-                          </div>
-                          <div 
-                            onClick={() => setShowNotif(false)} 
-                            className="p-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 cursor-pointer hover:border-blue-500/50 transition-colors"
-                          >
-                            <p className="font-bold text-slate-900 dark:text-white">Maintenance Request Room A-101</p>
-                            <p className="text-[10px] text-slate-500">AC not cooling • Yesterday</p>
-                          </div>
+                            Done
+                          </button>
                         </div>
                       </motion.div>
                     </>
