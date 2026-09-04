@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { prisma } from '@/lib/db';
 import { verifyToken } from '@/lib/auth';
 import { formatDate } from '@/utils/formatters';
@@ -7,17 +8,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    const cookies = request.headers.get('cookie') || '';
-    const token = cookies
-      .split(';')
-      .find(c => c.trim().startsWith('auth_token='))
-      ?.split('=')[1];
-
-    const readCookie = cookies
-      .split(';')
-      .find(c => c.trim().startsWith('read_notifs='))
-      ?.split('=')[1] || '';
-
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth_token')?.value;
+    const readCookie = cookieStore.get('read_notifs')?.value || '';
     const readIds = readCookie ? readCookie.split(',') : [];
 
     let currentUser: any = null;
@@ -31,22 +24,22 @@ export async function GET(request: Request) {
     // Fetch real-time data from DB for notifications
     const [recentPayments, recentComplaints, recentVisitors, recentNotices] = await Promise.all([
       prisma.payment.findMany({
-        take: 10,
+        take: 15,
         orderBy: { date: 'desc' },
         include: { tenant: { include: { profile: true } } }
       }),
       prisma.complaint.findMany({
-        take: 10,
+        take: 15,
         orderBy: { createdAt: 'desc' },
         include: { tenant: { include: { profile: true } } }
       }),
       prisma.visitor.findMany({
-        take: 10,
+        take: 15,
         orderBy: { createdAt: 'desc' },
         include: { tenant: { include: { profile: true } } }
       }),
       prisma.notice.findMany({
-        take: 10,
+        take: 15,
         orderBy: { createdAt: 'desc' }
       })
     ]);
@@ -189,11 +182,8 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   try {
     const { id, markAll } = await request.json();
-    const cookies = request.headers.get('cookie') || '';
-    const readCookie = cookies
-      .split(';')
-      .find(c => c.trim().startsWith('read_notifs='))
-      ?.split('=')[1] || '';
+    const cookieStore = await cookies();
+    const readCookie = cookieStore.get('read_notifs')?.value || '';
 
     let readIds = readCookie ? readCookie.split(',') : [];
 
@@ -209,14 +199,14 @@ export async function PUT(request: Request) {
       }
     }
 
-    const response = NextResponse.json({ success: true, readIds });
-    response.cookies.set('read_notifs', readIds.join(','), {
+    cookieStore.set('read_notifs', readIds.join(','), {
       path: '/',
       maxAge: 60 * 60 * 24 * 30, // 30 days
-      httpOnly: false
+      httpOnly: false,
+      sameSite: 'lax'
     });
 
-    return response;
+    return NextResponse.json({ success: true, readIds });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to update notification state' }, { status: 500 });
   }
