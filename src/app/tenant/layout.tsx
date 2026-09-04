@@ -14,7 +14,8 @@ import {
   Building, 
   User, 
   Search, 
-  ChevronLeft
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -34,6 +35,7 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
@@ -455,7 +457,7 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
 
               {/* Profile Avatar Trigger */}
               <button
-                onClick={() => router.push('/tenant/profile')}
+                onClick={() => setShowProfileModal(true)}
                 className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl tenant-bg-accent text-[#1C2522] dark:text-white font-black text-xs flex items-center justify-center shadow-md shrink-0 cursor-pointer transition-transform hover:scale-105"
                 title="My Profile & Lease Details"
               >
@@ -503,16 +505,127 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
           <Wrench className="w-5 h-5" />
           <span>Complaints</span>
         </Link>
-        <Link
-          href="/tenant/visitors"
-          className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
-            pathname === '/tenant/visitors' ? 'tenant-text-accent font-black scale-105' : 'text-[#68736E] dark:text-[#9BAAA4]'
+        <button
+          onClick={() => setShowProfileModal(true)}
+          className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all cursor-pointer ${
+            showProfileModal || pathname === '/tenant/profile' ? 'tenant-text-accent font-black scale-105' : 'text-[#68736E] dark:text-[#9BAAA4]'
           }`}
         >
-          <UserCheck className="w-5 h-5" />
-          <span>Visitors</span>
-        </Link>
+          <User className="w-5 h-5" />
+          <span>Profile</span>
+        </button>
       </nav>
+
+      {/* 👤 TENANT PROFILE & APPEARANCE POP-UP MODAL */}
+      <AnimatePresence>
+        {showProfileModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4"
+            onClick={() => setShowProfileModal(false)}
+          >
+            <motion.div
+              initial={{ y: '100%', opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: '100%', opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="w-full sm:max-w-md bg-[#FFFDF9] dark:bg-[#141D19] border border-[#DDD8CE] dark:border-[#293832] rounded-t-[32px] sm:rounded-[32px] shadow-2xl p-5 sm:p-6 space-y-4 sm:space-y-5 text-left relative overflow-hidden backdrop-blur-2xl max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Top Header & Close Button */}
+              <div className="flex justify-between items-center pb-3 border-b border-[#DDD8CE] dark:border-[#293832]">
+                <div className="flex items-center gap-2">
+                  <User className="w-5 h-5 tenant-text-accent" />
+                  <h3 className="font-black text-base text-[#1C2522] dark:text-[#F2F5F2]">Resident Account & Profile</h3>
+                </div>
+                <button 
+                  onClick={() => setShowProfileModal(false)}
+                  className="p-1.5 rounded-full bg-[#F1EEE7] dark:bg-[#1A2621] text-[#68736E] dark:text-[#9BAAA4] hover:text-[#1C2522] dark:hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Resident Profile Card */}
+              <div className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] flex items-center gap-4">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl tenant-bg-accent text-[#1C2522] dark:text-white font-black text-lg sm:text-xl flex items-center justify-center shadow-md shrink-0">
+                  {user?.name ? user.name.charAt(0).toUpperCase() : 'R'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="font-black text-base text-[#1C2522] dark:text-[#F2F5F2] truncate">
+                    {user?.name || 'Rohan Verma'}
+                  </h4>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1 text-xs">
+                    <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold border border-emerald-500/20">
+                      Room A-101 • Bed A
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Lease & Identity Summary */}
+              <div className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] space-y-2.5 text-xs">
+                <div className="flex justify-between items-center text-[#68736E] dark:text-[#9BAAA4]">
+                  <span className="font-bold">Move-In Date</span>
+                  <span className="font-black text-[#1C2522] dark:text-[#F2F5F2]">15 Jan 2026</span>
+                </div>
+                <div className="flex justify-between items-center text-[#68736E] dark:text-[#9BAAA4]">
+                  <span className="font-bold">Contact Phone</span>
+                  <span className="font-bold text-[#1C2522] dark:text-[#F2F5F2]">+91 98765 43210</span>
+                </div>
+                <div className="flex justify-between items-center text-[#68736E] dark:text-[#9BAAA4]">
+                  <span className="font-bold">Payment Status</span>
+                  <span className="font-black text-emerald-600 dark:text-emerald-400">✓ PAID</span>
+                </div>
+              </div>
+
+              {/* 🎨 APPEARANCE & THEME SWITCHER */}
+              <div className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <h5 className="font-black text-xs text-[#1C2522] dark:text-[#F2F5F2]">Appearance Mode</h5>
+                  <p className="text-[10px] text-[#68736E] dark:text-[#9BAAA4] font-medium">Switch between light and dark theme</p>
+                </div>
+                <ThemeToggleSwitch />
+              </div>
+
+              {/* Quick Actions List */}
+              <div className="space-y-2">
+                <button
+                  onClick={() => { setShowProfileModal(false); router.push('/tenant/profile'); }}
+                  className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] text-[#1C2522] dark:text-[#F2F5F2] font-black text-xs hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-600 transition-all cursor-pointer group"
+                >
+                  <span className="flex items-center gap-2">
+                    <User className="w-4 h-4 tenant-text-accent group-hover:text-white" />
+                    Full Profile & Lease Document Specs
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-[#68736E] group-hover:text-white" />
+                </button>
+                <button
+                  onClick={() => { setShowProfileModal(false); router.push('/tenant/visitors'); }}
+                  className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] text-[#1C2522] dark:text-[#F2F5F2] font-black text-xs hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-600 transition-all cursor-pointer group"
+                >
+                  <span className="flex items-center gap-2">
+                    <UserCheck className="w-4 h-4 text-purple-500 group-hover:text-white" />
+                    Request Visitor Gate Pass
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-[#68736E] group-hover:text-white" />
+                </button>
+              </div>
+
+              {/* Sign Out Button */}
+              <button
+                onClick={() => { setShowProfileModal(false); logout(); }}
+                className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 font-black text-xs border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all cursor-pointer shadow-sm"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Sign Out of Resident Account</span>
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

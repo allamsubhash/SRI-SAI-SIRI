@@ -520,12 +520,8 @@ function LoginContent() {
                 }`}>
                   <p className="font-bold text-xs">Password Reset Policy:</p>
                   <p className="leading-relaxed">
-                    To reset or recover your tenant portal account passkey, please contact your <strong>Hostel Owner or Warden</strong> at the front desk:
+                    To reset or recover your tenant portal account passkey, please contact your <strong>Hostel Owner or Warden</strong> at the front desk.
                   </p>
-                  <div className="pt-2 border-t border-current/20 font-mono font-bold text-center text-sm">
-                    📞 +91 98765 43210
-                  </div>
-                  <p className="text-[10px] opacity-80 text-center">Front Desk Hours: 06:00 AM – 10:00 PM</p>
                 </div>
 
                 <button

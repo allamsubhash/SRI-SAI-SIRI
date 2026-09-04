@@ -618,15 +618,17 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
 
           {/* 📱 COMPACT 4-ITEM MOBILE BOTTOM NAVIGATION BAR */}
           <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 backdrop-blur-2xl border-t border-[#DDD8CE] dark:border-[#293832] flex items-center justify-around z-40 px-2 shadow-lg">
-            <Link
-              href="/owner/dashboard"
-              className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
-                pathname === '/owner/dashboard' ? 'text-indigo-600 dark:text-cyan-400 font-black scale-105' : 'text-[#68736E] dark:text-[#9BAAA4]'
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all cursor-pointer ${
+                mobileMenuOpen ? 'text-indigo-600 dark:text-cyan-400 font-black scale-105' : 'text-[#68736E] dark:text-[#9BAAA4]'
               }`}
+              title="Toggle Side Navigation Bar"
             >
-              <Building className="w-5 h-5" />
-              <span>Home</span>
-            </Link>
+              <Menu className="w-5 h-5 text-indigo-500 dark:text-cyan-400" />
+              <span>Nav Menu</span>
+            </button>
             <Link
               href="/owner/buildings"
               className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${

@@ -593,7 +593,7 @@ export default function TenantsManagement() {
                     </thead>
                     <tbody className="divide-y divide-[#DDD8CE] dark:divide-[#293832]">
                       {filteredTenants.map((t) => {
-                        const isOverdue = t.rentStatus === 'OVERDUE' || t.paymentStatus === 'OVERDUE' || (t.dueAmount && t.dueAmount > 0) || (t.name && t.name.length % 2 === 1);
+                        const isOverdue = t.rentStatus === 'OVERDUE' || t.paymentStatus === 'OVERDUE' || (t.dueAmount && t.dueAmount > 0);
                         return (
                           <tr 
                             key={t.id} 

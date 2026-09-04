@@ -65,7 +65,7 @@ export async function GET(request: Request) {
       monthlyRent: 6500,
       nextPaymentDate: '30 Sep 2026',
       accountStatus: 'ALL CLEAR',
-      joiningDate: '15 Aug 2026',
+      joiningDate: '15 Jan 2026',
       hasPending: false,
       hasOverdue: false
     };
