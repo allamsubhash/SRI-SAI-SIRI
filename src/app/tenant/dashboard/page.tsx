@@ -114,6 +114,8 @@ export default function TenantDashboard() {
     );
   }, [data, user]);
 
+  const normalizeRoom = (r?: string) => (r || '').replace(/^room\s*/i, '').trim().toLowerCase();
+
   const userRoom = currentTenant?.roomNumber || 'A-101';
   const userBed = currentTenant?.bedNumber || 'A';
   const moveInDate = currentTenant?.moveInDate ? formatDate(currentTenant.moveInDate) : '15 Jan 2026';
@@ -121,13 +123,18 @@ export default function TenantDashboard() {
 
   const roommates = useMemo(() => {
     if (!data?.tenants) return [];
-    return data.tenants.filter((t: any) => 
-      t.status === 'ACTIVE' && 
-      t.roomNumber && 
-      t.roomNumber.toString() === userRoom.toString() && 
-      t.name?.toLowerCase() !== user?.name?.toLowerCase()
-    );
-  }, [data, userRoom, user]);
+    const targetRoomClean = normalizeRoom(userRoom);
+
+    return data.tenants.filter((t: any) => {
+      const isSameRoom = normalizeRoom(t.roomNumber) === targetRoomClean && targetRoomClean.length > 0;
+      const isSelf = 
+        (currentTenant && t.id === currentTenant.id) ||
+        (user?.email && t.email?.toLowerCase() === user.email.toLowerCase()) ||
+        (user?.name && t.name?.toLowerCase() === user.name.toLowerCase());
+      const isActive = t.status === 'ACTIVE' || !t.status;
+      return isActive && isSameRoom && !isSelf;
+    });
+  }, [data, currentTenant, userRoom, user]);
 
   const pendingInvoice = invoices.find(i => i.status === 'PENDING' || i.status === 'OVERDUE');
   const latestPaidInvoice = invoices.find(i => i.status === 'PAID');

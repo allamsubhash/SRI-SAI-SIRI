@@ -372,7 +372,8 @@ export const dbService = {
     const userId = `u-tenant-${Date.now()}`;
     const tenantId = `t-${Date.now()}`;
     const profileId = `p-${Date.now()}`;
-    const passwordHash = data.password ? (data.password.startsWith('$2a$') ? data.password : bcrypt.hashSync(data.password, 10)) : bcrypt.hashSync('password123', 10);
+    const isAlreadyHashed = data.password && (data.password.startsWith('$2a$') || data.password.startsWith('$2b$') || data.password.startsWith('$2y$'));
+    const passwordHash = data.password ? (isAlreadyHashed ? data.password : bcrypt.hashSync(data.password, 10)) : bcrypt.hashSync('password123', 10);
 
     const names = data.name.trim().split(' ');
     const firstName = names[0] || 'Tenant';
