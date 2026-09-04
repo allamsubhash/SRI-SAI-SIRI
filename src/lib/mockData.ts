@@ -375,9 +375,9 @@ export const mockInvoices: MockInvoice[] = [
     tenantName: 'Sneha Reddy',
     roomNumber: 'A-201',
     amount: 7000,
-    paidAmount: 0,
+    paidAmount: 7000,
     dueDate: '2026-06-05',
-    status: 'OVERDUE',
+    status: 'PAID',
     items: [
       { description: 'Monthly Room Rent (June 2026)', amount: 6500 },
       { description: 'High-Speed Wi-Fi Service', amount: 500 }

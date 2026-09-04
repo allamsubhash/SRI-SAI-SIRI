@@ -15,19 +15,23 @@ import {
   User, 
   Search, 
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Palette
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import LiveBackground, { BackgroundVariant } from '@/components/backgrounds/LiveBackground';
 import ThemeToggleSwitch from '@/components/ThemeToggleSwitch';
+import { TenantAppearanceProvider } from '@/context/TenantAppearanceContext';
+import TenantAppearanceSettings from '@/components/TenantAppearanceSettings';
+import { ToastProvider } from '@/components/ToastProvider';
 
 interface TenantLayoutProps {
   children: React.ReactNode;
 }
 
-export default function TenantLayout({ children }: TenantLayoutProps) {
+function TenantLayoutContent({ children }: TenantLayoutProps) {
   const { user, loading, logout } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
@@ -36,6 +40,7 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showAppearanceModal, setShowAppearanceModal] = useState(false);
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
@@ -109,13 +114,14 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
     }
   };
 
-  // CLEAN NAVIGATION ITEMS (ANNOUNCEMENTS REMOVED)
+  // CLEAN NAVIGATION ITEMS WITH APPEARANCE ACCENT THEMES
   const navItems = [
     { label: 'Home', href: '/tenant/dashboard', icon: Home, color: 'text-emerald-500' },
     { label: 'My Billing & Rent', href: '/tenant/billing', icon: Receipt, color: 'text-[#38C7D9]' },
     { label: 'My Complaints', href: '/tenant/complaints', icon: Wrench, color: 'text-orange-500' },
     { label: 'Visitors Gate Pass', href: '/tenant/visitors', icon: UserCheck, color: 'text-purple-500' },
     { label: 'My Profile & Lease', href: '/tenant/profile', icon: User, color: 'text-cyan-500' },
+    { label: 'Appearance & Themes', action: 'appearance', icon: Palette, color: 'text-indigo-400' },
   ];
 
   const getTenantBackgroundVariant = (): BackgroundVariant => {
@@ -187,13 +193,25 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
 
             {/* Navigation Items List */}
             <nav className="space-y-1.5">
-              {navItems.map((item) => {
+              {navItems.map((item, idx) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href;
+                const isActive = item.href ? pathname === item.href : false;
+                if (item.action === 'appearance') {
+                  return (
+                    <button
+                      key="appearance-btn"
+                      onClick={() => setShowAppearanceModal(true)}
+                      className="w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl font-bold text-xs transition-all relative group cursor-pointer text-[#68736E] dark:text-[#9BAAA4] hover:bg-[#F1EEE7] dark:hover:bg-[#1A2621] hover:text-[#1C2522] dark:hover:text-[#F2F5F2]"
+                    >
+                      <Palette className="w-4 h-4 shrink-0 text-indigo-400" />
+                      {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                    </button>
+                  );
+                }
                 return (
                   <Link
-                    key={item.href}
-                    href={item.href}
+                    key={item.href || idx}
+                    href={item.href || '#'}
                     className={`flex items-center gap-3.5 px-4 py-3.5 rounded-2xl font-bold text-xs transition-all relative group cursor-pointer ${
                       isActive 
                         ? 'tenant-bg-accent text-[#1C2522] dark:text-white shadow-lg' 
@@ -262,13 +280,25 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
                   </div>
 
                   <nav className="space-y-1.5">
-                    {navItems.map((item) => {
+                    {navItems.map((item, idx) => {
                       const Icon = item.icon;
-                      const isActive = pathname === item.href;
+                      const isActive = item.href ? pathname === item.href : false;
+                      if (item.action === 'appearance') {
+                        return (
+                          <button
+                            key="m-appearance-btn"
+                            onClick={() => { setMobileMenuOpen(false); setShowAppearanceModal(true); }}
+                            className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-black transition-all text-[#68736E] dark:text-[#9BAAA4] hover:bg-[#F1EEE7] dark:hover:bg-[#1A2621]"
+                          >
+                            <Palette className="w-4 h-4 text-indigo-400" />
+                            <span>{item.label}</span>
+                          </button>
+                        );
+                      }
                       return (
                         <Link
-                          key={item.href}
-                          href={item.href}
+                          key={item.href || idx}
+                          href={item.href || '#'}
                           onClick={() => setMobileMenuOpen(false)}
                           className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-black transition-all ${
                             isActive ? 'tenant-bg-accent text-[#1C2522] dark:text-white' : 'text-[#68736E] dark:text-[#9BAAA4]'
@@ -450,8 +480,17 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
                 </AnimatePresence>
               </div>
 
-              {/* Theme Switcher */}
-              <div className="shrink-0 scale-90 sm:scale-100">
+              {/* Theme & Palette Triggers */}
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <button
+                  onClick={() => setShowAppearanceModal(true)}
+                  className="p-2 sm:px-3 sm:py-2 rounded-xl sm:rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] text-indigo-500 dark:text-cyan-400 hover:scale-105 transition-all cursor-pointer flex items-center gap-1.5 font-bold text-xs shadow-xs"
+                  title="Customize Account Theme & Accent Colors"
+                >
+                  <Palette className="w-4 h-4 text-indigo-500 dark:text-cyan-400" />
+                  <span className="hidden sm:inline text-[11px] font-black">Themes</span>
+                </button>
+
                 <ThemeToggleSwitch />
               </div>
 
@@ -516,22 +555,22 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
         </button>
       </nav>
 
-      {/* 👤 TENANT PROFILE & APPEARANCE POP-UP MODAL */}
+      {/* 👤 TENANT PROFILE POP-UP MODAL (CENTERED POP-UP) */}
       <AnimatePresence>
         {showProfileModal && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4"
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4"
             onClick={() => setShowProfileModal(false)}
           >
             <motion.div
-              initial={{ y: '100%', opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: '100%', opacity: 0 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="w-full sm:max-w-md bg-[#FFFDF9] dark:bg-[#141D19] border border-[#DDD8CE] dark:border-[#293832] rounded-t-[32px] sm:rounded-[32px] shadow-2xl p-5 sm:p-6 space-y-4 sm:space-y-5 text-left relative overflow-hidden backdrop-blur-2xl max-h-[90vh] overflow-y-auto"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              className="w-full max-w-md bg-[#FFFDF9] dark:bg-[#141D19] border border-[#DDD8CE] dark:border-[#293832] rounded-[32px] shadow-2xl p-5 sm:p-6 space-y-4 sm:space-y-5 text-left relative overflow-hidden backdrop-blur-2xl max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Top Header & Close Button */}
@@ -581,13 +620,19 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
                 </div>
               </div>
 
-              {/* 🎨 APPEARANCE & THEME SWITCHER */}
+              {/* 🎨 APPEARANCE & THEME PICKER BUTTON */}
               <div className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <h5 className="font-black text-xs text-[#1C2522] dark:text-[#F2F5F2]">Appearance Mode</h5>
-                  <p className="text-[10px] text-[#68736E] dark:text-[#9BAAA4] font-medium">Switch between light and dark theme</p>
+                  <h5 className="font-black text-xs text-[#1C2522] dark:text-[#F2F5F2]">Theme & Accent Colors</h5>
+                  <p className="text-[10px] text-[#68736E] dark:text-[#9BAAA4] font-medium">Customize UI theme colors live</p>
                 </div>
-                <ThemeToggleSwitch />
+                <button
+                  onClick={() => { setShowProfileModal(false); setShowAppearanceModal(true); }}
+                  className="px-3 py-1.5 rounded-xl bg-[#2563EB] text-white font-bold text-xs hover:bg-[#1D4ED8] transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Palette className="w-3.5 h-3.5" />
+                  <span>Customize</span>
+                </button>
               </div>
 
               {/* Quick Actions List */}
@@ -627,6 +672,53 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
         )}
       </AnimatePresence>
 
+      {/* 🎨 TENANT APPEARANCE & THEMES ACCENT PICKER MODAL */}
+      <AnimatePresence>
+        {showAppearanceModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4"
+            onClick={() => setShowAppearanceModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              className="w-full max-w-xl bg-[#FFFDF9] dark:bg-[#141D19] border border-[#DDD8CE] dark:border-[#293832] rounded-[32px] shadow-2xl p-6 text-left relative overflow-hidden backdrop-blur-2xl max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center pb-4 border-b border-[#DDD8CE] dark:border-[#293832] mb-4">
+                <div className="flex items-center gap-2.5">
+                  <Palette className="w-5 h-5 text-indigo-500 dark:text-cyan-400" />
+                  <h3 className="font-black text-base text-[#1C2522] dark:text-[#F2F5F2]">Customize Account Theme & Colors</h3>
+                </div>
+                <button 
+                  onClick={() => setShowAppearanceModal(false)}
+                  className="p-2 rounded-full bg-[#F1EEE7] dark:bg-[#1A2621] text-[#68736E] dark:text-[#9BAAA4] hover:text-[#1C2522] dark:hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <TenantAppearanceSettings />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
+  );
+}
+
+export default function TenantLayout({ children }: TenantLayoutProps) {
+  return (
+    <ToastProvider>
+      <TenantAppearanceProvider>
+        <TenantLayoutContent>{children}</TenantLayoutContent>
+      </TenantAppearanceProvider>
+    </ToastProvider>
   );
 }

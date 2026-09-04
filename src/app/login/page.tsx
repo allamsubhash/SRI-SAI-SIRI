@@ -177,7 +177,7 @@ function LoginContent() {
     }
     const role = welcomeUser?.role || user?.role;
     if (role === 'OWNER') {
-      router.push('/owner/reports');
+      router.push('/owner/tenants');
     } else {
       router.push('/tenant/dashboard');
     }
