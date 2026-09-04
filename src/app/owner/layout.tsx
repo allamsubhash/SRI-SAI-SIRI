@@ -433,8 +433,8 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
         {/* WORKSPACE CONTENT */}
         <div className="flex-1 flex flex-col min-w-0 min-h-screen md:max-h-screen md:overflow-y-auto overflow-x-hidden">
           
-          {/* HEADER TOOLBAR */}
-          <header className="relative z-30 bg-[#FFFDF9] dark:bg-[#141D19] border border-[#DDD8CE] dark:border-[#293832] shadow-sm rounded-[28px] p-2.5 sm:p-4 mb-6 flex items-center justify-between gap-2 sm:gap-4 transition-all w-full">
+          {/* STICKY TOP HEADER TOOLBAR */}
+          <header className="sticky top-2 sm:top-4 z-40 bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-[#DDD8CE] dark:border-[#293832] shadow-md rounded-[28px] p-2.5 sm:p-4 mb-6 flex items-center justify-between gap-2 sm:gap-4 backdrop-blur-2xl w-full">
             
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <motion.button 
@@ -502,7 +502,7 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
                         initial={{ opacity: 0, scale: 0.9, y: 10 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.9, y: 10 }}
-                        className="absolute right-0 mt-3 w-80 sm:w-96 bg-white/95 dark:bg-[#121826]/95 border border-slate-200 dark:border-zinc-800 rounded-3xl shadow-2xl z-50 p-4 space-y-3 text-left backdrop-blur-2xl"
+                        className="fixed left-3 right-3 sm:left-auto sm:right-0 mt-3 sm:w-96 max-w-sm sm:max-w-none bg-white/95 dark:bg-[#121826]/95 border border-slate-200 dark:border-zinc-800 rounded-3xl shadow-2xl z-50 p-4 space-y-3 text-left backdrop-blur-2xl"
                       >
                         <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-zinc-800">
                           <div className="flex items-center gap-2">
@@ -646,13 +646,13 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
               <span>Tenants</span>
             </Link>
             <Link
-              href="/owner/rent"
+              href="/owner/profile"
               className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
-                pathname === '/owner/rent' ? 'text-indigo-600 dark:text-cyan-400 font-black scale-105' : 'text-[#68736E] dark:text-[#9BAAA4]'
+                pathname === '/owner/profile' ? 'text-indigo-600 dark:text-cyan-400 font-black scale-105' : 'text-[#68736E] dark:text-[#9BAAA4]'
               }`}
             >
-              <Receipt className="w-5 h-5" />
-              <span>Billing</span>
+              <User className="w-5 h-5" />
+              <span>Profile</span>
             </Link>
           </nav>
         </div>

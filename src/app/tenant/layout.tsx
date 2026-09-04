@@ -297,8 +297,8 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
            ======================================================== */}
         <div className="flex-1 flex flex-col min-w-0 min-h-screen md:max-h-screen md:overflow-y-auto overflow-x-hidden">
           
-          {/* HEADER TOOLBAR (RESPONSIVE FOR MOBILE) */}
-          <header className="relative z-30 bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-[#DDD8CE] dark:border-[#293832] shadow-sm rounded-[28px] p-2.5 sm:p-4 mb-6 flex items-center justify-between gap-2 sm:gap-4 backdrop-blur-2xl w-full">
+          {/* STICKY TOP HEADER TOOLBAR */}
+          <header className="sticky top-2 sm:top-4 z-40 bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-[#DDD8CE] dark:border-[#293832] shadow-md rounded-[28px] p-2.5 sm:p-4 mb-6 flex items-center justify-between gap-2 sm:gap-4 backdrop-blur-2xl w-full">
             
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <motion.button 
@@ -363,7 +363,7 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
                         initial={{ opacity: 0, scale: 0.9, y: 10 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.9, y: 10 }}
-                        className="absolute right-0 mt-3 w-80 sm:w-96 bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-[#DDD8CE] dark:border-[#293832] rounded-3xl shadow-2xl z-50 p-4 space-y-3 text-left backdrop-blur-2xl"
+                        className="fixed left-3 right-3 sm:left-auto sm:right-0 mt-3 sm:w-96 max-w-sm sm:max-w-none bg-[#FFFDF9]/98 dark:bg-[#141D19]/98 border border-[#DDD8CE] dark:border-[#293832] rounded-3xl shadow-2xl z-50 p-4 space-y-3 text-left backdrop-blur-2xl"
                       >
                         <div className="flex justify-between items-center pb-2 border-b border-[#DDD8CE] dark:border-[#293832]">
                           <div className="flex items-center gap-2">
