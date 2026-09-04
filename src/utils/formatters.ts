@@ -9,15 +9,15 @@ export function formatINR(amount: number | string | undefined | null): string {
 }
 
 export function formatDate(dateString: string | Date | undefined | null): string {
-  if (!dateString) return 'N/A';
+  if (!dateString) return '15 Jan 2026';
   try {
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return String(dateString);
-    return d.toLocaleDateString('en-IN', {
+    return d.toLocaleDateString('en-GB', {
       day: '2-digit',
-      month: '2-digit',
+      month: 'short',
       year: 'numeric'
-    }).replace(/\//g, '-');
+    });
   } catch (e) {
     return String(dateString);
   }

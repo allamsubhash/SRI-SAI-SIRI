@@ -297,8 +297,8 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
            ======================================================== */}
         <div className="flex-1 flex flex-col min-w-0 min-h-screen md:max-h-screen md:overflow-y-auto overflow-x-hidden">
           
-          {/* HEADER TOOLBAR (RESPONSIVE FOR MOBILE - 0 OVERFLOW) */}
-          <header className="relative z-30 bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-[#DDD8CE] dark:border-[#293832] shadow-sm rounded-[28px] p-2.5 sm:p-4 mb-6 flex items-center justify-between gap-2 sm:gap-4 backdrop-blur-2xl w-full max-w-full overflow-hidden">
+          {/* HEADER TOOLBAR (RESPONSIVE FOR MOBILE) */}
+          <header className="relative z-30 bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-[#DDD8CE] dark:border-[#293832] shadow-sm rounded-[28px] p-2.5 sm:p-4 mb-6 flex items-center justify-between gap-2 sm:gap-4 backdrop-blur-2xl w-full">
             
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <motion.button 
@@ -466,13 +466,53 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
           </header>
 
           {/* PAGE CONTENT WORKSPACE */}
-          <main className="flex-1 pb-6">
+          <main className="flex-1 pb-20 md:pb-6">
             {children}
           </main>
 
         </div>
 
       </div>
+
+      {/* 📱 COMPACT 4-ITEM MOBILE BOTTOM NAVIGATION BAR */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border-t border-[#DDD8CE] dark:border-[#293832] backdrop-blur-2xl flex items-center justify-around z-40 px-2 shadow-lg">
+        <Link
+          href="/tenant/dashboard"
+          className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
+            pathname === '/tenant/dashboard' ? 'tenant-text-accent font-black scale-105' : 'text-[#68736E] dark:text-[#9BAAA4]'
+          }`}
+        >
+          <Home className="w-5 h-5" />
+          <span>Home</span>
+        </Link>
+        <Link
+          href="/tenant/billing"
+          className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
+            pathname === '/tenant/billing' ? 'tenant-text-accent font-black scale-105' : 'text-[#68736E] dark:text-[#9BAAA4]'
+          }`}
+        >
+          <Receipt className="w-5 h-5" />
+          <span>Billing</span>
+        </Link>
+        <Link
+          href="/tenant/complaints"
+          className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
+            pathname === '/tenant/complaints' ? 'tenant-text-accent font-black scale-105' : 'text-[#68736E] dark:text-[#9BAAA4]'
+          }`}
+        >
+          <Wrench className="w-5 h-5" />
+          <span>Complaints</span>
+        </Link>
+        <Link
+          href="/tenant/visitors"
+          className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
+            pathname === '/tenant/visitors' ? 'tenant-text-accent font-black scale-105' : 'text-[#68736E] dark:text-[#9BAAA4]'
+          }`}
+        >
+          <UserCheck className="w-5 h-5" />
+          <span>Visitors</span>
+        </Link>
+      </nav>
 
     </div>
   );

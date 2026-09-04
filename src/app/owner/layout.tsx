@@ -434,7 +434,7 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
         <div className="flex-1 flex flex-col min-w-0 min-h-screen md:max-h-screen md:overflow-y-auto overflow-x-hidden">
           
           {/* HEADER TOOLBAR */}
-          <header className="relative z-30 bg-[#FFFDF9] dark:bg-[#141D19] border border-[#DDD8CE] dark:border-[#293832] shadow-sm rounded-[28px] p-2.5 sm:p-4 mb-6 flex items-center justify-between gap-2 sm:gap-4 transition-all w-full max-w-full overflow-hidden">
+          <header className="relative z-30 bg-[#FFFDF9] dark:bg-[#141D19] border border-[#DDD8CE] dark:border-[#293832] shadow-sm rounded-[28px] p-2.5 sm:p-4 mb-6 flex items-center justify-between gap-2 sm:gap-4 transition-all w-full">
             
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <motion.button 
@@ -612,9 +612,49 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
 
           </header>
 
-          <main className="flex-1 pb-6">
+          <main className="flex-1 pb-20 md:pb-6">
             {children}
           </main>
+
+          {/* 📱 COMPACT 4-ITEM MOBILE BOTTOM NAVIGATION BAR */}
+          <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 backdrop-blur-2xl border-t border-[#DDD8CE] dark:border-[#293832] flex items-center justify-around z-40 px-2 shadow-lg">
+            <Link
+              href="/owner/dashboard"
+              className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
+                pathname === '/owner/dashboard' ? 'text-indigo-600 dark:text-cyan-400 font-black scale-105' : 'text-[#68736E] dark:text-[#9BAAA4]'
+              }`}
+            >
+              <Building className="w-5 h-5" />
+              <span>Home</span>
+            </Link>
+            <Link
+              href="/owner/buildings"
+              className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
+                pathname === '/owner/buildings' ? 'text-indigo-600 dark:text-cyan-400 font-black scale-105' : 'text-[#68736E] dark:text-[#9BAAA4]'
+              }`}
+            >
+              <Building className="w-5 h-5" />
+              <span>Rooms</span>
+            </Link>
+            <Link
+              href="/owner/tenants"
+              className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
+                pathname === '/owner/tenants' ? 'text-indigo-600 dark:text-cyan-400 font-black scale-105' : 'text-[#68736E] dark:text-[#9BAAA4]'
+              }`}
+            >
+              <Users className="w-5 h-5" />
+              <span>Tenants</span>
+            </Link>
+            <Link
+              href="/owner/rent"
+              className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
+                pathname === '/owner/rent' ? 'text-indigo-600 dark:text-cyan-400 font-black scale-105' : 'text-[#68736E] dark:text-[#9BAAA4]'
+              }`}
+            >
+              <Receipt className="w-5 h-5" />
+              <span>Billing</span>
+            </Link>
+          </nav>
         </div>
 
         {/* REUSABLE FLOATING RADIAL BUBBLE ACTION MENU SYSTEM */}

@@ -11,13 +11,10 @@ import {
   Bed, 
   Calendar, 
   ShieldCheck, 
-  Lock, 
   LogOut, 
   Sparkles, 
-  CheckCircle2, 
   Receipt,
-  FileText,
-  AlertCircle
+  FileText
 } from 'lucide-react';
 import { formatINR, formatDate } from '@/utils/formatters';
 
@@ -25,13 +22,6 @@ export default function TenantProfilePage() {
   const { user, logout } = useAuth();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-
-  // Change Password state
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [pwdMsg, setPwdMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [pwdSubmitting, setPwdSubmitting] = useState(false);
 
   useEffect(() => {
     fetch('/api/dashboard')
@@ -59,45 +49,11 @@ export default function TenantProfilePage() {
   const phone = currentTenant?.phone || currentTenant?.profile?.phone || '+91 98765 43210';
   const emergencyPhone = currentTenant?.emergencyPhone || currentTenant?.profile?.emergencyPhone || '+91 98765 00000';
 
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPassword !== confirmPassword) {
-      setPwdMsg({ type: 'error', text: 'New passwords do not match!' });
-      return;
-    }
-    setPwdSubmitting(true);
-    setPwdMsg(null);
-
-    try {
-      const res = await fetch('/api/auth/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentPassword, newPassword })
-      });
-      const result = await res.json();
-      if (res.ok) {
-        setPwdMsg({ type: 'success', text: 'Password updated successfully!' });
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
-      } else {
-        setPwdMsg({ type: 'error', text: result.error || 'Failed to update password' });
-      }
-    } catch (e: any) {
-      setPwdMsg({ type: 'error', text: e.message || 'An error occurred' });
-    } finally {
-      setPwdSubmitting(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="space-y-6 animate-pulse text-left">
         <div className="h-44 bg-[#FFFDF9]/80 dark:bg-[#141D19]/80 rounded-[32px] border border-white/80 dark:border-[#293832]" />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="h-64 bg-[#FFFDF9]/80 dark:bg-[#141D19]/80 rounded-[28px]" />
-          <div className="h-64 bg-[#FFFDF9]/80 dark:bg-[#141D19]/80 rounded-[28px]" />
-        </div>
+        <div className="h-64 bg-[#FFFDF9]/80 dark:bg-[#141D19]/80 rounded-[28px]" />
       </div>
     );
   }
@@ -148,129 +104,54 @@ export default function TenantProfilePage() {
         </button>
       </motion.div>
 
-      {/* 📊 2. PROFILE & LEASE DETAILS GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        
-        {/* Room Lease Specifications */}
-        <motion.div 
-          whileHover={{ y: -2 }}
-          className="p-6 rounded-[32px] bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-white/80 dark:border-[#293832] shadow-xl backdrop-blur-2xl space-y-4"
-        >
-          <div className="pb-3 border-b border-[#DDD8CE] dark:border-[#293832] flex justify-between items-center">
-            <div>
-              <h3 className="font-black text-base text-[#1C2522] dark:text-[#F2F5F2] flex items-center gap-2">
-                <Building className="w-4 h-4 tenant-text-accent" />
-                Room Lease Specifications
-              </h3>
-              <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] font-medium mt-0.5">Authoritative room & stay data</p>
-            </div>
-            <span className="text-[10px] font-black px-3 py-1 rounded-full tenant-bg-soft tenant-text-accent border tenant-border-accent">
-              ACTIVE LEASE
-            </span>
-          </div>
-
-          <div className="space-y-3 text-xs font-bold">
-            <div className="flex justify-between p-3.5 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832]">
-              <span className="text-[#68736E] dark:text-[#9BAAA4]">Hostel Trade Name</span>
-              <span className="text-[#1C2522] dark:text-[#F2F5F2]">Sri Sai Siri Boys Hostel</span>
-            </div>
-
-            <div className="flex justify-between p-3.5 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832]">
-              <span className="text-[#68736E] dark:text-[#9BAAA4]">Assigned Room Number</span>
-              <span className="tenant-text-accent font-black">{roomNumber}</span>
-            </div>
-
-            <div className="flex justify-between p-3.5 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832]">
-              <span className="text-[#68736E] dark:text-[#9BAAA4]">Assigned Bed Spot</span>
-              <span className="tenant-text-accent font-black">Bed {bedSpot.toString().split('-').pop()}</span>
-            </div>
-
-            <div className="flex justify-between p-3.5 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832]">
-              <span className="text-[#68736E] dark:text-[#9BAAA4]">Move-in Date</span>
-              <span className="text-[#1C2522] dark:text-[#F2F5F2]">{moveInDate}</span>
-            </div>
-
-            <div className="flex justify-between p-3.5 rounded-2xl tenant-bg-soft border tenant-border-accent">
-              <span className="tenant-text-accent">Monthly Rent Tariff</span>
-              <span className="tenant-text-accent font-black text-sm">{formatINR(rentAmount)} / mo</span>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Account Security & Password Change */}
-        <motion.div 
-          whileHover={{ y: -2 }}
-          className="p-6 rounded-[32px] bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-white/80 dark:border-[#293832] shadow-xl backdrop-blur-2xl space-y-4"
-        >
-          <div className="pb-3 border-b border-[#DDD8CE] dark:border-[#293832]">
-            <h3 className="font-black text-base text-[#1C2522] dark:text-[#F2F5F2] flex items-center gap-2">
-              <Lock className="w-4 h-4 tenant-text-accent" />
-              Account Security & Password
+      {/* 📊 2. ROOM LEASE SPECIFICATIONS CARD */}
+      <motion.div 
+        whileHover={{ y: -2 }}
+        className="p-6 sm:p-8 rounded-[32px] bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-white/80 dark:border-[#293832] shadow-xl backdrop-blur-2xl space-y-4"
+      >
+        <div className="pb-4 border-b border-[#DDD8CE] dark:border-[#293832] flex justify-between items-center">
+          <div>
+            <h3 className="font-black text-lg text-[#1C2522] dark:text-[#F2F5F2] flex items-center gap-2">
+              <Building className="w-5 h-5 tenant-text-accent" />
+              Room Lease Specifications
             </h3>
-            <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] font-medium mt-0.5">Update your resident portal passkey</p>
+            <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] font-medium mt-0.5">Authoritative resident room & tariff data</p>
+          </div>
+          <span className="text-[10px] font-black px-3.5 py-1 rounded-full tenant-bg-soft tenant-text-accent border tenant-border-accent">
+            ACTIVE LEASE
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-bold pt-2">
+          <div className="p-4 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832] space-y-1">
+            <span className="text-[#68736E] dark:text-[#9BAAA4] text-[10px] uppercase font-black tracking-wider block">Hostel Trade Name</span>
+            <span className="text-[#1C2522] dark:text-[#F2F5F2] text-sm font-black">Sri Sai Siri Boys Hostel</span>
           </div>
 
-          <form onSubmit={handleChangePassword} className="space-y-3">
-            {pwdMsg && (
-              <div className={`p-3 rounded-2xl text-xs font-bold border flex items-center gap-2 ${
-                pwdMsg.type === 'success' 
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
-                  : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-              }`}>
-                {pwdMsg.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
-                <span>{pwdMsg.text}</span>
-              </div>
-            )}
+          <div className="p-4 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832] space-y-1">
+            <span className="text-[#68736E] dark:text-[#9BAAA4] text-[10px] uppercase font-black tracking-wider block">Assigned Room Number</span>
+            <span className="tenant-text-accent text-sm font-black">{roomNumber}</span>
+          </div>
 
+          <div className="p-4 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832] space-y-1">
+            <span className="text-[#68736E] dark:text-[#9BAAA4] text-[10px] uppercase font-black tracking-wider block">Assigned Bed Spot</span>
+            <span className="tenant-text-accent text-sm font-black">Bed {bedSpot.toString().split('-').pop()}</span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832] space-y-1">
+            <span className="text-[#68736E] dark:text-[#9BAAA4] text-[10px] uppercase font-black tracking-wider block">Move-in Date</span>
+            <span className="text-[#1C2522] dark:text-[#F2F5F2] text-sm font-black">{moveInDate}</span>
+          </div>
+
+          <div className="sm:col-span-2 p-5 rounded-2xl tenant-bg-soft border tenant-border-accent flex justify-between items-center">
             <div>
-              <label className="text-[10px] font-black uppercase text-[#68736E] dark:text-[#9BAAA4] block mb-1">Current Password</label>
-              <input
-                type="password"
-                required
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="••••••••••••"
-                className="w-full px-4 py-2.5 rounded-2xl bg-white dark:bg-[#101916] border border-[#DDD8CE] dark:border-[#30423A] text-xs font-bold text-[#1C2522] dark:text-[#F2F5F2]"
-              />
+              <span className="text-[10px] font-black tenant-text-accent uppercase tracking-wider block">Monthly Rent Tariff</span>
+              <span className="text-[#68736E] dark:text-[#9BAAA4] text-xs font-medium">Verified fixed monthly fee</span>
             </div>
-
-            <div>
-              <label className="text-[10px] font-black uppercase text-[#68736E] dark:text-[#9BAAA4] block mb-1">New Password</label>
-              <input
-                type="password"
-                required
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="••••••••••••"
-                className="w-full px-4 py-2.5 rounded-2xl bg-white dark:bg-[#101916] border border-[#DDD8CE] dark:border-[#30423A] text-xs font-bold text-[#1C2522] dark:text-[#F2F5F2]"
-              />
-            </div>
-
-            <div>
-              <label className="text-[10px] font-black uppercase text-[#68736E] dark:text-[#9BAAA4] block mb-1">Confirm New Password</label>
-              <input
-                type="password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="••••••••••••"
-                className="w-full px-4 py-2.5 rounded-2xl bg-white dark:bg-[#101916] border border-[#DDD8CE] dark:border-[#30423A] text-xs font-bold text-[#1C2522] dark:text-[#F2F5F2]"
-              />
-            </div>
-
-            <div className="pt-2">
-              <button
-                type="submit"
-                disabled={pwdSubmitting}
-                className="w-full py-3 rounded-2xl tenant-bg-accent font-black text-xs uppercase tracking-wider shadow-lg hover:scale-[1.01] transition-all cursor-pointer disabled:opacity-50"
-              >
-                {pwdSubmitting ? 'Updating...' : 'Update Password ✓'}
-              </button>
-            </div>
-          </form>
-        </motion.div>
-
-      </div>
+            <span className="tenant-text-accent font-black text-xl">{formatINR(rentAmount)} / mo</span>
+          </div>
+        </div>
+      </motion.div>
 
     </motion.div>
   );

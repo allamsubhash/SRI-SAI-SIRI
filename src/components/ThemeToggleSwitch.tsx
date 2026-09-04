@@ -11,16 +11,28 @@ interface ThemeToggleSwitchProps {
 
 export default function ThemeToggleSwitch({ className = '' }: ThemeToggleSwitchProps) {
   const { preferences, setThemeMode } = useTenantAppearance();
-  const [theme, setTheme] = useState<'light' | 'dark'>(preferences.themeMode || 'light');
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    setTheme(preferences.themeMode || 'light');
+    const hasDarkClass = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+    const localTheme = typeof localStorage !== 'undefined' ? localStorage.getItem('theme') : null;
+    const activeMode = (localTheme === 'dark' || hasDarkClass || preferences.themeMode === 'dark') ? 'dark' : (preferences.themeMode || 'light');
+    setTheme(activeMode as 'light' | 'dark');
   }, [preferences.themeMode]);
 
   const applyTheme = async (mode: 'light' | 'dark') => {
     setTheme(mode);
+    if (typeof document !== 'undefined') {
+      if (mode === 'dark') {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
+      }
+    }
     try {
       await setThemeMode(mode);
     } catch (e) {
@@ -42,7 +54,7 @@ export default function ThemeToggleSwitch({ className = '' }: ThemeToggleSwitchP
       whileTap={{ scale: 0.96 }}
       className={`relative flex items-center p-1 rounded-full bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] shadow-inner select-none shrink-0 cursor-pointer ${className}`}
     >
-      {/* Sliding Active Pill Background - Dynamic Tenant Accent */}
+      {/* Sliding Active Pill Background */}
       <motion.div
         layout
         transition={{ type: "spring", stiffness: 450, damping: 30 }}
