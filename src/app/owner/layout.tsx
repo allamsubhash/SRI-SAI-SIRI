@@ -434,7 +434,7 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
         <div className="flex-1 flex flex-col min-w-0 min-h-screen md:max-h-screen md:overflow-y-auto overflow-x-hidden">
           
           {/* STICKY TOP HEADER TOOLBAR */}
-          <header className="sticky top-2 sm:top-4 z-40 bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-[#DDD8CE] dark:border-[#293832] shadow-md rounded-[28px] p-2.5 sm:p-4 mb-6 flex items-center justify-between gap-2 sm:gap-4 backdrop-blur-2xl w-full">
+          <header className="sticky top-0 z-40 bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border-b border-[#DDD8CE] dark:border-[#293832] shadow-md p-2.5 sm:p-4 mb-6 flex items-center justify-between gap-2 sm:gap-4 backdrop-blur-2xl w-full">
             
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <motion.button 

@@ -20,34 +20,37 @@ import { formatINR, formatDate } from '@/utils/formatters';
 
 export default function TenantProfilePage() {
   const { user, logout } = useAuth();
-  const [data, setData] = useState<any>(null);
+  const [currentTenant, setCurrentTenant] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/dashboard')
-      .then(res => res.json())
-      .then(dashData => {
-        setData(dashData);
+    Promise.all([
+      fetch('/api/tenants/me').then(res => res.ok ? res.json() : null),
+      fetch('/api/dashboard').then(res => res.ok ? res.json() : null)
+    ])
+      .then(([meRes, dashData]) => {
+        let activeTenant = meRes?.tenant;
+        if (!activeTenant && dashData?.tenants) {
+          activeTenant = dashData.tenants.find((t: any) => 
+            (user?.id && (t.userId === user.id || t.id === user.id)) ||
+            (user?.email && t.email?.toLowerCase() === user.email.toLowerCase()) || 
+            (user?.name && t.name?.toLowerCase() === user.name.toLowerCase())
+          );
+        }
+        if (activeTenant) {
+          console.log("TENANT RAW DATA:", activeTenant);
+          console.log("TENANT PHONE:", activeTenant.phone);
+          console.log("TENANT MOVE-IN:", activeTenant.moveInDate);
+          console.log("TENANT ID:", activeTenant.id);
+        }
+        setCurrentTenant(activeTenant);
         setLoading(false);
       })
       .catch(err => {
         console.error(err);
         setLoading(false);
       });
-  }, []);
-
-  const currentTenant = data?.tenants?.find((t: any) => 
-    (user?.id && (t.userId === user.id || t.id === user.id)) ||
-    (user?.email && t.email?.toLowerCase() === user.email.toLowerCase()) || 
-    (user?.name && t.name?.toLowerCase() === user.name.toLowerCase())
-  );
-
-  if (currentTenant) {
-    console.log("TENANT RAW DATA:", currentTenant);
-    console.log("TENANT PHONE:", currentTenant.phone);
-    console.log("TENANT MOVE-IN:", currentTenant.moveInDate);
-    console.log("TENANT ID:", currentTenant.id);
-  }
+  }, [user]);
 
   const roomNumber = currentTenant?.roomNumber || 'A-101';
   const bedSpot = currentTenant?.bedNumber || 'Spot A';

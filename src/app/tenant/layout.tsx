@@ -26,6 +26,7 @@ import ThemeToggleSwitch from '@/components/ThemeToggleSwitch';
 import { TenantAppearanceProvider } from '@/context/TenantAppearanceContext';
 import TenantAppearanceSettings from '@/components/TenantAppearanceSettings';
 import { ToastProvider } from '@/components/ToastProvider';
+import { formatDate } from '@/utils/formatters';
 
 interface TenantLayoutProps {
   children: React.ReactNode;
@@ -84,9 +85,20 @@ function TenantLayoutContent({ children }: TenantLayoutProps) {
       .catch(err => console.error(err));
   };
 
+  const [tenantProfile, setTenantProfile] = useState<any>(null);
+
   useEffect(() => {
     if (user) {
       fetchTenantNotifications();
+      fetch('/api/tenants/me')
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data?.tenant) {
+            setTenantProfile(data.tenant);
+          }
+        })
+        .catch(err => console.error(err));
+
       const interval = setInterval(fetchTenantNotifications, 8000);
       return () => clearInterval(interval);
     }
@@ -330,7 +342,7 @@ function TenantLayoutContent({ children }: TenantLayoutProps) {
         <div className="flex-1 flex flex-col min-w-0 min-h-screen md:max-h-screen md:overflow-y-auto overflow-x-hidden">
           
           {/* STICKY TOP HEADER TOOLBAR */}
-          <header className="sticky top-2 sm:top-4 z-40 bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-[#DDD8CE] dark:border-[#293832] shadow-md rounded-[28px] p-2.5 sm:p-4 mb-6 flex items-center justify-between gap-2 sm:gap-4 backdrop-blur-2xl w-full">
+          <header className="sticky top-0 z-40 bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border-b border-[#DDD8CE] dark:border-[#293832] shadow-md p-2.5 sm:p-4 mb-6 flex items-center justify-between gap-2 sm:gap-4 backdrop-blur-2xl w-full">
             
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <motion.button 
@@ -594,11 +606,11 @@ function TenantLayoutContent({ children }: TenantLayoutProps) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <h4 className="font-black text-base text-[#1C2522] dark:text-[#F2F5F2] truncate">
-                    {user?.name || 'Rohan Verma'}
+                    {user?.name || tenantProfile?.name || 'Resident Tenant'}
                   </h4>
                   <div className="flex flex-wrap items-center gap-1.5 mt-1 text-xs">
                     <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold border border-emerald-500/20">
-                      Room A-101 • Bed A
+                      {tenantProfile ? `Room ${tenantProfile.roomNumber} • Bed ${tenantProfile.bedNumber}` : 'Room A-101 • Bed A'}
                     </span>
                   </div>
                 </div>
@@ -608,11 +620,11 @@ function TenantLayoutContent({ children }: TenantLayoutProps) {
               <div className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] space-y-2.5 text-xs">
                 <div className="flex justify-between items-center text-[#68736E] dark:text-[#9BAAA4]">
                   <span className="font-bold">Move-In Date</span>
-                  <span className="font-black text-[#1C2522] dark:text-[#F2F5F2]">15 Jan 2026</span>
+                  <span className="font-black text-[#1C2522] dark:text-[#F2F5F2]">{tenantProfile?.moveInDate ? formatDate(tenantProfile.moveInDate) : '15 Jan 2026'}</span>
                 </div>
                 <div className="flex justify-between items-center text-[#68736E] dark:text-[#9BAAA4]">
                   <span className="font-bold">Contact Phone</span>
-                  <span className="font-bold text-[#1C2522] dark:text-[#F2F5F2]">+91 98765 43210</span>
+                  <span className="font-bold text-[#1C2522] dark:text-[#F2F5F2]">{tenantProfile?.phone || '+91 98765 43210'}</span>
                 </div>
                 <div className="flex justify-between items-center text-[#68736E] dark:text-[#9BAAA4]">
                   <span className="font-bold">Payment Status</span>
