@@ -80,8 +80,9 @@ export async function GET(request: Request) {
       });
 
       const dbTenant = tenants.find(t => 
-        (t.profile?.firstName && currentUser.name && currentUser.name.toLowerCase().includes(t.profile.firstName.toLowerCase())) ||
-        (t.id === currentUser.userId)
+        (t.profile?.userId === currentUser.userId) ||
+        (t.id === currentUser.userId) ||
+        (t.profile?.firstName && currentUser.name && currentUser.name.toLowerCase().includes(t.profile.firstName.toLowerCase()))
       ) || tenants[0];
 
       if (dbTenant) {
@@ -102,13 +103,14 @@ export async function GET(request: Request) {
           nextDueDate = formatDate(unpaidInvoices[0].dueDate);
         }
 
+        const moveInVal = dbTenant.moveInDate || dbTenant.profile?.moveInDate;
         tenantMetrics = {
           roomNumber: assignedRoom ? (assignedRoom.number.startsWith('Room') ? assignedRoom.number : `Room ${assignedRoom.number}`) : 'A-101',
           bedSpot: assignedBed ? assignedBed.number : 'A',
           monthlyRent: financialSummary.monthlyRent || 6500,
           nextPaymentDate: nextDueDate,
           accountStatus: statusText,
-          joiningDate: formatDate(dbTenant.profile?.moveInDate || dbTenant.createdAt) || '15 Jan 2026',
+          joiningDate: moveInVal ? formatDate(moveInVal) : '15 Jan 2026',
           hasPending,
           hasOverdue
         };

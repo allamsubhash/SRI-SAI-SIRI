@@ -107,11 +107,18 @@ export default function TenantDashboard() {
 
   const currentTenant = useMemo(() => {
     if (!data?.tenants) return null;
-    return data.tenants.find((t: any) => 
+    const found = data.tenants.find((t: any) => 
+      (user?.id && (t.userId === user.id || t.id === user.id)) ||
       (user?.email && t.email?.toLowerCase() === user.email.toLowerCase()) || 
-      (user?.name && t.name?.toLowerCase() === user.name.toLowerCase()) ||
-      t.id === user?.id
+      (user?.name && t.name?.toLowerCase() === user.name.toLowerCase())
     );
+    if (found) {
+      console.log("TENANT RAW DATA:", found);
+      console.log("TENANT PHONE:", found.phone);
+      console.log("TENANT MOVE-IN:", found.moveInDate);
+      console.log("TENANT ID:", found.id);
+    }
+    return found;
   }, [data, user]);
 
   const normalizeRoom = (r?: string) => (r || '').replace(/^room\s*/i, '').trim().toLowerCase();
@@ -128,7 +135,7 @@ export default function TenantDashboard() {
     return data.tenants.filter((t: any) => {
       const isSameRoom = normalizeRoom(t.roomNumber) === targetRoomClean && targetRoomClean.length > 0;
       const isSelf = 
-        (currentTenant && t.id === currentTenant.id) ||
+        (currentTenant && (t.id === currentTenant.id || t.userId === currentTenant.userId)) ||
         (user?.email && t.email?.toLowerCase() === user.email.toLowerCase()) ||
         (user?.name && t.name?.toLowerCase() === user.name.toLowerCase());
       const isActive = t.status === 'ACTIVE' || !t.status;

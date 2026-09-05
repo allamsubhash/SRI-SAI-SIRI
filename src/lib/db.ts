@@ -307,6 +307,66 @@ export const dbService = {
   },
 
   // --- TENANTS ---
+  async getTenantByUserId(userId: string) {
+    if (!userId) return null;
+    try {
+      const dbTenant = await prisma.tenant.findFirst({
+        where: {
+          profile: {
+            userId: userId
+          }
+        },
+        include: {
+          profile: {
+            include: {
+              user: true
+            }
+          },
+          beds: true
+        }
+      });
+
+      if (dbTenant) {
+        const assignedBed = dbTenant.beds && dbTenant.beds.length > 0 ? dbTenant.beds[0] : null;
+        const formattedDate = dbTenant.moveInDate
+          ? dbTenant.moveInDate.toISOString().split('T')[0]
+          : (dbTenant.profile.moveInDate ? dbTenant.profile.moveInDate.toISOString().split('T')[0] : '2026-01-15');
+
+        return {
+          id: dbTenant.id,
+          tenantId: dbTenant.id,
+          userId: dbTenant.profile.userId,
+          name: `${dbTenant.profile.firstName} ${dbTenant.profile.lastName}`.trim(),
+          email: dbTenant.profile.user.email,
+          phone: dbTenant.profile.phone,
+          roomNumber: dbTenant.roomNumber || 'N/A',
+          bedNumber: assignedBed ? assignedBed.number : (dbTenant.bedNumber || 'N/A'),
+          rentAmount: dbTenant.rentAmount || 8500,
+          status: dbTenant.status as any,
+          moveInDate: formattedDate,
+          joiningDate: formattedDate,
+          gender: dbTenant.profile.gender || 'Male',
+          aadhaar: dbTenant.profile.aadhaar || '',
+          address: dbTenant.profile.address || '',
+          emergencyName: dbTenant.profile.emergencyContactName || '',
+          emergencyPhone: dbTenant.profile.emergencyContactPhone || '',
+          guardianName: dbTenant.profile.guardianName || '',
+          guardianPhone: dbTenant.profile.guardianPhone || '',
+          occupation: dbTenant.profile.occupation || 'Student',
+          medicalNotes: dbTenant.medicalNotes || '',
+          agreementUrl: dbTenant.agreementUrl || '',
+          photoUrl: dbTenant.profile.photoUrl || ''
+        };
+      }
+    } catch (e) {
+      logDebug('getTenantByUserId fallback to mockTenants:', e);
+    }
+
+    // Fallback search in mockTenants
+    const mockT = mockTenants.find(t => t.userId === userId || t.id === userId);
+    return mockT || null;
+  },
+
   async getTenants() {
     try {
       const dbTenants = await prisma.tenant.findMany({
@@ -324,8 +384,13 @@ export const dbService = {
       if (dbTenants && dbTenants.length > 0) {
         return dbTenants.map(t => {
           const assignedBed = t.beds && t.beds.length > 0 ? t.beds[0] : null;
+          const formattedDate = t.moveInDate
+            ? t.moveInDate.toISOString().split('T')[0]
+            : (t.profile.moveInDate ? t.profile.moveInDate.toISOString().split('T')[0] : '2026-01-15');
+
           return {
             id: t.id,
+            tenantId: t.id,
             userId: t.profile.userId,
             name: `${t.profile.firstName} ${t.profile.lastName}`.trim(),
             email: t.profile.user.email,
@@ -334,7 +399,8 @@ export const dbService = {
             bedNumber: assignedBed ? assignedBed.number : (t.bedNumber || 'N/A'),
             rentAmount: t.rentAmount || 8500,
             status: t.status as any,
-            moveInDate: t.moveInDate ? t.moveInDate.toISOString().split('T')[0] : (t.profile.moveInDate ? t.profile.moveInDate.toISOString().split('T')[0] : '2026-01-15'),
+            moveInDate: formattedDate,
+            joiningDate: formattedDate,
             gender: t.profile.gender || 'Male',
             aadhaar: t.profile.aadhaar || '',
             address: t.profile.address || '',
@@ -577,7 +643,8 @@ export const dbService = {
         data: {
           roomNumber: data.roomNumber,
           bedNumber: data.bedNumber,
-          rentAmount: data.rentAmount
+          rentAmount: data.rentAmount,
+          moveInDate: data.moveInDate ? new Date(data.moveInDate) : undefined
         }
       });
     });
@@ -1628,7 +1695,8 @@ export const dbService = {
             }))
           }))
         }))
-      }))
+      })),
+      tenants: await this.getTenants()
     };
   }
 };

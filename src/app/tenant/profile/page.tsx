@@ -37,17 +37,24 @@ export default function TenantProfilePage() {
   }, []);
 
   const currentTenant = data?.tenants?.find((t: any) => 
+    (user?.id && (t.userId === user.id || t.id === user.id)) ||
     (user?.email && t.email?.toLowerCase() === user.email.toLowerCase()) || 
-    (user?.name && t.name?.toLowerCase() === user.name.toLowerCase()) ||
-    t.id === user?.id
+    (user?.name && t.name?.toLowerCase() === user.name.toLowerCase())
   );
+
+  if (currentTenant) {
+    console.log("TENANT RAW DATA:", currentTenant);
+    console.log("TENANT PHONE:", currentTenant.phone);
+    console.log("TENANT MOVE-IN:", currentTenant.moveInDate);
+    console.log("TENANT ID:", currentTenant.id);
+  }
 
   const roomNumber = currentTenant?.roomNumber || 'A-101';
   const bedSpot = currentTenant?.bedNumber || 'Spot A';
   const moveInDate = currentTenant?.moveInDate ? formatDate(currentTenant.moveInDate) : '15 Jan 2026';
   const rentAmount = currentTenant?.rentAmount || 6500;
-  const phone = currentTenant?.phone || currentTenant?.profile?.phone || '+91 98765 43210';
-  const emergencyPhone = currentTenant?.emergencyPhone || currentTenant?.profile?.emergencyPhone || '+91 98765 00000';
+  const phone = currentTenant?.phone || '+91 98765 43210';
+  const emergencyPhone = currentTenant?.emergencyPhone || '+91 98765 00000';
 
   if (loading) {
     return (

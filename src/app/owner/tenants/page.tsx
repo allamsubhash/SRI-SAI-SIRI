@@ -96,8 +96,17 @@ export default function TenantsManagement() {
       fetch('/api/buildings').then(res => res.json())
     ])
       .then(([tenantsData, buildingsData]) => {
-        setTenants(Array.isArray(tenantsData) ? tenantsData : []);
+        const tList = Array.isArray(tenantsData) ? tenantsData : [];
+        setTenants(tList);
         setBuildings(Array.isArray(buildingsData) ? buildingsData : []);
+        if (tList.length > 0) {
+          tList.forEach((tenant: any) => {
+            console.log("OWNER TENANT RAW DATA:", tenant);
+            console.log("OWNER PHONE:", tenant.phone);
+            console.log("OWNER MOVE-IN:", tenant.moveInDate);
+            console.log("OWNER TENANT ID:", tenant.id);
+          });
+        }
         setLoading(false);
       })
       .catch(err => {

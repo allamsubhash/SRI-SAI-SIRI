@@ -161,16 +161,63 @@ async function runMasterAuditTestSuite() {
     );
     assert(!roommatesPostVacate.some(t => t.id === tenantA.id), "Vacated Tenant Disappears from Roommate List", "Tenant A no longer listed as active roommate");
 
+    // -------------------------------------------------------------------
+    // TEST 6: Strict Single Source of Truth & ID Alignment (User Test Case)
+    // -------------------------------------------------------------------
+    console.log("\n--- [TEST GROUP 6] Strict Database Phone & Move-in Date Single Source ---");
+    const testNewTenantName = 'TEST TENANT';
+    const testNewPhone = '9876543210';
+    const testNewMoveIn = '2026-09-01';
+    const testNewEmail = `test_tenant_${Date.now()}@srisaisiri.com`;
+
+    const registeredTestTenant = await dbService.createTenant({
+      name: testNewTenantName,
+      email: testNewEmail,
+      phone: testNewPhone,
+      moveInDate: testNewMoveIn,
+      roomNumber: 'TEST ROOM',
+      bedNumber: 'TEST BED',
+      rentAmount: 6500
+    });
+
+    const ownerList = await dbService.getTenants();
+    const ownerTenantObj = ownerList.find(t => t.id === registeredTestTenant.id);
+
+    const tenantPortalObj = await dbService.getTenantByUserId(registeredTestTenant.userId);
+
+    assert(Boolean(ownerTenantObj), "Tenant Visible in Owner Portal Data", `ID: ${registeredTestTenant.id}`);
+    assert(Boolean(tenantPortalObj), "Tenant Resolved via User ID in Tenant Portal", `User ID: ${registeredTestTenant.userId}`);
+
+    if (ownerTenantObj && tenantPortalObj) {
+      assert(
+        ownerTenantObj.phone === testNewPhone && tenantPortalObj.phone === testNewPhone,
+        "Database Phone = Owner Phone = Tenant Phone",
+        `Owner: ${ownerTenantObj.phone}, Tenant: ${tenantPortalObj.phone}`
+      );
+
+      assert(
+        ownerTenantObj.moveInDate === testNewMoveIn && tenantPortalObj.moveInDate === testNewMoveIn,
+        "Database Move-in Date = Owner Move-in Date = Tenant Move-in Date",
+        `Owner: ${ownerTenantObj.moveInDate}, Tenant: ${tenantPortalObj.moveInDate}`
+      );
+
+      assert(
+        ownerTenantObj.id === tenantPortalObj.id,
+        "Database Tenant ID = Owner Tenant ID = Tenant Portal Tenant ID",
+        `Owner ID: ${ownerTenantObj.id}, Tenant ID: ${tenantPortalObj.id}`
+      );
+    }
+
     // Clean up temporary audit records from database if connected
     try {
       await prisma.tenant.deleteMany({
         where: {
-          id: { in: [createdTenant.id, tenantA.id, tenantB.id] }
+          id: { in: [createdTenant.id, tenantA.id, tenantB.id, registeredTestTenant.id] }
         }
       });
       await prisma.user.deleteMany({
         where: {
-          email: { in: [testEmail, `rm_alpha_${Date.now()}@srisaisiri.com`, `rm_beta_${Date.now()}@srisaisiri.com`] }
+          email: { in: [testEmail, testNewEmail, `rm_alpha_${Date.now()}@srisaisiri.com`, `rm_beta_${Date.now()}@srisaisiri.com`] }
         }
       });
     } catch {
