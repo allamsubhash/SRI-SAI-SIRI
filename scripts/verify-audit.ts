@@ -210,14 +210,17 @@ async function runMasterAuditTestSuite() {
 
     // Clean up temporary audit records from database if connected
     try {
-      await prisma.tenant.deleteMany({
-        where: {
-          id: { in: [createdTenant.id, tenantA.id, tenantB.id, registeredTestTenant.id] }
-        }
-      });
       await prisma.user.deleteMany({
         where: {
-          email: { in: [testEmail, testNewEmail, `rm_alpha_${Date.now()}@srisaisiri.com`, `rm_beta_${Date.now()}@srisaisiri.com`] }
+          OR: [
+            { email: { startsWith: 'audit_' } },
+            { email: { startsWith: 'test_' } },
+            { email: { startsWith: 'testa_' } },
+            { email: { startsWith: 'testb_' } },
+            { email: { startsWith: 'testc_' } },
+            { email: { startsWith: 'rm_alpha_' } },
+            { email: { startsWith: 'rm_beta_' } }
+          ]
         }
       });
     } catch {
@@ -228,7 +231,22 @@ async function runMasterAuditTestSuite() {
     console.error(" ❌ EXCEPTION IN AUDIT SUITE:", error);
     assert(false, "Master Audit Test Suite Execution", error.message);
   } finally {
-    try { await prisma.$disconnect(); } catch {}
+    try {
+      await prisma.user.deleteMany({
+        where: {
+          OR: [
+            { email: { startsWith: 'audit_' } },
+            { email: { startsWith: 'test_' } },
+            { email: { startsWith: 'testa_' } },
+            { email: { startsWith: 'testb_' } },
+            { email: { startsWith: 'testc_' } },
+            { email: { startsWith: 'rm_alpha_' } },
+            { email: { startsWith: 'rm_beta_' } }
+          ]
+        }
+      });
+      await prisma.$disconnect(); 
+    } catch {}
   }
 
   console.log("\n==========================================================");
