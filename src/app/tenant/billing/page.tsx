@@ -114,6 +114,8 @@ export default function TenantBilling() {
   useEffect(() => {
     if (user) {
       loadData();
+      const interval = setInterval(loadData, 5000);
+      return () => clearInterval(interval);
     }
   }, [user]);
 
@@ -381,9 +383,16 @@ export default function TenantBilling() {
                         ? 'tenant-bg-soft tenant-text-accent border tenant-border-accent'
                         : pay.status === 'REJECTED'
                         ? 'bg-rose-50 dark:bg-[#F27676]/15 text-[#C94B4B] dark:text-[#F27676] border-rose-200 dark:border-[#F27676]/30'
+                        : pay.status === 'PENDING_VERIFICATION' || pay.status === 'VERIFICATION'
+                        ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800'
+                        : pay.status === 'OVERDUE'
+                        ? 'bg-rose-50 dark:bg-[#F27676]/15 text-[#C94B4B] dark:text-[#F27676] border-rose-200 dark:border-[#F27676]/30'
                         : 'bg-amber-50 dark:bg-[#F2C15D]/15 text-[#B7791F] dark:text-[#F2C15D] border-amber-200 dark:border-[#F2C15D]/30'
                     }`}>
-                      {pay.status === 'APPROVED' ? 'APPROVED ✓' : pay.status === 'REJECTED' ? 'REJECTED ❌' : 'PENDING ⏳'}
+                      {pay.status === 'APPROVED' || pay.status === 'PAID' ? 'PAID ✓' :
+                       pay.status === 'REJECTED' ? 'REJECTED ❌' :
+                       pay.status === 'PENDING_VERIFICATION' || pay.status === 'VERIFICATION' ? 'VERIFICATION 🔍' :
+                       pay.status === 'OVERDUE' ? 'OVERDUE ⚠️' : 'PENDING ⏳'}
                     </span>
                   </div>
                   <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] font-medium">

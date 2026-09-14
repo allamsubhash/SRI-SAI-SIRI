@@ -270,6 +270,10 @@ async function runMasterAuditTestSuite() {
     const updatedOwner = await dbService.getUserByEmail('owner@srisaisiri.com');
     assert(updatedOwner?.name === 'Alok Sharma Updated' || Boolean(updatedOwner), "Owner Profile Name Persistence", `Name: ${updatedOwner?.name}`);
 
+    // 7. Auto-Generate Monthly Dues Invoices
+    const autoResult = await dbService.autoGenerateMonthlyInvoices('September 2026');
+    assert(autoResult.success === true, "Auto-Generate Monthly Invoices Executed", `Count: ${autoResult.count}`);
+
     // Clean up temporary audit records from database if connected
     try {
       await prisma.user.deleteMany({

@@ -60,7 +60,18 @@ export default function TenantDashboard() {
 
   const [paying, setPaying] = useState(false);
 
+  const [directTenant, setDirectTenant] = useState<any>(null);
+
   const fetchDashboardData = () => {
+    fetch('/api/tenants/me')
+      .then(res => res.json())
+      .then(tData => {
+        if (tData.tenant || tData.id) {
+          setDirectTenant(tData.tenant || tData);
+        }
+      })
+      .catch(() => {});
+
     Promise.all([
       fetch('/api/dashboard').then(res => res.json()),
       fetch('/api/rent').then(res => res.json()),
@@ -102,29 +113,24 @@ export default function TenantDashboard() {
   useEffect(() => {
     if (user) {
       fetchDashboardData();
+      const interval = setInterval(fetchDashboardData, 5000);
+      return () => clearInterval(interval);
     }
   }, [user]);
 
   const currentTenant = useMemo(() => {
+    if (directTenant) return directTenant;
     if (!data?.tenants) return null;
-    const found = data.tenants.find((t: any) => 
+    return data.tenants.find((t: any) => 
       (user?.id && (t.userId === user.id || t.id === user.id)) ||
-      (user?.email && t.email?.toLowerCase() === user.email.toLowerCase()) || 
-      (user?.name && t.name?.toLowerCase() === user.name.toLowerCase())
-    );
-    if (found) {
-      console.log("TENANT RAW DATA:", found);
-      console.log("TENANT PHONE:", found.phone);
-      console.log("TENANT MOVE-IN:", found.moveInDate);
-      console.log("TENANT ID:", found.id);
-    }
-    return found;
-  }, [data, user]);
+      (user?.email && t.email?.toLowerCase() === user.email.toLowerCase())
+    ) || data.tenants[0];
+  }, [directTenant, data, user]);
 
   const normalizeRoom = (r?: string) => (r || '').replace(/^room\s*/i, '').trim().toLowerCase();
 
   const userRoom = currentTenant?.roomNumber || 'A-101';
-  const userBed = currentTenant?.bedNumber || 'A';
+  const userBed = currentTenant?.bedNumber || 'A-101-A';
   const moveInDate = currentTenant?.moveInDate ? formatDate(currentTenant.moveInDate) : '15 Jan 2026';
   const rentAmount = currentTenant?.rentAmount ? currentTenant.rentAmount : (invoices[0]?.amount || 6500);
 
@@ -136,8 +142,8 @@ export default function TenantDashboard() {
       const isSameRoom = normalizeRoom(t.roomNumber) === targetRoomClean && targetRoomClean.length > 0;
       const isSelf = 
         (currentTenant && (t.id === currentTenant.id || t.userId === currentTenant.userId)) ||
-        (user?.email && t.email?.toLowerCase() === user.email.toLowerCase()) ||
-        (user?.name && t.name?.toLowerCase() === user.name.toLowerCase());
+        (user?.id && (t.userId === user.id || t.id === user.id)) ||
+        (user?.email && t.email?.toLowerCase() === user.email.toLowerCase());
       const isActive = t.status === 'ACTIVE' || !t.status;
       return isActive && isSameRoom && !isSelf;
     });
@@ -247,6 +253,19 @@ export default function TenantDashboard() {
       </div>
     );
   }
+
+  const formatBedSpot = (bed: string, idx: number) => {
+    if (!bed || bed === 'N/A' || bed === 'Assigned') {
+      const letter = String.fromCharCode(65 + idx);
+      return `Bed Spot ${letter}`;
+    }
+    if (bed.includes('-')) {
+      const parts = bed.split('-');
+      const spot = parts[parts.length - 1];
+      return `Bed Spot ${spot}`;
+    }
+    return bed.toLowerCase().startsWith('bed') ? bed : `Bed Spot ${bed}`;
+  };
 
   return (
     <motion.div 
@@ -549,7 +568,7 @@ export default function TenantDashboard() {
                     </div>
                     <div>
                       <h4 className="font-bold text-[#1C2522] dark:text-[#F2F5F2] text-sm">{rm.name}</h4>
-                      <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] font-medium">{rm.occupation || 'Resident'} • Bed {rm.bedNumber || 'Assigned'}</p>
+                      <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] font-medium">{rm.occupation || 'Resident'} • {formatBedSpot(rm.bedNumber, idx)}</p>
                     </div>
                   </div>
                   <span className="text-[10px] px-3.5 py-1 rounded-full tenant-bg-soft tenant-text-accent border tenant-border-accent font-black uppercase tracking-wider">
@@ -775,7 +794,7 @@ export default function TenantDashboard() {
                       </div>
                       <div>
                         <p className="text-[#1C2522] dark:text-[#F2F5F2]">{rm.name}</p>
-                        <p className="text-[10px] text-[#68736E] dark:text-[#9BAAA4]">{rm.occupation || 'Resident'} • Bed {rm.bedNumber || 'Assigned'}</p>
+                        <p className="text-[10px] text-[#68736E] dark:text-[#9BAAA4]">{rm.occupation || 'Resident'} • {formatBedSpot(rm.bedNumber, idx)}</p>
                       </div>
                     </div>
                     <span className="text-[9px] px-2.5 py-0.5 rounded-full tenant-bg-soft tenant-text-accent border tenant-border-accent">Active</span>

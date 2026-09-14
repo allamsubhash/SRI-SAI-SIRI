@@ -197,6 +197,8 @@ export default function RentPage() {
     setSelectedSideInvoice((prev: any) => prev ? { ...prev, status: newStatus, paidAmount: newStatus === 'PAID' ? (prev.amount || 8500) : 0 } : null);
   };
 
+  const [autoGenerating, setAutoGenerating] = useState(false);
+
   const fetchInitialData = () => {
     setLoading(true);
     Promise.all([
@@ -208,7 +210,7 @@ export default function RentPage() {
         const iList = Array.isArray(rentData) ? rentData : [];
         setTenants(tList);
         setInvoices(iList);
-        if (tList.length > 0) {
+        if (tList.length > 0 && !selectedTenantForInvoice) {
           setSelectedTenantForInvoice(tList[0]);
           setIssuerForm(prev => ({
             ...prev,
@@ -226,11 +228,35 @@ export default function RentPage() {
 
   useEffect(() => {
     fetchInitialData();
+    const interval = setInterval(fetchInitialData, 5000);
+    return () => clearInterval(interval);
   }, []);
+
+  const handleAutoGenerateInvoices = async () => {
+    setAutoGenerating(true);
+    try {
+      const res = await fetch('/api/rent/auto-generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ billingMonth: selectedMonthFilter === 'ALL' ? 'September 2026' : selectedMonthFilter })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast('Auto-Invoices Generated', data.message, 'success');
+        fetchInitialData();
+      } else {
+        showToast('Generation Failed', data.error || 'Could not auto-generate invoices', 'danger');
+      }
+    } catch (e: any) {
+      showToast('Error', e.message || 'Network error', 'danger');
+    } finally {
+      setAutoGenerating(false);
+    }
+  };
 
   // Summary Metrics calculations
   const totalBilling = useMemo(() => invoices.reduce((sum, inv) => sum + (inv.amount || 0), 0), [invoices]);
-  const totalCollected = useMemo(() => invoices.reduce((sum, inv) => sum + (inv.paidAmount || (inv.status === 'PAID' ? inv.amount : 0)), 0), [invoices]);
+  const totalCollected = useMemo(() => invoices.reduce((sum, inv) => sum + (inv.paidAmount || (inv.status === 'PAID' || inv.status === 'APPROVED' ? inv.amount : 0)), 0), [invoices]);
   const totalPending = useMemo(() => invoices.reduce((sum, inv) => {
     if (inv.status === 'PENDING_VERIFICATION' || inv.status === 'PENDING') {
       return sum + (inv.amount - (inv.paidAmount || 0));
@@ -247,8 +273,8 @@ export default function RentPage() {
 
   const collectionPercentage = totalBilling > 0 ? Math.round((totalCollected / totalBilling) * 100) : 84;
 
-  const countVerification = invoices.filter(inv => inv.status === 'PENDING_VERIFICATION').length;
-  const countPaid = invoices.filter(inv => inv.status === 'PAID').length;
+  const countVerification = invoices.filter(inv => inv.status === 'PENDING_VERIFICATION' || inv.status === 'VERIFICATION').length;
+  const countPaid = invoices.filter(inv => inv.status === 'PAID' || inv.status === 'APPROVED').length;
   const countPending = invoices.filter(inv => inv.status === 'PENDING').length;
   const countOverdue = invoices.filter(inv => inv.status === 'OVERDUE' || (inv.status === 'PENDING' && new Date(inv.dueDate) < new Date())).length;
 
@@ -263,14 +289,20 @@ export default function RentPage() {
       const isOverdue = r.status === 'OVERDUE' || (r.status === 'PENDING' && new Date(r.dueDate) < new Date());
 
       let matchesTab = true;
-      if (activeTab === 'verification') matchesTab = r.status === 'PENDING_VERIFICATION';
-      else if (activeTab === 'paid') matchesTab = r.status === 'PAID';
+      if (activeTab === 'verification') matchesTab = r.status === 'PENDING_VERIFICATION' || r.status === 'VERIFICATION';
+      else if (activeTab === 'paid') matchesTab = r.status === 'PAID' || r.status === 'APPROVED';
       else if (activeTab === 'pending') matchesTab = r.status === 'PENDING';
       else if (activeTab === 'overdue') matchesTab = isOverdue;
 
-      return matchesSearch && matchesTab;
+      let matchesMonth = true;
+      if (selectedMonthFilter !== 'ALL') {
+        const invMonth = r.billingMonth || (r.dateCreated ? new Date(r.dateCreated).toLocaleString('en-US', { month: 'long', year: 'numeric' }) : '');
+        matchesMonth = invMonth.toLowerCase().includes(selectedMonthFilter.toLowerCase());
+      }
+
+      return matchesSearch && matchesTab && matchesMonth;
     });
-  }, [invoices, searchQuery, activeTab]);
+  }, [invoices, searchQuery, activeTab, selectedMonthFilter]);
 
   const handleSelectResidentForIssuer = (t: any) => {
     setSelectedTenantForInvoice(t);
@@ -459,26 +491,37 @@ export default function RentPage() {
           </p>
         </div>
 
-        {/* Quick Invoice Generator Refined Toggle */}
-        <div className="flex items-center gap-3 bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] rounded-2xl px-4 py-2 shrink-0 z-10">
-          <span className="text-xs font-black text-[#1C2522] dark:text-[#F2F5F2]">Quick Invoice Generator</span>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0 z-10">
           <button
-            type="button"
-            role="switch"
-            aria-checked={showQuickIssuer}
-            onClick={() => setShowQuickIssuer(!showQuickIssuer)}
-            className={`w-11 h-6 rounded-full p-0.5 transition-colors duration-300 cursor-pointer flex items-center shrink-0 border ${
-              showQuickIssuer 
-                ? 'tenant-bg-accent border-transparent' 
-                : 'bg-[#DDD8CE] dark:bg-[#293832] border-transparent'
-            }`}
+            onClick={handleAutoGenerateInvoices}
+            disabled={autoGenerating}
+            className="py-2.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-md transition-all cursor-pointer flex items-center gap-2"
           >
-            <div
-              className={`w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-300 ease-in-out shrink-0 ${
-                showQuickIssuer ? 'translate-x-5' : 'translate-x-0'
-              }`}
-            />
+            <Sparkles className="w-4 h-4" />
+            <span>{autoGenerating ? 'Generating...' : 'Auto-Generate Monthly Invoices'}</span>
           </button>
+
+          {/* Quick Invoice Generator Refined Toggle */}
+          <div className="flex items-center gap-3 bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] rounded-2xl px-4 py-2 shrink-0">
+            <span className="text-xs font-black text-[#1C2522] dark:text-[#F2F5F2]">Quick Generator</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={showQuickIssuer}
+              onClick={() => setShowQuickIssuer(!showQuickIssuer)}
+              className={`w-11 h-6 rounded-full p-0.5 transition-colors duration-300 cursor-pointer flex items-center shrink-0 border ${
+                showQuickIssuer 
+                  ? 'tenant-bg-accent border-transparent' 
+                  : 'bg-[#DDD8CE] dark:bg-[#293832] border-transparent'
+              }`}
+            >
+              <div
+                className={`w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-300 ease-in-out shrink-0 ${
+                  showQuickIssuer ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -786,16 +829,39 @@ export default function RentPage() {
           ))}
         </div>
 
-        {/* Command Search Bar */}
-        <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search invoice, resident, room..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
-          />
+        <div className="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto">
+          {/* Month Filter Dropdown */}
+          <select
+            value={selectedMonthFilter}
+            onChange={(e) => setSelectedMonthFilter(e.target.value)}
+            className="w-full sm:w-auto px-4 py-2.5 rounded-2xl bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 cursor-pointer"
+          >
+            <option value="ALL">🗓️ All Months</option>
+            <option value="January 2026">January 2026</option>
+            <option value="February 2026">February 2026</option>
+            <option value="March 2026">March 2026</option>
+            <option value="April 2026">April 2026</option>
+            <option value="May 2026">May 2026</option>
+            <option value="June 2026">June 2026</option>
+            <option value="July 2026">July 2026</option>
+            <option value="August 2026">August 2026</option>
+            <option value="September 2026">September 2026</option>
+            <option value="October 2026">October 2026</option>
+            <option value="November 2026">November 2026</option>
+            <option value="December 2026">December 2026</option>
+          </select>
+
+          {/* Command Search Bar */}
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search invoice, resident, room..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+            />
+          </div>
         </div>
 
       </div>
