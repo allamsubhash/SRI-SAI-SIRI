@@ -28,7 +28,15 @@ import { useAccent, AccentColor } from '@/context/AccentContext';
 export default function SettingsPage() {
   const { showToast } = useToast();
   const { accent, setAccent, customHex, setCustomHexColor } = useAccent();
-  const [activeTab, setActiveTab] = useState<'property' | 'security' | 'billing' | 'alerts' | 'maintenance'>('property');
+  const [activeTab, setActiveTab] = useState<'property' | 'qr' | 'security' | 'billing' | 'alerts' | 'maintenance'>('property');
+
+  // QR Settings State
+  const [qrForm, setQrForm] = useState({
+    qrCodeUrl: '/uploads/sample_qr.png',
+    upiId: 'srisaisiri@upi',
+    instructions: 'Pay via any UPI app (GPay, PhonePe, Paytm) and enter the 12-digit UTR/Reference number.'
+  });
+  const [qrSaving, setQrSaving] = useState(false);
 
   // Quick Action States
   const [curfewLockdown, setCurfewLockdown] = useState(false);
@@ -82,7 +90,37 @@ export default function SettingsPage() {
         }
       })
       .catch(() => {});
+
+    fetch('/api/settings/qr')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.settings) {
+          setQrForm(data.settings);
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  const handleSaveQRSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setQrSaving(true);
+    try {
+      const res = await fetch('/api/settings/qr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(qrForm)
+      });
+      if (res.ok) {
+        showToast('QR Settings Saved', 'QR code image URL, UPI ID, and payment instructions updated persistently.', 'success');
+      } else {
+        showToast('Save Failed', 'Could not update QR settings.', 'danger');
+      }
+    } catch (err) {
+      showToast('Error', 'Network request failed.', 'danger');
+    } finally {
+      setQrSaving(false);
+    }
+  };
 
   const handleSavePropertySettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -243,6 +281,7 @@ export default function SettingsPage() {
       <div className="bg-[#FDFBF9]/95 dark:bg-[#141D30]/95 p-2 rounded-[28px] border border-white/80 dark:border-white/10 shadow-xl backdrop-blur-2xl flex items-center gap-1.5 overflow-x-auto">
         {[
           { id: 'property', label: 'Property Profile', icon: <Building className="w-4 h-4" /> },
+          { id: 'qr', label: 'QR Payment Settings', icon: <Receipt className="w-4 h-4" /> },
           { id: 'security', label: 'Security & Auth', icon: <Lock className="w-4 h-4" /> },
           { id: 'billing', label: 'Rent Rules', icon: <Receipt className="w-4 h-4" /> },
           { id: 'alerts', label: 'Notices & Alerts', icon: <Bell className="w-4 h-4" /> },
@@ -356,6 +395,71 @@ export default function SettingsPage() {
               >
                 <Save className="w-4 h-4" />
                 <span>Save Property Settings</span>
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* TAB: QR PAYMENT SETTINGS */}
+        {activeTab === 'qr' && (
+          <form onSubmit={handleSaveQRSettings} className="space-y-6 max-w-2xl">
+            <div className="pb-4 border-b border-slate-100 dark:border-zinc-800">
+              <h3 className="font-black text-lg text-slate-900 dark:text-white">
+                Official Payment QR Code & UPI Configuration
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5 font-medium">
+                Set up the QR code image URL, UPI ID, and payment instructions shown to tenants on the Pay Rent page.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-extrabold text-slate-700 dark:text-zinc-300 mb-1">
+                QR Code Image URL / Path
+              </label>
+              <input
+                type="text"
+                value={qrForm.qrCodeUrl}
+                onChange={(e) => setQrForm({ ...qrForm, qrCodeUrl: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white"
+                placeholder="/uploads/sample_qr.png"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-extrabold text-slate-700 dark:text-zinc-300 mb-1">
+                Official UPI ID <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={qrForm.upiId}
+                onChange={(e) => setQrForm({ ...qrForm, upiId: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white font-mono"
+                placeholder="srisaisiri@upi"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-extrabold text-slate-700 dark:text-zinc-300 mb-1">
+                Tenant Payment Instructions
+              </label>
+              <textarea
+                rows={3}
+                value={qrForm.instructions}
+                onChange={(e) => setQrForm({ ...qrForm, instructions: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white"
+                placeholder="Pay via any UPI app (GPay, PhonePe, Paytm) and enter the 12-digit UTR/Reference number."
+              />
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 dark:border-zinc-800 flex justify-end">
+              <button 
+                disabled={qrSaving}
+                type="submit" 
+                className="py-2.5 px-6 rounded-2xl bg-blue-600 text-white font-black text-xs shadow-md hover:scale-105 transition-transform cursor-pointer disabled:opacity-50 flex items-center gap-2"
+              >
+                <Save className="w-4 h-4" />
+                <span>{qrSaving ? 'Saving...' : 'Save QR Payment Settings'}</span>
               </button>
             </div>
           </form>

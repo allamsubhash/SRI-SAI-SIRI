@@ -33,9 +33,23 @@ export default function ProfilePage() {
     confirmPassword: ''
   });
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    showToast('Profile Updated', 'Your user account details have been saved.', 'success');
+    try {
+      const res = await fetch('/api/auth/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: profileData.name })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast('Profile Updated', 'Your owner account profile has been saved permanently.', 'success');
+      } else {
+        showToast('Update Failed', data.error || 'Could not update profile name.', 'danger');
+      }
+    } catch (err) {
+      showToast('Error', 'Network connection failed.', 'danger');
+    }
   };
 
   const handleUpdatePassword = async (e: React.FormEvent) => {

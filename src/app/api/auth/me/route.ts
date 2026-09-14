@@ -20,13 +20,17 @@ export async function GET(request: Request) {
       return NextResponse.json({ authenticated: false, error: 'Invalid or expired token' }, { status: 401 });
     }
 
+    const { dbService } = await import('@/lib/db');
+    const liveUser = await dbService.getUserByEmail(payload.email);
+    const resolvedName = liveUser?.name || payload.name;
+
     return NextResponse.json({
       authenticated: true,
       user: {
         id: payload.userId,
         email: payload.email,
         role: payload.role,
-        name: payload.name
+        name: resolvedName
       }
     });
   } catch (error: any) {

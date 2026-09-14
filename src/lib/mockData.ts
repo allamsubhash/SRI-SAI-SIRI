@@ -668,3 +668,44 @@ export const mockLeaveRequests: MockLeaveRequest[] = [
     dateCreated: '2026-06-30'
   }
 ];
+
+export interface MockPaymentRecord {
+  id: string;
+  tenantId: string;
+  tenantName?: string;
+  invoiceId?: string;
+  amount: number;
+  date: string;
+  type: string;
+  paymentMethod: string;
+  status: 'PAID' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'OVERDUE';
+  referenceId?: string;
+  notes?: string;
+  rejectionReason?: string;
+  createdAt: string;
+}
+
+export const mockPayments: MockPaymentRecord[] = [
+  {
+    id: 'pay-sample-001',
+    tenantId: 't-1',
+    tenantName: 'Rohan Verma',
+    amount: 8500,
+    date: '2026-08-01',
+    type: 'RENT',
+    paymentMethod: 'ONLINE',
+    status: 'APPROVED',
+    referenceId: 'UPI987654321001',
+    notes: 'August 2026 Rent Payment',
+    createdAt: new Date('2026-08-01').toISOString()
+  }
+];
+
+export const mockQRSettings = {
+  qrCodeUrl: '/uploads/sample_qr.png',
+  upiId: 'srisaisiri@upi',
+  instructions: 'Pay via any UPI app (GPay, PhonePe, Paytm, BHIM) and enter the 12-digit UTR transaction reference number.'
+};
+
+export const mockNotificationReads: Set<string> = new Set();
+

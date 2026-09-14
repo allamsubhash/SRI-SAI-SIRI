@@ -113,18 +113,21 @@ model Bed {
 }
 
 model Payment {
-  id            String   @id @default(uuid())
-  tenantId      String
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  invoiceId     String?
-  invoice       Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
-  amount        Float
-  date          DateTime @default(now())
-  type          String   // RENT, DEPOSIT, LATE_FEE, DISCOUNT
-  paymentMethod String   // CASH, ONLINE, CARD
-  status        String   // PAID, PENDING, OVERDUE
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id              String   @id @default(uuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoiceId       String?
+  invoice         Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  amount          Float
+  date            DateTime @default(now())
+  type            String   // RENT, DEPOSIT, LATE_FEE, DISCOUNT
+  paymentMethod   String   // CASH, ONLINE, CARD
+  status          String   // PAID, PENDING, APPROVED, REJECTED, OVERDUE
+  referenceId     String?
+  notes           String?  @db.Text
+  rejectionReason String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model Invoice {
@@ -295,4 +298,13 @@ model AuditLog {
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   details   String   @db.Text
   createdAt DateTime @default(now())
+}
+
+model NotificationRead {
+  id             String   @id @default(uuid())
+  userId         String
+  notificationId String
+  createdAt      DateTime @default(now())
+
+  @@unique([userId, notificationId])
 }

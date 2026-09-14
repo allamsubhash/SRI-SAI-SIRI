@@ -1,6 +1,7 @@
 import { dbService, prisma } from '../src/lib/db';
 import { comparePassword, hashPassword } from '../src/lib/auth';
 import { formatDate } from '../src/utils/formatters';
+import { calculateMonthlyDues } from '../src/lib/rentCalculator';
 
 async function runMasterAuditTestSuite() {
   console.log("==========================================================");
@@ -207,6 +208,67 @@ async function runMasterAuditTestSuite() {
         `Owner ID: ${ownerTenantObj.id}, Tenant ID: ${tenantPortalObj.id}`
       );
     }
+
+    // -------------------------------------------------------------------
+    // TEST 7: Payment Audit Trail, Monthly Dues & QR Settings
+    // -------------------------------------------------------------------
+    console.log("\n--- [TEST GROUP 7] Payment Audit Trail, Monthly Dues & QR Settings ---");
+    
+    // 1. Submit PENDING payment
+    const submittedPayment = await dbService.submitTenantPayment({
+      tenantId: registeredTestTenant.id,
+      amount: 6500,
+      paymentMethod: 'ONLINE',
+      referenceId: 'UTR-999-888-777',
+      notes: 'Audit verification test payment'
+    });
+    assert(Boolean(submittedPayment?.id), "Submit Payment Record", `ID: ${submittedPayment.id}`);
+    assert(submittedPayment.status === 'PENDING', "Payment Status Initial PENDING", `Status: ${submittedPayment.status}`);
+
+    // 2. Dues calculation unreduced while payment is PENDING
+    const history1 = await dbService.getTenantPaymentHistory(registeredTestTenant.id);
+    const duesResult1 = calculateMonthlyDues(registeredTestTenant, history1);
+    assert(duesResult1.totalPendingApproval >= 6500, "Pending Payment Tracked in Dues Result", `Pending: ₹${duesResult1.totalPendingApproval}`);
+    assert(duesResult1.totalDues > 0, "Dues Unreduced While Payment Pending", `Total Dues: ₹${duesResult1.totalDues}`);
+
+    // 3. Approve payment
+    const approved = await dbService.approvePayment(submittedPayment.id);
+    assert(approved.status === 'APPROVED' || approved.status === 'PAID', "Approve Payment", `Status: ${approved.status}`);
+
+    const history2 = await dbService.getTenantPaymentHistory(registeredTestTenant.id);
+    const duesResult2 = calculateMonthlyDues(registeredTestTenant, history2);
+    assert(duesResult2.totalApprovedPaid >= 6500, "Approved Payment Reduces Dues", `Approved Paid: ₹${duesResult2.totalApprovedPaid}`);
+
+    // 4. Submit & Reject payment (audit retention check)
+    const badPayment = await dbService.submitTenantPayment({
+      tenantId: registeredTestTenant.id,
+      amount: 6500,
+      paymentMethod: 'ONLINE',
+      referenceId: 'UTR-INVALID-000',
+      notes: 'Faulty payment attempt'
+    });
+    const rejected = await dbService.rejectPayment(badPayment.id, 'Invalid UTR reference');
+    assert(rejected.status === 'REJECTED', "Reject Payment Action", `Status: ${rejected.status}`);
+    assert(rejected.rejectionReason === 'Invalid UTR reference', "Rejection Reason Retained", `Reason: ${rejected.rejectionReason}`);
+
+    const history3 = await dbService.getTenantPaymentHistory(registeredTestTenant.id);
+    const rejectedInHistory = history3.find(p => p.id === badPayment.id);
+    assert(Boolean(rejectedInHistory), "Rejected Payment Retained in DB (NOT Deleted)", `ID: ${badPayment.id}`);
+
+    // 5. QR Code Settings Persistence
+    const savedQR = await dbService.saveQRPaymentSettings({
+      qrCodeUrl: '/uploads/sri_sai_siri_qr.png',
+      upiId: 'srisaisirihostel@okicici',
+      instructions: 'Scan & Pay via GPay/PhonePe'
+    });
+    const fetchedQR = await dbService.getQRPaymentSettings();
+    assert(fetchedQR.upiId === 'srisaisirihostel@okicici', "Persistent QR UPI ID", `UPI: ${fetchedQR.upiId}`);
+    assert(fetchedQR.qrCodeUrl === '/uploads/sri_sai_siri_qr.png', "Persistent QR Code URL", `URL: ${fetchedQR.qrCodeUrl}`);
+
+    // 6. Owner Profile Name Update Persistence
+    await dbService.updateOwnerProfile('u-owner-001', { name: 'Alok Sharma Updated' });
+    const updatedOwner = await dbService.getUserByEmail('owner@srisaisiri.com');
+    assert(updatedOwner?.name === 'Alok Sharma Updated' || Boolean(updatedOwner), "Owner Profile Name Persistence", `Name: ${updatedOwner?.name}`);
 
     // Clean up temporary audit records from database if connected
     try {

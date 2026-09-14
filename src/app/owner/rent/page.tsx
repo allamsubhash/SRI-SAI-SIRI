@@ -159,17 +159,23 @@ export default function RentPage() {
   // Status Change Handler for Popup Modal
   const handleUpdateInvoiceStatus = async (invoiceId: string, newStatus: string) => {
     try {
-      if (newStatus === 'PAID') {
-        await fetch('/api/rent', {
-          method: 'PUT',
+      if (newStatus === 'PAID' || newStatus === 'APPROVED') {
+        await fetch('/api/payments/approve', {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            invoiceId,
-            amountPaid: selectedSideInvoice?.amount || 8500,
-            method: 'UPI',
-            isTenantPayment: false
-          })
+          body: JSON.stringify({ paymentId: invoiceId })
         });
+        showToast('Payment Approved', `Payment ${invoiceId} status updated to APPROVED`, 'success');
+      } else if (newStatus === 'REJECTED') {
+        const reason = prompt('Enter rejection reason for audit log:', 'Invalid UTR / Reference ID');
+        if (reason !== null) {
+          await fetch('/api/payments/reject', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paymentId: invoiceId, rejectionReason: reason })
+          });
+          showToast('Payment Rejected', `Payment rejected and stored in DB audit history.`, 'info');
+        }
       } else {
         await fetch('/api/rent', {
           method: 'PUT',
@@ -180,8 +186,8 @@ export default function RentPage() {
             status: newStatus
           })
         });
+        showToast('Payment Status Updated', `Status changed to ${newStatus}`, 'success');
       }
-      showToast('Payment Status Updated', `Status changed to ${newStatus}`, 'success');
     } catch (err) {
       showToast('Payment Status Updated', `Status changed to ${newStatus}`, 'success');
     }

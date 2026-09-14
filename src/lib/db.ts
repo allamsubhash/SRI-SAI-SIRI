@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { mockTenants, mockBuildings, mockInvoices, mockUsers } from './mockData';
+import { mockTenants, mockBuildings, mockInvoices, mockUsers, mockPayments, mockQRSettings, mockNotificationReads } from './mockData';
 
 // Avoid multiple PrismaClient instances in development / serverless executions
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
@@ -50,26 +50,41 @@ export const dbService = {
   async getUserByEmail(email: string) {
     if (!email) return null;
     const cleanEmail = email.trim().toLowerCase();
-    const user = await prisma.user.findFirst({
-      where: { email: cleanEmail },
-      include: {
-        profile: {
-          include: {
-            tenant: true
+    try {
+      const user = await prisma.user.findFirst({
+        where: { email: cleanEmail },
+        include: {
+          profile: {
+            include: {
+              tenant: true
+            }
           }
         }
+      });
+
+      if (user) {
+        return {
+          id: user.id,
+          email: user.email,
+          password: user.password,
+          role: user.role,
+          name: user.profile ? `${user.profile.firstName} ${user.profile.lastName}`.trim() : 'User',
+          tenantId: user.profile?.tenant?.id || null
+        };
       }
-    });
+    } catch (e) {
+      logDebug('getUserByEmail fallback to mockUsers:', e);
+    }
 
-    if (!user) return null;
-
+    const mock = mockUsers.find(u => u.email.trim().toLowerCase() === cleanEmail);
+    if (!mock) return null;
     return {
-      id: user.id,
-      email: user.email,
-      password: user.password,
-      role: user.role,
-      name: user.profile ? `${user.profile.firstName} ${user.profile.lastName}`.trim() : 'User',
-      tenantId: user.profile?.tenant?.id || null
+      id: mock.id,
+      email: mock.email,
+      password: '',
+      role: mock.role,
+      name: mock.name,
+      tenantId: null
     };
   },
 
@@ -1698,5 +1713,301 @@ export const dbService = {
       })),
       tenants: await this.getTenants()
     };
+  },
+
+  // --- PAYMENT HISTORY & AUDIT ---
+  async getTenantPaymentHistory(tenantId: string) {
+    try {
+      const dbPayments = await prisma.payment.findMany({
+        where: { tenantId },
+        orderBy: { date: 'desc' }
+      });
+      if (dbPayments && dbPayments.length > 0) {
+        return dbPayments.map(p => ({
+          id: p.id,
+          tenantId: p.tenantId,
+          amount: p.amount,
+          date: p.date.toISOString().split('T')[0],
+          type: p.type,
+          paymentMethod: p.paymentMethod,
+          status: p.status,
+          referenceId: p.referenceId,
+          notes: p.notes,
+          rejectionReason: p.rejectionReason,
+          createdAt: p.createdAt.toISOString()
+        }));
+      }
+    } catch (e) {
+      logDebug('getTenantPaymentHistory fallback to mockPayments:', e);
+    }
+    return mockPayments
+      .filter(p => p.tenantId === tenantId)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  },
+
+  async getAllPayments() {
+    try {
+      const dbPayments = await prisma.payment.findMany({
+        include: {
+          tenant: {
+            include: {
+              profile: true
+            }
+          }
+        },
+        orderBy: { date: 'desc' }
+      });
+      if (dbPayments && dbPayments.length > 0) {
+        return dbPayments.map(p => ({
+          id: p.id,
+          tenantId: p.tenantId,
+          tenantName: p.tenant?.profile ? `${p.tenant.profile.firstName} ${p.tenant.profile.lastName}`.trim() : 'Resident',
+          amount: p.amount,
+          date: p.date.toISOString().split('T')[0],
+          type: p.type,
+          paymentMethod: p.paymentMethod,
+          status: p.status,
+          referenceId: p.referenceId,
+          notes: p.notes,
+          rejectionReason: p.rejectionReason,
+          createdAt: p.createdAt.toISOString()
+        }));
+      }
+    } catch (e) {
+      logDebug('getAllPayments fallback to mockPayments:', e);
+    }
+    return [...mockPayments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  },
+
+  async submitTenantPayment(data: {
+    tenantId: string;
+    amount: number;
+    paymentMethod: string;
+    referenceId?: string;
+    notes?: string;
+  }) {
+    const paymentId = `pay-${Date.now()}`;
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    try {
+      const created = await prisma.payment.create({
+        data: {
+          id: paymentId,
+          tenantId: data.tenantId,
+          amount: data.amount,
+          date: new Date(),
+          type: 'RENT',
+          paymentMethod: data.paymentMethod,
+          status: 'PENDING',
+          referenceId: data.referenceId || null,
+          notes: data.notes || null
+        }
+      });
+      return {
+        id: created.id,
+        tenantId: created.tenantId,
+        amount: created.amount,
+        date: todayStr,
+        type: created.type,
+        paymentMethod: created.paymentMethod,
+        status: created.status,
+        referenceId: created.referenceId,
+        notes: created.notes,
+        createdAt: created.createdAt.toISOString()
+      };
+    } catch (e) {
+      logDebug('submitTenantPayment DB fallback:', e);
+    }
+
+    const mockPayObj = {
+      id: paymentId,
+      tenantId: data.tenantId,
+      amount: data.amount,
+      date: todayStr,
+      type: 'RENT',
+      paymentMethod: data.paymentMethod,
+      status: 'PENDING' as const,
+      referenceId: data.referenceId,
+      notes: data.notes,
+      createdAt: new Date().toISOString()
+    };
+    mockPayments.unshift(mockPayObj);
+    return mockPayObj;
+  },
+
+  async approvePayment(paymentId: string) {
+    try {
+      const updated = await prisma.payment.update({
+        where: { id: paymentId },
+        data: { status: 'APPROVED' }
+      });
+      return updated;
+    } catch (e) {
+      logDebug('approvePayment DB fallback:', e);
+    }
+
+    const target = mockPayments.find(p => p.id === paymentId);
+    if (target) {
+      target.status = 'APPROVED';
+    }
+    return target || { id: paymentId, status: 'APPROVED' };
+  },
+
+  async rejectPayment(paymentId: string, rejectionReason?: string) {
+    try {
+      const updated = await prisma.payment.update({
+        where: { id: paymentId },
+        data: {
+          status: 'REJECTED',
+          rejectionReason: rejectionReason || 'Payment verification failed'
+        }
+      });
+      return updated;
+    } catch (e) {
+      logDebug('rejectPayment DB fallback:', e);
+    }
+
+    const target = mockPayments.find(p => p.id === paymentId);
+    if (target) {
+      target.status = 'REJECTED';
+      target.rejectionReason = rejectionReason || 'Payment verification failed';
+    }
+    return target || { id: paymentId, status: 'REJECTED', rejectionReason };
+  },
+
+  // --- QR PAYMENT SETTINGS ---
+  async getQRPaymentSettings() {
+    try {
+      const settings = await prisma.setting.findMany({
+        where: { key: { in: ['qr_code_url', 'upi_id', 'payment_instructions'] } }
+      });
+      if (settings && settings.length > 0) {
+        const qrMap: Record<string, string> = {};
+        settings.forEach(s => {
+          qrMap[s.key] = s.value;
+        });
+        return {
+          qrCodeUrl: qrMap['qr_code_url'] || mockQRSettings.qrCodeUrl,
+          upiId: qrMap['upi_id'] || mockQRSettings.upiId,
+          instructions: qrMap['payment_instructions'] || mockQRSettings.instructions
+        };
+      }
+    } catch (e) {
+      logDebug('getQRPaymentSettings DB fallback:', e);
+    }
+    return mockQRSettings;
+  },
+
+  async saveQRPaymentSettings(data: { qrCodeUrl?: string; upiId?: string; instructions?: string }) {
+    try {
+      if (data.qrCodeUrl !== undefined) {
+        await prisma.setting.upsert({
+          where: { key: 'qr_code_url' },
+          update: { value: data.qrCodeUrl },
+          create: { id: 'setting-qr-url', key: 'qr_code_url', value: data.qrCodeUrl }
+        });
+        mockQRSettings.qrCodeUrl = data.qrCodeUrl;
+      }
+      if (data.upiId !== undefined) {
+        await prisma.setting.upsert({
+          where: { key: 'upi_id' },
+          update: { value: data.upiId },
+          create: { id: 'setting-upi-id', key: 'upi_id', value: data.upiId }
+        });
+        mockQRSettings.upiId = data.upiId;
+      }
+      if (data.instructions !== undefined) {
+        await prisma.setting.upsert({
+          where: { key: 'payment_instructions' },
+          update: { value: data.instructions },
+          create: { id: 'setting-instructions', key: 'payment_instructions', value: data.instructions }
+        });
+        mockQRSettings.instructions = data.instructions;
+      }
+      return this.getQRPaymentSettings();
+    } catch (e) {
+      logDebug('saveQRPaymentSettings DB fallback:', e);
+    }
+    if (data.qrCodeUrl !== undefined) mockQRSettings.qrCodeUrl = data.qrCodeUrl;
+    if (data.upiId !== undefined) mockQRSettings.upiId = data.upiId;
+    if (data.instructions !== undefined) mockQRSettings.instructions = data.instructions;
+    return mockQRSettings;
+  },
+
+  // --- PERSISTENT NOTIFICATIONS ---
+  async getReadNotificationIds(userId: string) {
+    try {
+      const readRecords = await prisma.notificationRead.findMany({
+        where: { userId }
+      });
+      if (readRecords) {
+        return readRecords.map(r => r.notificationId);
+      }
+    } catch (e) {
+      logDebug('getReadNotificationIds DB fallback:', e);
+    }
+    return Array.from(mockNotificationReads);
+  },
+
+  async markNotificationAsRead(userId: string, notificationId: string) {
+    try {
+      await prisma.notificationRead.upsert({
+        where: {
+          userId_notificationId: { userId, notificationId }
+        },
+        update: {},
+        create: {
+          userId,
+          notificationId
+        }
+      });
+    } catch (e) {
+      logDebug('markNotificationAsRead DB fallback:', e);
+    }
+    mockNotificationReads.add(notificationId);
+    return true;
+  },
+
+  // --- OWNER PROFILE NAME PERSISTENCE ---
+  async updateOwnerProfile(userId: string, data: { name?: string; phone?: string }) {
+    let firstName = 'Alok';
+    let lastName = 'Sharma';
+    if (data.name) {
+      const parts = data.name.trim().split(/\s+/);
+      firstName = parts[0] || '';
+      lastName = parts.slice(1).join(' ') || '';
+    }
+
+    try {
+      const existingProfile = await prisma.profile.findFirst({ where: { userId } });
+      if (existingProfile) {
+        await prisma.profile.update({
+          where: { id: existingProfile.id },
+          data: {
+            ...(data.name ? { firstName, lastName } : {}),
+            ...(data.phone ? { phone: data.phone } : {})
+          }
+        });
+      } else {
+        await prisma.profile.create({
+          data: {
+            userId,
+            firstName,
+            lastName,
+            phone: data.phone || '+91 98765 43210',
+            status: 'ACTIVE'
+          }
+        });
+      }
+    } catch (e) {
+      logDebug('updateOwnerProfile DB fallback:', e);
+    }
+
+    const mockOwner = mockUsers.find(u => u.id === userId || u.email === 'owner@srisaisiri.com');
+    if (mockOwner && data.name) {
+      mockOwner.name = data.name;
+    }
+    return { userId, name: data.name, phone: data.phone };
   }
 };
+

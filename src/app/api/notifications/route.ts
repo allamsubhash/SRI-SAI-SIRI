@@ -11,12 +11,16 @@ export async function GET(request: Request) {
     const cookieStore = await cookies();
     const token = cookieStore.get('auth_token')?.value;
     const readCookie = cookieStore.get('read_notifs')?.value || '';
-    const readIds = readCookie ? readCookie.split(',') : [];
 
     let currentUser: any = null;
     if (token) {
       currentUser = verifyToken(token);
     }
+
+    const userId = currentUser?.userId || 'u-guest';
+    const { dbService } = await import('@/lib/db');
+    const dbReadIds = await dbService.getReadNotificationIds(userId);
+    const readIds = Array.from(new Set([...(readCookie ? readCookie.split(',') : []), ...dbReadIds]));
 
     const isOwner = currentUser?.role === 'OWNER';
     const isTenant = currentUser?.role === 'TENANT';
@@ -183,8 +187,15 @@ export async function PUT(request: Request) {
   try {
     const { id, markAll } = await request.json();
     const cookieStore = await cookies();
-    const readCookie = cookieStore.get('read_notifs')?.value || '';
+    const token = cookieStore.get('auth_token')?.value;
+    let currentUser: any = null;
+    if (token) {
+      currentUser = verifyToken(token);
+    }
+    const userId = currentUser?.userId || 'u-guest';
+    const { dbService } = await import('@/lib/db');
 
+    const readCookie = cookieStore.get('read_notifs')?.value || '';
     let readIds = readCookie ? readCookie.split(',') : [];
 
     if (markAll) {
@@ -193,15 +204,19 @@ export async function PUT(request: Request) {
       const currentData = await currentNotifsRes.json();
       const allIds = currentData.notifications ? currentData.notifications.map((n: any) => n.id) : [];
       readIds = Array.from(new Set([...readIds, ...allIds]));
+      for (const nid of allIds) {
+        await dbService.markNotificationAsRead(userId, nid);
+      }
     } else if (id) {
       if (!readIds.includes(id)) {
         readIds.push(id);
       }
+      await dbService.markNotificationAsRead(userId, id);
     }
 
     cookieStore.set('read_notifs', readIds.join(','), {
       path: '/',
-      maxAge: 60 * 60 * 24 * 30, // 30 days
+      maxAge: 60 * 60 * 24 * 30,
       httpOnly: false,
       sameSite: 'lax'
     });
