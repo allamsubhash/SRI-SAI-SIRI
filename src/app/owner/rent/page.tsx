@@ -199,8 +199,8 @@ export default function RentPage() {
 
   const [autoGenerating, setAutoGenerating] = useState(false);
 
-  const fetchInitialData = () => {
-    setLoading(true);
+  const fetchInitialData = (isInitial: boolean = false) => {
+    if (isInitial) setLoading(true);
     Promise.all([
       fetch('/api/tenants').then(res => res.json()),
       fetch('/api/rent').then(res => res.json())
@@ -218,17 +218,17 @@ export default function RentPage() {
             amount: tList[0].rentAmount || 8500
           }));
         }
-        setLoading(false);
+        if (isInitial) setLoading(false);
       })
       .catch(err => {
         console.error('Fetch rent error:', err);
-        setLoading(false);
+        if (isInitial) setLoading(false);
       });
   };
 
   useEffect(() => {
-    fetchInitialData();
-    const interval = setInterval(fetchInitialData, 5000);
+    fetchInitialData(true);
+    const interval = setInterval(() => fetchInitialData(false), 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -396,8 +396,25 @@ export default function RentPage() {
     }
   };
 
-  const handleSendReminder = () => {
+  const handleSendReminder = async () => {
     setReminderSuccess(true);
+    if (reminderModalTenant) {
+      try {
+        const targetTenantId = reminderModalTenant.tenantId || reminderModalTenant.id || reminderModalTenant.userId;
+        await fetch('/api/notices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: `Rent Due Reminder: ₹${(reminderModalTenant.amount || 8500).toLocaleString('en-IN')}`,
+            content: `Dear ${reminderModalTenant.tenantName || 'Resident'}, your rent payment of ₹${(reminderModalTenant.amount || 8500).toLocaleString('en-IN')} is due. Please process payment via your Tenant Portal.`,
+            target: `TENANT_${targetTenantId}`,
+            isEmergency: false
+          })
+        });
+      } catch (e) {
+        console.error('Failed to post targeted reminder notice:', e);
+      }
+    }
     setTimeout(() => {
       setReminderSuccess(false);
       setReminderModalTenant(null);

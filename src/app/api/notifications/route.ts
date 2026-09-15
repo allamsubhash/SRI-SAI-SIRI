@@ -53,10 +53,12 @@ export async function GET(request: Request) {
     // Helper for matching tenant
     const isTenantMatch = (tenantObj: any) => {
       if (!isTenant) return false;
-      if (!tenantObj) return true;
-      if (currentUser?.userId && tenantObj.userId === currentUser.userId) return true;
-      if (currentUser?.name && tenantObj.profile?.firstName && currentUser.name.toLowerCase().includes(tenantObj.profile.firstName.toLowerCase())) return true;
-      return true;
+      if (!tenantObj) return false;
+      if (currentUser?.userId && (tenantObj.userId === currentUser.userId || tenantObj.id === currentUser.userId)) return true;
+      if (currentUser?.tenantId && tenantObj.id === currentUser.tenantId) return true;
+      if (currentUser?.email && tenantObj.email?.toLowerCase() === currentUser.email?.toLowerCase()) return true;
+      if (currentUser?.name && tenantObj.profile?.firstName && currentUser.name.toLowerCase().trim() === `${tenantObj.profile.firstName} ${tenantObj.profile.lastName}`.toLowerCase().trim()) return true;
+      return false;
     };
 
     // 1. PAYMENT NOTIFICATIONS
@@ -150,19 +152,28 @@ export async function GET(request: Request) {
       }
     });
 
-    // 4. WARDEN BROADCAST ANNOUNCEMENTS
+    // 4. WARDEN BROADCAST ANNOUNCEMENTS & TARGETED REMINDERS
     recentNotices.forEach(n => {
       const notifId = `notif-notice-${n.id}`;
-      notifications.push({
-        id: notifId,
-        type: 'ANNOUNCEMENT',
-        tag: n.isEmergency ? 'EMERGENCY ALERT' : 'ANNOUNCEMENT',
-        title: n.title,
-        desc: n.content,
-        time: formatDate(n.createdAt),
-        link: isOwner ? '/owner/notices' : '/tenant/announcements',
-        read: readIds.includes(notifId)
-      });
+      let matchesRecipient = true;
+      if (isTenant) {
+        if (n.target && n.target.startsWith('TENANT_')) {
+          const targetId = n.target.replace('TENANT_', '');
+          matchesRecipient = (currentUser?.tenantId === targetId || currentUser?.userId === targetId);
+        }
+      }
+      if (matchesRecipient) {
+        notifications.push({
+          id: notifId,
+          type: 'ANNOUNCEMENT',
+          tag: n.isEmergency ? 'EMERGENCY ALERT' : (n.target?.startsWith('TENANT_') ? 'PAYMENT REMINDER' : 'ANNOUNCEMENT'),
+          title: n.title,
+          desc: n.content,
+          time: formatDate(n.createdAt),
+          link: isOwner ? '/owner/notices' : '/tenant/announcements',
+          read: readIds.includes(notifId)
+        });
+      }
     });
 
     // Unread count

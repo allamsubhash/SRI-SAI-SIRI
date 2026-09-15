@@ -120,7 +120,7 @@ export function calculateMonthlyDues(
   
   // Sum pending payments
   const pendingPayments = (payments || []).filter(
-    (p: any) => p.status === 'PENDING'
+    (p: any) => p.status === 'PENDING' || p.status === 'PENDING_VERIFICATION' || p.status === 'VERIFICATION'
   );
   const totalPendingApproval = pendingPayments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
   

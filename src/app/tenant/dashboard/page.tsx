@@ -62,7 +62,9 @@ export default function TenantDashboard() {
 
   const [directTenant, setDirectTenant] = useState<any>(null);
 
-  const fetchDashboardData = () => {
+  const fetchDashboardData = (isInitial: boolean = false) => {
+    if (isInitial) setLoading(true);
+
     fetch('/api/tenants/me')
       .then(res => res.json())
       .then(tData => {
@@ -102,18 +104,18 @@ export default function TenantDashboard() {
         );
         setVisitors(userVisitors.length > 0 ? userVisitors : vList);
 
-        setLoading(false);
+        if (isInitial) setLoading(false);
       })
       .catch(err => {
         console.error(err);
-        setLoading(false);
+        if (isInitial) setLoading(false);
       });
   };
 
   useEffect(() => {
     if (user) {
-      fetchDashboardData();
-      const interval = setInterval(fetchDashboardData, 5000);
+      fetchDashboardData(true);
+      const interval = setInterval(() => fetchDashboardData(false), 5000);
       return () => clearInterval(interval);
     }
   }, [user]);

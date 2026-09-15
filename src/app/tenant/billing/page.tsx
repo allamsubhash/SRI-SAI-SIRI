@@ -52,8 +52,8 @@ export default function TenantBilling() {
   const [selectedReceipt, setSelectedReceipt] = useState<OfficialReceiptData | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (isInitial: boolean = false) => {
+    if (isInitial) setLoading(true);
     try {
       // 1. Fetch current tenant profile
       const tenantRes = await fetch('/api/tenants/me');
@@ -72,49 +72,29 @@ export default function TenantBilling() {
       }
 
       // 3. Fetch Tenant Payment History & Invoices
-      const dashboardRes = await fetch('/api/dashboard');
-      if (dashboardRes.ok) {
-        const dData = await dashboardRes.json();
-        // find tenant payments
-        if (dData.tenants && dData.tenants.length > 0) {
-          const matched = dData.tenants.find((t: any) => 
-            t.userId === user?.id || t.id === user?.id || t.email?.toLowerCase() === user?.email?.toLowerCase()
-          ) || dData.tenants[0];
-          setTenantData(matched);
-        }
-      }
-
-      // Fetch payment history directly from tenant API or payments route
-      const payHistoryRes = await fetch('/api/dashboard');
-      if (payHistoryRes.ok) {
-        const payData = await payHistoryRes.json();
-        if (payData.recentActivities) {
-          // Keep payments array fresh
-        }
+      const rentRes = await fetch('/api/rent');
+      if (rentRes.ok) {
+        const rentData = await rentRes.json();
+        const rList = Array.isArray(rentData) ? rentData : [];
+        const userPayments = rList.filter((inv: any) => 
+          (inv.tenantName && user?.name && inv.tenantName.toLowerCase().trim().includes(user.name.toLowerCase().trim())) ||
+          (inv.tenantId && user?.id && inv.tenantId === user.id) ||
+          (inv.userId && user?.id && inv.userId === user.id) ||
+          (tenantData && inv.tenantId === tenantData.id)
+        );
+        setPayments(userPayments.length > 0 ? userPayments : rList);
       }
     } catch (e) {
       console.error("Error loading billing data:", e);
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchPayments = async (tId?: string) => {
-    try {
-      const res = await fetch('/api/dashboard');
-      if (res.ok) {
-        const data = await res.json();
-        // If we have payments from server:
-      }
-    } catch (e) {
-      console.error(e);
+      if (isInitial) setLoading(false);
     }
   };
 
   useEffect(() => {
     if (user) {
-      loadData();
-      const interval = setInterval(loadData, 5000);
+      loadData(true);
+      const interval = setInterval(() => loadData(false), 5000);
       return () => clearInterval(interval);
     }
   }, [user]);
@@ -237,14 +217,43 @@ export default function TenantBilling() {
           </p>
         </div>
         
-        <button
-          onClick={handleOpenPayModal}
-          className="py-3.5 px-7 rounded-2xl tenant-bg-accent text-xs font-black shadow-lg hover:scale-105 transition-all cursor-pointer flex items-center gap-2.5 z-10 shrink-0"
-        >
-          <CreditCard className="w-4 h-4" />
-          <span>PAY RENT NOW →</span>
-        </button>
+        {duesCalculation.totalPendingApproval > 0 ? (
+          <div className="py-3 px-6 rounded-2xl bg-purple-500/20 text-purple-600 dark:text-purple-300 border border-purple-500/30 text-xs font-black flex items-center gap-2 z-10 shrink-0 shadow-md">
+            <Clock className="w-4 h-4 animate-spin text-purple-500" />
+            <span>PAYMENT SUBMITTED & AWAITING VERIFICATION ⏳</span>
+          </div>
+        ) : (
+          <button
+            onClick={handleOpenPayModal}
+            className="py-3.5 px-7 rounded-2xl tenant-bg-accent text-xs font-black shadow-lg hover:scale-105 transition-all cursor-pointer flex items-center gap-2.5 z-10 shrink-0"
+          >
+            <CreditCard className="w-4 h-4" />
+            <span>PAY RENT NOW →</span>
+          </button>
+        )}
       </div>
+
+      {/* ⌛ PENDING PAYMENT VERIFICATION CARD */}
+      {duesCalculation.totalPendingApproval > 0 && (
+        <div className="p-6 rounded-[32px] bg-purple-500/10 border border-purple-500/30 shadow-xl backdrop-blur-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="p-3.5 rounded-2xl bg-purple-500/20 text-purple-500 dark:text-purple-400">
+              <Clock className="w-6 h-6 animate-pulse" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-black text-purple-700 dark:text-purple-300">
+                PAYMENT SUBMITTED & AWAITING VERIFICATION ⏳
+              </h3>
+              <p className="text-xs text-purple-600/90 dark:text-purple-200/90 font-medium">
+                Submitted Amount: <strong>{formatINR(duesCalculation.totalPendingApproval)}</strong> • Ref/UTR: <strong>{payments.find(p => p.status === 'PENDING' || p.status === 'PENDING_VERIFICATION' || p.status === 'VERIFICATION')?.referenceId || 'Submitted'}</strong>. The hostel owner is currently reviewing your transaction.
+              </p>
+            </div>
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest px-3.5 py-1.5 rounded-full bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30 shrink-0">
+            OWNER VERIFICATION IN PROGRESS
+          </span>
+        </div>
+      )}
 
       {/* 📊 2. AUTOMATIC DUES SUMMARY METRICS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
