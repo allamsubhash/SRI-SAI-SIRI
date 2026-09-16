@@ -30,8 +30,38 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Access denied: Only owner can modify settings' }, { status: 403 });
     }
 
-    const body = await request.json();
-    const { qrCodeUrl, upiId, instructions } = body;
+    let qrCodeUrl: string | undefined;
+    let upiId: string | undefined;
+    let instructions: string | undefined;
+
+    const contentType = request.headers.get('content-type') || '';
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await request.formData();
+      upiId = (formData.get('upiId') as string) || undefined;
+      instructions = (formData.get('instructions') as string) || undefined;
+      const file = formData.get('qrFile') as File | null;
+      if (file && file.size > 0) {
+        const bytes = await file.arrayBuffer();
+        const buffer = Buffer.from(bytes);
+        const path = await import('path');
+        const fs = await import('fs');
+        const filename = `qr_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        const filePath = path.join(uploadDir, filename);
+        fs.writeFileSync(filePath, buffer);
+        qrCodeUrl = `/uploads/${filename}`;
+      } else if (formData.get('qrCodeUrl')) {
+        qrCodeUrl = formData.get('qrCodeUrl') as string;
+      }
+    } else {
+      const body = await request.json();
+      qrCodeUrl = body.qrCodeUrl;
+      upiId = body.upiId;
+      instructions = body.instructions;
+    }
 
     const updated = await dbService.saveQRPaymentSettings({ qrCodeUrl, upiId, instructions });
 

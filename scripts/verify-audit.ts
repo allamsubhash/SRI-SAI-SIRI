@@ -255,7 +255,37 @@ async function runMasterAuditTestSuite() {
     const rejectedInHistory = history3.find(p => p.id === badPayment.id);
     assert(Boolean(rejectedInHistory), "Rejected Payment Retained in DB (NOT Deleted)", `ID: ${badPayment.id}`);
 
-    // 5. QR Code Settings Persistence
+    // 5. Duplicate Reference ID Submission Guard Test
+    let duplicateCaught = false;
+    try {
+      await dbService.submitTenantPayment({
+        tenantId: registeredTestTenant.id,
+        amount: 6500,
+        paymentMethod: 'ONLINE',
+        referenceId: 'UTR-999-888-777', // duplicate referenceId
+        notes: 'Duplicate UTR test'
+      });
+    } catch (e: any) {
+      duplicateCaught = true;
+    }
+    assert(duplicateCaught, "Duplicate UTR Reference Guard", "Prevented duplicate payment submission with same UTR");
+
+    // 6. Double Approval Prevention Guard Test
+    let doubleApprovalCaught = false;
+    try {
+      await dbService.approvePayment(submittedPayment.id);
+    } catch (e: any) {
+      doubleApprovalCaught = true;
+    }
+    assert(doubleApprovalCaught, "Double Approval Guard", "Prevented re-approving already processed payment");
+
+    // 7. Persistent Notification Read State Test
+    const testNotifId = `notif-test-${Date.now()}`;
+    await dbService.markNotificationAsRead(registeredTestTenant.userId, testNotifId);
+    const readNotifs = await dbService.getReadNotificationIds(registeredTestTenant.userId);
+    assert(readNotifs.includes(testNotifId), "Persistent Notification Read Mark", `Notification ID ${testNotifId} marked read in DB`);
+
+    // 8. QR Code Settings Persistence
     const savedQR = await dbService.saveQRPaymentSettings({
       qrCodeUrl: '/uploads/sri_sai_siri_qr.png',
       upiId: 'srisaisirihostel@okicici',
@@ -265,12 +295,12 @@ async function runMasterAuditTestSuite() {
     assert(fetchedQR.upiId === 'srisaisirihostel@okicici', "Persistent QR UPI ID", `UPI: ${fetchedQR.upiId}`);
     assert(fetchedQR.qrCodeUrl === '/uploads/sri_sai_siri_qr.png', "Persistent QR Code URL", `URL: ${fetchedQR.qrCodeUrl}`);
 
-    // 6. Owner Profile Name Update Persistence
+    // 9. Owner Profile Name Update Persistence
     await dbService.updateOwnerProfile('u-owner-001', { name: 'Alok Sharma Updated' });
     const updatedOwner = await dbService.getUserByEmail('owner@srisaisiri.com');
     assert(updatedOwner?.name === 'Alok Sharma Updated' || Boolean(updatedOwner), "Owner Profile Name Persistence", `Name: ${updatedOwner?.name}`);
 
-    // 7. Auto-Generate Monthly Dues Invoices
+    // 10. Auto-Generate Monthly Dues Invoices
     const autoResult = await dbService.autoGenerateMonthlyInvoices('September 2026');
     assert(autoResult.success === true, "Auto-Generate Monthly Invoices Executed", `Count: ${autoResult.count}`);
 

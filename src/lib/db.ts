@@ -436,6 +436,63 @@ export const dbService = {
     return mockTenants;
   },
 
+  async getTenantRoommates(tenantId: string) {
+    if (!tenantId) return [];
+    try {
+      const targetTenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        include: { beds: { include: { room: true } } }
+      });
+
+      if (!targetTenant) return [];
+
+      const targetRoomId = targetTenant.roomId || (targetTenant.beds && targetTenant.beds.length > 0 ? targetTenant.beds[0].roomId : null);
+      const targetRoomNumber = targetTenant.roomNumber || (targetTenant.beds && targetTenant.beds.length > 0 ? targetTenant.beds[0].room.number : null);
+
+      if (!targetRoomId && !targetRoomNumber) return [];
+
+      const roommates = await prisma.tenant.findMany({
+        where: {
+          status: 'ACTIVE',
+          id: { not: targetTenant.id },
+          OR: [
+            targetRoomId ? { roomId: targetRoomId } : {},
+            targetRoomNumber ? { roomNumber: { equals: targetRoomNumber.trim() } } : {}
+          ]
+        },
+        include: {
+          profile: true,
+          beds: true
+        }
+      });
+
+      return roommates.map((t, idx) => {
+        const assignedBed = t.beds && t.beds.length > 0 ? t.beds[0] : null;
+        return {
+          id: t.id,
+          tenantId: t.id,
+          userId: t.profile.userId,
+          name: `${t.profile.firstName} ${t.profile.lastName}`.trim(),
+          phone: t.profile.phone,
+          roomNumber: t.roomNumber || targetRoomNumber || 'N/A',
+          bedNumber: assignedBed ? assignedBed.number : (t.bedNumber || 'N/A'),
+          occupation: t.profile.occupation || 'Resident',
+          photoUrl: t.profile.photoUrl || '',
+          moveInDate: t.moveInDate ? t.moveInDate.toISOString().split('T')[0] : '2026-01-15'
+        };
+      });
+    } catch (e) {
+      logDebug('getTenantRoommates error:', e);
+    }
+    const mockCurrent = mockTenants.find(t => t.id === tenantId || t.userId === tenantId);
+    if (!mockCurrent) return [];
+    return mockTenants.filter(t => 
+      t.status === 'ACTIVE' && 
+      t.id !== mockCurrent.id && 
+      (t.roomNumber || '').toLowerCase().replace(/^room\s*/i, '').trim() === (mockCurrent.roomNumber || '').toLowerCase().replace(/^room\s*/i, '').trim()
+    );
+  },
+
   async createTenant(data: {
     name: string;
     email: string;
@@ -1798,6 +1855,15 @@ export const dbService = {
     const todayStr = new Date().toISOString().split('T')[0];
 
     try {
+      if (data.referenceId && data.referenceId.trim().length > 0) {
+        const existingRef = await prisma.payment.findFirst({
+          where: { referenceId: { equals: data.referenceId.trim() } }
+        });
+        if (existingRef) {
+          throw new Error(`A payment with transaction UTR / reference ID '${data.referenceId}' has already been submitted.`);
+        }
+      }
+
       const created = await prisma.payment.create({
         data: {
           id: paymentId,
@@ -1823,8 +1889,16 @@ export const dbService = {
         notes: created.notes,
         createdAt: created.createdAt.toISOString()
       };
-    } catch (e) {
+    } catch (e: any) {
       logDebug('submitTenantPayment DB fallback:', e);
+      if (e.message?.includes('already been submitted')) {
+        throw e;
+      }
+    }
+
+    const mockDuplicate = data.referenceId && mockPayments.find(p => p.referenceId === data.referenceId);
+    if (mockDuplicate) {
+      throw new Error(`A payment with transaction UTR / reference ID '${data.referenceId}' has already been submitted.`);
     }
 
     const mockPayObj = {
@@ -1845,17 +1919,51 @@ export const dbService = {
 
   async approvePayment(paymentId: string) {
     try {
-      const updated = await prisma.payment.update({
-        where: { id: paymentId },
-        data: { status: 'APPROVED' }
+      return await prisma.$transaction(async (tx) => {
+        const existing = await tx.payment.findUnique({
+          where: { id: paymentId }
+        });
+        if (!existing) {
+          throw new Error('Payment record not found');
+        }
+        if (existing.status !== 'PENDING' && existing.status !== 'PENDING_VERIFICATION' && existing.status !== 'VERIFICATION') {
+          throw new Error(`Payment has already been processed with status '${existing.status}'`);
+        }
+
+        const updated = await tx.payment.update({
+          where: { id: paymentId },
+          data: { status: 'APPROVED' }
+        });
+
+        if (existing.invoiceId) {
+          const inv = await tx.invoice.findUnique({
+            where: { id: existing.invoiceId }
+          });
+          if (inv) {
+            const newPaid = (inv.paidAmount || 0) + existing.amount;
+            const newStatus = newPaid >= inv.amount ? 'PAID' : 'PARTIAL';
+            await tx.invoice.update({
+              where: { id: existing.invoiceId },
+              data: {
+                paidAmount: newPaid,
+                status: newStatus
+              }
+            });
+          }
+        }
+        return updated;
       });
-      return updated;
-    } catch (e) {
+    } catch (e: any) {
       logDebug('approvePayment DB fallback:', e);
+      if (e.message?.includes('already been processed')) throw e;
     }
 
     const target = mockPayments.find(p => p.id === paymentId);
     if (target) {
+      const currentStatus = target.status as string;
+      if (currentStatus !== 'PENDING' && currentStatus !== 'PENDING_VERIFICATION' && currentStatus !== 'VERIFICATION') {
+        throw new Error(`Payment has already been processed with status '${target.status}'`);
+      }
       target.status = 'APPROVED';
     }
     return target || { id: paymentId, status: 'APPROVED' };
@@ -1863,16 +1971,29 @@ export const dbService = {
 
   async rejectPayment(paymentId: string, rejectionReason?: string) {
     try {
-      const updated = await prisma.payment.update({
-        where: { id: paymentId },
-        data: {
-          status: 'REJECTED',
-          rejectionReason: rejectionReason || 'Payment verification failed'
+      return await prisma.$transaction(async (tx) => {
+        const existing = await tx.payment.findUnique({
+          where: { id: paymentId }
+        });
+        if (!existing) {
+          throw new Error('Payment record not found');
         }
+        if (existing.status !== 'PENDING' && existing.status !== 'PENDING_VERIFICATION' && existing.status !== 'VERIFICATION') {
+          throw new Error(`Payment has already been processed with status '${existing.status}'`);
+        }
+
+        const updated = await tx.payment.update({
+          where: { id: paymentId },
+          data: {
+            status: 'REJECTED',
+            rejectionReason: rejectionReason || 'Payment verification failed'
+          }
+        });
+        return updated;
       });
-      return updated;
-    } catch (e) {
+    } catch (e: any) {
       logDebug('rejectPayment DB fallback:', e);
+      if (e.message?.includes('already been processed')) throw e;
     }
 
     const target = mockPayments.find(p => p.id === paymentId);

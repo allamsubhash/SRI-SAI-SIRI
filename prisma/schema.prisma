@@ -46,6 +46,12 @@ model Tenant {
   id            String         @id @default(uuid())
   profileId     String         @unique
   profile       Profile        @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  roomId        String?
+  room          Room?          @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  buildingId    String?
+  building      Building?      @relation(fields: [buildingId], references: [id], onDelete: SetNull)
+  floorId       String?
+  floor         Floor?         @relation(fields: [floorId], references: [id], onDelete: SetNull)
   roomNumber    String?
   bedNumber     String?
   rentAmount    Float          @default(0.0)
@@ -62,6 +68,11 @@ model Tenant {
   beds          Bed[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+
+  @@index([roomId])
+  @@index([buildingId])
+  @@index([floorId])
+  @@index([status])
 }
 
 model Building {
@@ -69,6 +80,7 @@ model Building {
   name      String
   address   String   @db.Text
   floors    Floor[]
+  tenants   Tenant[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -79,6 +91,7 @@ model Floor {
   buildingId String
   building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
   rooms      Room[]
+  tenants    Tenant[]
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -95,6 +108,7 @@ model Room {
   floorId     String
   floor       Floor         @relation(fields: [floorId], references: [id], onDelete: Cascade)
   beds        Bed[]
+  tenants     Tenant[]
   maintenance Maintenance[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -110,6 +124,9 @@ model Bed {
   isAvailable Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([roomId])
+  @@index([tenantId])
 }
 
 model Payment {
@@ -128,6 +145,10 @@ model Payment {
   rejectionReason String?  @db.Text
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([referenceId])
 }
 
 model Invoice {

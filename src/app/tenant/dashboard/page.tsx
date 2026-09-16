@@ -59,8 +59,8 @@ export default function TenantDashboard() {
   const [submittingVisitor, setSubmittingVisitor] = useState(false);
 
   const [paying, setPaying] = useState(false);
-
   const [directTenant, setDirectTenant] = useState<any>(null);
+  const [apiRoommates, setApiRoommates] = useState<any[]>([]);
 
   const fetchDashboardData = (isInitial: boolean = false) => {
     if (isInitial) setLoading(true);
@@ -70,6 +70,15 @@ export default function TenantDashboard() {
       .then(tData => {
         if (tData.tenant || tData.id) {
           setDirectTenant(tData.tenant || tData);
+        }
+      })
+      .catch(() => {});
+
+    fetch('/api/tenants/roommates')
+      .then(res => res.json())
+      .then(rmData => {
+        if (rmData.success && Array.isArray(rmData.roommates)) {
+          setApiRoommates(rmData.roommates);
         }
       })
       .catch(() => {});
@@ -125,8 +134,9 @@ export default function TenantDashboard() {
     if (!data?.tenants) return null;
     return data.tenants.find((t: any) => 
       (user?.id && (t.userId === user.id || t.id === user.id)) ||
-      (user?.email && t.email?.toLowerCase() === user.email.toLowerCase())
-    ) || data.tenants[0];
+      (user?.email && t.email?.toLowerCase() === user.email.toLowerCase()) ||
+      (user?.name && t.name?.toLowerCase().trim() === user.name.toLowerCase().trim())
+    ) || null;
   }, [directTenant, data, user]);
 
   const normalizeRoom = (r?: string) => (r || '').replace(/^room\s*/i, '').trim().toLowerCase();
@@ -137,6 +147,7 @@ export default function TenantDashboard() {
   const rentAmount = currentTenant?.rentAmount ? currentTenant.rentAmount : (invoices[0]?.amount || 6500);
 
   const roommates = useMemo(() => {
+    if (apiRoommates.length > 0) return apiRoommates;
     if (!data?.tenants) return [];
     const targetRoomClean = normalizeRoom(userRoom);
 
@@ -149,7 +160,7 @@ export default function TenantDashboard() {
       const isActive = t.status === 'ACTIVE' || !t.status;
       return isActive && isSameRoom && !isSelf;
     });
-  }, [data, currentTenant, userRoom, user]);
+  }, [apiRoommates, data, currentTenant, userRoom, user]);
 
   const pendingInvoice = invoices.find(i => i.status === 'PENDING' || i.status === 'OVERDUE');
   const latestPaidInvoice = invoices.find(i => i.status === 'PAID');
