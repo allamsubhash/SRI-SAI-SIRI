@@ -1,5 +1,5 @@
 datasource db {
-  provider = "mysql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -25,9 +25,9 @@ model Profile {
   firstName             String
   lastName              String
   phone                 String
-  photoUrl              String?   @db.Text
+  photoUrl              String?
   gender                String?
-  address               String?   @db.Text
+  address               String?
   aadhaar               String?
   emergencyContactName  String?
   emergencyContactPhone String?
@@ -55,8 +55,8 @@ model Tenant {
   roomNumber    String?
   bedNumber     String?
   rentAmount    Float          @default(0.0)
-  agreementUrl  String?        @db.Text
-  medicalNotes  String?        @db.Text
+  agreementUrl  String?
+  medicalNotes  String?
   moveInDate    DateTime?
   moveOutDate   DateTime?
   status        String         @default("ACTIVE") // ACTIVE, ARCHIVED, BLACKLISTED
@@ -78,7 +78,7 @@ model Tenant {
 model Building {
   id        String   @id @default(uuid())
   name      String
-  address   String   @db.Text
+  address   String
   floors    Floor[]
   tenants   Tenant[]
   createdAt DateTime @default(now())
@@ -103,8 +103,8 @@ model Room {
   rent        Float
   status      String        @default("AVAILABLE") // AVAILABLE, OCCUPIED, MAINTENANCE, RESERVED
   capacity    Int
-  amenities   String        @db.Text // Comma-separated list e.g., "Wifi, AC, Attached Bathroom"
-  images      String?       @db.Text // JSON array of image URLs
+  amenities   String // Comma-separated list e.g., "Wifi, AC, Attached Bathroom"
+  images      String? // JSON array of image URLs
   floorId     String
   floor       Floor         @relation(fields: [floorId], references: [id], onDelete: Cascade)
   beds        Bed[]
@@ -141,8 +141,8 @@ model Payment {
   paymentMethod   String   // CASH, ONLINE, CARD
   status          String   // PAID, PENDING, APPROVED, REJECTED, OVERDUE
   referenceId     String?
-  notes           String?  @db.Text
-  rejectionReason String?  @db.Text
+  notes           String?
+  rejectionReason String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -160,7 +160,7 @@ model Invoice {
   paidAmount    Float     @default(0.0)
   dueDate       DateTime
   status        String    // PAID, PARTIAL, PENDING, OVERDUE
-  itemsJson     String    @db.Text // Description of invoice items (rent, wifi, electricity, etc.)
+  itemsJson     String // Description of invoice items (rent, wifi, electricity, etc.)
   payments      Payment[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -170,13 +170,13 @@ model Employee {
   id               String        @id @default(uuid())
   name             String
   phone            String
-  address          String        @db.Text
+  address          String
   role             String        // MANAGER, SECURITY, COOK, CLEANER, ELECTRICIAN, PLUMBER, RECEPTION, WARDEN, MAINTENANCE
   salary           Float
   status           String        @default("ACTIVE") // ACTIVE, INACTIVE
-  bankDetails      String?       @db.Text
+  bankDetails      String?
   emergencyContact String?
-  photoUrl         String?       @db.Text
+  photoUrl         String?
   joiningDate      DateTime      @default(now())
   salaries         Salary[]
   attendance       Attendance[]
@@ -231,7 +231,7 @@ model LeaveRequest {
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   startDate DateTime
   endDate   DateTime
-  reason    String   @db.Text
+  reason    String
   status    String   @default("PENDING") // PENDING, APPROVED, REJECTED
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -240,7 +240,7 @@ model LeaveRequest {
 model Complaint {
   id                 String    @id @default(uuid())
   title              String
-  description        String    @db.Text
+  description        String
   category           String    // ELECTRICITY, WATER, FURNITURE, INTERNET, CLEANING, FOOD, OTHER
   status             String    @default("PENDING") // PENDING, ASSIGNED, IN_PROGRESS, RESOLVED, CLOSED
   tenantId           String
@@ -254,9 +254,9 @@ model Complaint {
 model Maintenance {
   id             String    @id @default(uuid())
   title          String
-  description    String    @db.Text
+  description    String
   cost           Float
-  materialsUsed  String?   @db.Text
+  materialsUsed  String?
   roomId         String
   room           Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
   employeeId     String?
@@ -288,7 +288,7 @@ model Expense {
   amount    Float
   category  String   // ELECTRICITY, WATER, INTERNET, FOOD, REPAIRS, FURNITURE, CLEANING, SALARY, TAXES, MISC
   date      DateTime
-  notes     String?  @db.Text
+  notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -296,7 +296,7 @@ model Expense {
 model Notice {
   id           String    @id @default(uuid())
   title        String
-  content      String    @db.Text
+  content      String
   target       String    // EVERYONE, TENANTS, EMPLOYEES
   isEmergency  Boolean   @default(false)
   scheduleDate DateTime?
@@ -307,7 +307,7 @@ model Notice {
 model Setting {
   id        String   @id @default(uuid())
   key       String   @unique
-  value     String   @db.Text
+  value     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -317,7 +317,7 @@ model AuditLog {
   action    String
   userId    String?
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  details   String   @db.Text
+  details   String
   createdAt DateTime @default(now())
 }
 
@@ -333,7 +333,7 @@ model NotificationRead {
 model Guideline {
   id        String   @id @default(uuid())
   title     String
-  content   String   @db.Text
+  content   String
   category  String?
   icon      String?
   order     Int      @default(0)

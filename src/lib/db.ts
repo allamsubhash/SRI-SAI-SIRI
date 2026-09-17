@@ -73,19 +73,10 @@ export const dbService = {
         };
       }
     } catch (e) {
-      logDebug('getUserByEmail fallback to mockUsers:', e);
+      logDebug('getUserByEmail error:', e);
+      throw e;
     }
-
-    const mock = mockUsers.find(u => u.email.trim().toLowerCase() === cleanEmail);
-    if (!mock) return null;
-    return {
-      id: mock.id,
-      email: mock.email,
-      password: '',
-      role: mock.role,
-      name: mock.name,
-      tenantId: null
-    };
+    return null;
   },
 
   async registerUser(userData: { id?: string; email: string; password?: string; role: 'OWNER' | 'TENANT'; name: string }) {
@@ -396,7 +387,7 @@ export const dbService = {
         orderBy: { createdAt: 'desc' }
       });
 
-      if (dbTenants && dbTenants.length > 0) {
+      if (dbTenants) {
         return dbTenants.map(t => {
           const assignedBed = t.beds && t.beds.length > 0 ? t.beds[0] : null;
           const formattedDate = t.moveInDate
@@ -433,7 +424,7 @@ export const dbService = {
     } catch (e) {
       logDebug('getTenants fallback to mockTenants:', e);
     }
-    return mockTenants;
+    return [];
   },
 
   async getTenantRoommates(tenantId: string) {
@@ -808,7 +799,7 @@ export const dbService = {
         orderBy: { createdAt: 'desc' }
       });
 
-      if (dbInvoices && dbInvoices.length > 0) {
+      if (dbInvoices) {
         return dbInvoices.map(inv => {
           let itemsList: any[] = [];
           try {
@@ -837,7 +828,7 @@ export const dbService = {
     } catch (e) {
       logDebug('getInvoices fallback to mockInvoices:', e);
     }
-    return mockInvoices;
+    return [];
   },
 
   async getTenantFinancialSummary(tenantIdentifier: string) {
@@ -1811,7 +1802,7 @@ export const dbService = {
         where: { tenantId },
         orderBy: { date: 'desc' }
       });
-      if (dbPayments && dbPayments.length > 0) {
+      if (dbPayments) {
         return dbPayments.map(p => ({
           id: p.id,
           tenantId: p.tenantId,
@@ -1846,7 +1837,7 @@ export const dbService = {
         },
         orderBy: { date: 'desc' }
       });
-      if (dbPayments && dbPayments.length > 0) {
+      if (dbPayments) {
         return dbPayments.map(p => ({
           id: p.id,
           tenantId: p.tenantId,
@@ -2034,21 +2025,19 @@ export const dbService = {
       const settings = await prisma.setting.findMany({
         where: { key: { in: ['qr_code_url', 'upi_id', 'payment_instructions'] } }
       });
-      if (settings && settings.length > 0) {
-        const qrMap: Record<string, string> = {};
-        settings.forEach(s => {
-          qrMap[s.key] = s.value;
-        });
-        return {
-          qrCodeUrl: qrMap['qr_code_url'] || mockQRSettings.qrCodeUrl,
-          upiId: qrMap['upi_id'] || mockQRSettings.upiId,
-          instructions: qrMap['payment_instructions'] || mockQRSettings.instructions
-        };
-      }
+      const qrMap: Record<string, string> = {};
+      (settings || []).forEach(s => {
+        qrMap[s.key] = s.value;
+      });
+      return {
+        qrCodeUrl: qrMap['qr_code_url'] || '',
+        upiId: qrMap['upi_id'] || '',
+        instructions: qrMap['payment_instructions'] || ''
+      };
     } catch (e) {
-      logDebug('getQRPaymentSettings DB fallback:', e);
+      logDebug('getQRPaymentSettings DB error:', e);
+      return { qrCodeUrl: '', upiId: '', instructions: '' };
     }
-    return mockQRSettings;
   },
 
   async saveQRPaymentSettings(data: { qrCodeUrl?: string; upiId?: string; instructions?: string }) {
@@ -2235,29 +2224,26 @@ export const dbService = {
     };
   },
 
-  // --- HOSTEL GUIDELINES ---
   async getGuidelines() {
     try {
       const guidelines = await prisma.guideline.findMany({
         orderBy: { order: 'asc' }
       });
-      if (guidelines && guidelines.length > 0) {
-        return guidelines.map(g => ({
-          id: g.id,
-          title: g.title,
-          content: g.content,
-          category: g.category || undefined,
-          icon: g.icon || undefined,
-          order: g.order,
-          isActive: g.isActive,
-          createdAt: g.createdAt.toISOString(),
-          updatedAt: g.updatedAt.toISOString()
-        }));
-      }
+      return (guidelines || []).map(g => ({
+        id: g.id,
+        title: g.title,
+        content: g.content,
+        category: g.category || undefined,
+        icon: g.icon || undefined,
+        order: g.order,
+        isActive: g.isActive,
+        createdAt: g.createdAt.toISOString(),
+        updatedAt: g.updatedAt.toISOString()
+      }));
     } catch (e) {
-      logDebug('getGuidelines DB fallback:', e);
+      logDebug('getGuidelines DB error:', e);
+      return [];
     }
-    return mockGuidelines;
   },
 
   async createGuideline(data: { title: string; content: string; category?: string; icon?: string; order?: number; isActive?: boolean }) {
