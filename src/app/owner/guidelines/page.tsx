@@ -37,20 +37,28 @@ export default function OwnerGuidelinesPage() {
   const [editingItem, setEditingItem] = useState<Guideline | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [category, setCategory] = useState('CLEANLINESS');
   const [order, setOrder] = useState<number>(0);
   const [isActive, setIsActive] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   const fetchGuidelines = async () => {
     setLoading(true);
+    setError('');
     try {
       const res = await fetch('/api/guidelines?all=true');
       const data = await res.json();
-      if (Array.isArray(data)) {
+      if (res.ok && Array.isArray(data)) {
         setGuidelines(data);
+      } else {
+        setGuidelines([]);
+        if (data && data.error) {
+          setError(data.error);
+        }
       }
     } catch (err: any) {
-      setError('Failed to load guidelines');
+      console.error('Fetch guidelines error:', err);
+      setError('Failed to load guidelines. Please check network connection.');
     } finally {
       setLoading(false);
     }
@@ -59,8 +67,6 @@ export default function OwnerGuidelinesPage() {
   useEffect(() => {
     fetchGuidelines();
   }, []);
-
-  const [category, setCategory] = useState('CLEANLINESS');
 
   const openCreateModal = () => {
     setEditingItem(null);
