@@ -25,7 +25,7 @@ import {
 import NeonModal from '@/components/NeonModal';
 import { formatINR, formatDate } from '@/utils/formatters';
 import OfficialPaymentReceiptModal, { OfficialReceiptData } from '@/components/OfficialPaymentReceiptModal';
-import { calculateMonthlyDues } from '@/lib/rentCalculator';
+import { computeTenantBillingState } from '@/lib/billingService';
 
 export default function TenantBilling() {
   const { user } = useAuth();
@@ -98,10 +98,10 @@ export default function TenantBilling() {
     }
   }, [user]);
 
-  // Calculate monthly dues strictly from moveInDate to current date
+  // Single Authoritative Billing State computation
   const duesCalculation = useMemo(() => {
-    return calculateMonthlyDues(tenantData, payments);
-  }, [tenantData, payments]);
+    return computeTenantBillingState(tenantData || { id: user?.id, name: user?.name }, payments, payments);
+  }, [tenantData, user, payments]);
 
   const handleOpenPayModal = () => {
     setPayAmount(duesCalculation.totalDues > 0 ? String(duesCalculation.totalDues) : String(duesCalculation.monthlyRent));
@@ -218,27 +218,46 @@ export default function TenantBilling() {
         </div>
       </div>
 
-      {/* ⌛ PENDING PAYMENT VERIFICATION CARD */}
-      {duesCalculation.totalPendingApproval > 0 && (
-        <div className="p-6 rounded-[32px] bg-purple-500/10 border border-purple-500/30 shadow-xl backdrop-blur-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      {/* ⌛ 1. PAYMENT STATE STATUS BANNER */}
+      {duesCalculation.isUnderVerification ? (
+        <div className="p-6 rounded-[32px] bg-purple-500/10 border-2 border-purple-500/30 shadow-xl backdrop-blur-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="p-3.5 rounded-2xl bg-purple-500/20 text-purple-500 dark:text-purple-400">
-              <Clock className="w-6 h-6 animate-pulse" />
+            <div className="p-3.5 rounded-2xl bg-purple-500/20 text-purple-500 dark:text-purple-400 shrink-0">
+              <Clock className="w-7 h-7 animate-spin" />
             </div>
-            <div className="space-y-1">
-              <h3 className="text-base font-black text-purple-700 dark:text-purple-300">
-                PAYMENT SUBMITTED & AWAITING VERIFICATION ⏳
+            <div className="space-y-1 text-left">
+              <h3 className="text-base font-black text-purple-700 dark:text-purple-300 uppercase tracking-wider">
+                PAYMENT UNDER OWNER VERIFICATION ⏳
               </h3>
               <p className="text-xs text-purple-600/90 dark:text-purple-200/90 font-medium">
-                Submitted Amount: <strong>{formatINR(duesCalculation.totalPendingApproval)}</strong> • Ref/UTR: <strong>{payments.find(p => p.status === 'PENDING' || p.status === 'PENDING_VERIFICATION' || p.status === 'VERIFICATION')?.referenceId || 'Submitted'}</strong>. The hostel owner is currently reviewing your transaction.
+                Submitted Amount: <strong>{formatINR(duesCalculation.totalPendingVerification)}</strong> • Ref/UTR: <strong>{payments.find(p => p.status === 'PENDING' || p.status === 'PENDING_VERIFICATION' || p.status === 'VERIFICATION')?.referenceId || 'Submitted'}</strong>. The hostel owner is currently reviewing your transaction.
               </p>
             </div>
           </div>
-          <span className="text-[10px] font-black uppercase tracking-widest px-3.5 py-1.5 rounded-full bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30 shrink-0">
-            OWNER VERIFICATION IN PROGRESS
+          <span className="text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-full bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30 shrink-0">
+            VERIFICATION IN PROGRESS
           </span>
         </div>
-      )}
+      ) : duesCalculation.isFullyPaid ? (
+        <div className="p-6 rounded-[32px] bg-emerald-500/10 border-2 border-emerald-500/30 shadow-xl backdrop-blur-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="p-3.5 rounded-2xl bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 shrink-0">
+              <CheckCircle className="w-7 h-7" />
+            </div>
+            <div className="space-y-1 text-left">
+              <h3 className="text-base font-black text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">
+                RENT PAID IN FULL ✓
+              </h3>
+              <p className="text-xs text-emerald-600/90 dark:text-emerald-200/90 font-medium">
+                All rent dues for your account are completely settled and verified by hostel management. No payment due at this time.
+              </p>
+            </div>
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 shrink-0">
+            ACCOUNT IN GOOD STANDING
+          </span>
+        </div>
+      ) : null}
 
       {/* 📊 2. AUTOMATIC DUES SUMMARY METRICS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -251,7 +270,7 @@ export default function TenantBilling() {
             {formatINR(duesCalculation.monthlyRent)}
           </div>
           <p className="text-xs text-[#68736E] dark:text-[#9BAAA4]">
-            Move-in Date: <strong className="text-[#1C2522] dark:text-[#F2F5F2]">{duesCalculation.moveInDate}</strong> ({duesCalculation.monthsElapsed} month(s))
+            Move-in Date: <strong className="text-[#1C2522] dark:text-[#F2F5F2]">{duesCalculation.moveInDate}</strong>
           </p>
         </div>
 
@@ -271,84 +290,79 @@ export default function TenantBilling() {
         <div className="p-6 rounded-[32px] bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-white/80 dark:border-[#293832] shadow-xl backdrop-blur-2xl space-y-2">
           <div className="flex justify-between items-center">
             <span className="text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider">CURRENT OUTSTANDING DUES</span>
-            <AlertCircle className={`w-5 h-5 ${duesCalculation.totalDues > 0 ? 'text-amber-400' : 'text-emerald-400'}`} />
+            <AlertCircle className={`w-5 h-5 ${duesCalculation.remainingOutstanding > 0 ? 'text-amber-400' : 'text-emerald-400'}`} />
           </div>
-          <div className={`text-3xl font-black ${duesCalculation.totalDues > 0 ? 'text-amber-500 dark:text-amber-400' : 'text-emerald-500 dark:text-emerald-400'}`}>
-            {formatINR(duesCalculation.totalDues)}
+          <div className={`text-3xl font-black ${duesCalculation.remainingOutstanding > 0 ? 'text-amber-500 dark:text-amber-400' : 'text-emerald-500 dark:text-emerald-400'}`}>
+            {formatINR(duesCalculation.remainingOutstanding)}
           </div>
           <p className="text-xs text-[#68736E] dark:text-[#9BAAA4]">
-            {duesCalculation.totalDues === 0 ? 'All rent dues cleared ✓' : `Due by 5th of current month`}
+            {duesCalculation.remainingOutstanding === 0 ? 'All rent dues cleared ✓' : `Due by ${duesCalculation.dueDate}`}
           </p>
         </div>
       </div>
 
-      {/* 📲 3. QR CODE PAYMENT SETTINGS SECTION */}
-      <div className="p-6 sm:p-8 rounded-[32px] bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-white/80 dark:border-[#293832] shadow-xl backdrop-blur-2xl space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-2xl tenant-bg-soft tenant-text-accent border tenant-border-accent">
-            <QrCode className="w-6 h-6" />
+      {/* 📲 3. SINGLE OFFICIAL QR CODE PAYMENT DESK (Shown ONLY when payment is payable) */}
+      {duesCalculation.isPayable && (
+        <div className="p-6 sm:p-8 rounded-[32px] bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border-2 border-emerald-500/30 shadow-2xl backdrop-blur-2xl space-y-6">
+          <div className="flex items-center gap-3 border-b border-[#DDD8CE] dark:border-[#293832] pb-4">
+            <div className="p-2.5 rounded-2xl tenant-bg-soft tenant-text-accent border tenant-border-accent">
+              <QrCode className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-lg font-black text-[#1C2522] dark:text-[#F2F5F2]">Official Owner Payment QR & UPI Details</h2>
+              <p className="text-xs text-[#68736E] dark:text-[#9BAAA4]">Pay your rent directly using any standard UPI mobile application (GPay, PhonePe, Paytm).</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg font-black text-[#1C2522] dark:text-[#F2F5F2]">Official Owner Payment QR & UPI Details</h2>
-            <p className="text-xs text-[#68736E] dark:text-[#9BAAA4]">Pay your rent directly using any standard UPI mobile application.</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+            {/* Clean, Full, Uncropped QR Image Box */}
+            <div className="flex flex-col items-center justify-center p-4 bg-white dark:bg-[#101916] rounded-2xl border border-[#DDD8CE] dark:border-[#293832] space-y-3">
+              <div className="w-56 h-56 bg-white p-3 rounded-2xl border-2 border-emerald-500/30 shadow-md flex items-center justify-center shrink-0">
+                {qrSettings.qrCodeUrl ? (
+                  <img 
+                    src={qrSettings.qrCodeUrl} 
+                    alt="Official Owner Payment QR Code" 
+                    className="w-full h-full object-contain rounded-xl"
+                  />
+                ) : (
+                  <div className="text-center p-4">
+                    <QrCode className="w-20 h-20 text-emerald-500 mx-auto opacity-70" />
+                    <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest block mt-2">OFFICIAL QR CODE</span>
+                  </div>
+                )}
+              </div>
+              <span className="text-[11px] font-bold text-[#68736E] dark:text-[#9BAAA4]">Scan with any UPI App</span>
+            </div>
+
+            <div className="md:col-span-2 space-y-4">
+              <div className="p-4 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832] space-y-1">
+                <span className="text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider block">OFFICIAL HOSTEL UPI ID</span>
+                <div className="text-xl font-black text-[#1C2522] dark:text-[#F2F5F2] font-mono select-all">
+                  {qrSettings.upiId || 'srisaisiri@upi'}
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-1.5">
+                <div className="flex items-center gap-2 text-amber-400 font-black text-xs">
+                  <Info className="w-4 h-4" />
+                  <span>Payment Instructions</span>
+                </div>
+                <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] leading-relaxed font-medium">
+                  {qrSettings.instructions || 'Scan QR code or use UPI ID. After payment, enter your 12-digit UTR reference number below.'}
+                </p>
+              </div>
+
+              <button
+                onClick={handleOpenPayModal}
+                className="w-full py-4 px-8 rounded-2xl tenant-bg-accent text-sm font-black shadow-xl hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2.5"
+              >
+                <Send className="w-5 h-5" />
+                <span>Submit Payment UTR Reference ({formatINR(duesCalculation.remainingOutstanding)}) →</span>
+              </button>
+            </div>
           </div>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-          <div className="flex flex-col items-center justify-center p-4 bg-white dark:bg-[#101916] rounded-2xl border border-[#DDD8CE] dark:border-[#293832] space-y-3">
-            <div className="w-44 h-44 bg-emerald-500/10 rounded-xl flex items-center justify-center p-2 overflow-hidden border border-emerald-500/20">
-              {qrSettings.qrCodeUrl ? (
-                <img 
-                  src={qrSettings.qrCodeUrl} 
-                  alt="Owner QR Code" 
-                  className="w-full h-full object-contain"
-                  onError={(e) => {
-                    // Fallback visual QR preview if image not uploaded yet
-                    (e.target as HTMLElement).style.display = 'none';
-                  }} 
-                />
-              ) : null}
-              <div className="text-center p-4">
-                <QrCode className="w-16 h-16 text-emerald-500 mx-auto opacity-70" />
-                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest block mt-2">OFFICIAL QR CODE</span>
-              </div>
-            </div>
-            <span className="text-[11px] font-bold text-[#68736E] dark:text-[#9BAAA4]">Scan to Pay via UPI</span>
-          </div>
-
-          <div className="md:col-span-2 space-y-4">
-            <div className="p-4 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832] space-y-1">
-              <span className="text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider block">OFFICIAL HOSTEL UPI ID</span>
-              <div className="text-lg font-black text-[#1C2522] dark:text-[#F2F5F2] font-mono select-all">
-                {qrSettings.upiId || 'srisaisiri@upi'}
-              </div>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-1.5">
-              <div className="flex items-center gap-2 text-amber-400 font-black text-xs">
-                <Info className="w-4 h-4" />
-                <span>Payment Instructions</span>
-              </div>
-              <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] leading-relaxed font-medium">
-                {qrSettings.instructions || 'Pay via any UPI app (GPay, PhonePe, Paytm) and enter the 12-digit UTR/Reference number.'}
-              </p>
-            </div>
-
-            <button
-              onClick={handleOpenPayModal}
-              disabled={duesCalculation.totalDues === 0 || duesCalculation.totalPendingApproval >= duesCalculation.totalDues}
-              className={`py-3 px-6 rounded-2xl text-xs font-black shadow-md flex items-center gap-2 transition-all ${
-                duesCalculation.totalDues === 0 || duesCalculation.totalPendingApproval >= duesCalculation.totalDues
-                  ? 'bg-slate-300 dark:bg-zinc-800 text-slate-500 cursor-not-allowed opacity-60'
-                  : 'tenant-bg-accent hover:scale-105 cursor-pointer'
-              }`}
-            >
-              <Send className="w-4 h-4" />
-              <span>{duesCalculation.totalPendingApproval >= duesCalculation.totalDues && duesCalculation.totalPendingApproval > 0 ? 'Payment Under Verification ⏳' : duesCalculation.totalDues === 0 ? 'No Payment Due ✓' : 'Submit Payment UTR Reference →'}</span>
-            </button>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* 📑 4. PERSISTENT PAYMENT HISTORY TABLE */}
       <div className="p-6 sm:p-8 rounded-[32px] bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-white/80 dark:border-[#293832] shadow-xl backdrop-blur-2xl space-y-5">

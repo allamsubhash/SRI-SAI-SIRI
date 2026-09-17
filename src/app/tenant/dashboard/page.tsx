@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import NeonModal from '@/components/NeonModal';
 import { formatINR, formatDate } from '@/utils/formatters';
+import { computeTenantBillingState } from '@/lib/billingService';
 
 export default function TenantDashboard() {
   const { user } = useAuth();
@@ -37,7 +38,6 @@ export default function TenantDashboard() {
   const [loading, setLoading] = useState(true);
 
   // Pop-up Modals State
-  const [showPayModal, setShowPayModal] = useState(false);
   const [showRentModal, setShowRentModal] = useState(false);
   const [showRoomModal, setShowRoomModal] = useState(false);
   const [showAnnouncementsModal, setShowAnnouncementsModal] = useState(false);
@@ -162,38 +162,12 @@ export default function TenantDashboard() {
     });
   }, [apiRoommates, data, currentTenant, userRoom, user]);
 
-  const pendingInvoice = invoices.find(i => i.status === 'PENDING' || i.status === 'OVERDUE');
-  const latestPaidInvoice = invoices.find(i => i.status === 'PAID');
-  const outstandingBalance = invoices.reduce((sum, inv) => sum + (inv.status !== 'PAID' ? (inv.amount - (inv.paidAmount || 0)) : 0), 0);
+  const duesCalculation = useMemo(() => {
+    return computeTenantBillingState(currentTenant || { id: user?.id, name: user?.name }, invoices, invoices);
+  }, [currentTenant, user, invoices]);
 
   const activeComplaint = complaints.find(c => c.status !== 'RESOLVED' && c.status !== 'Resolved');
   const upcomingVisitor = visitors.find(v => v.status === 'APPROVED' || v.approvalStatus === 'APPROVED' || v.status === 'PENDING');
-
-  const handlePayNow = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pendingInvoice) return;
-    setPaying(true);
-    try {
-      const res = await fetch('/api/rent', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          invoiceId: pendingInvoice.id,
-          amountPaid: pendingInvoice.amount,
-          method: 'ONLINE',
-          isTenantPayment: true
-        })
-      });
-      if (res.ok) {
-        setShowPayModal(false);
-        fetchDashboardData();
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setPaying(false);
-    }
-  };
 
   const handleCreateComplaint = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -332,8 +306,8 @@ export default function TenantDashboard() {
         </div>
       </motion.div>
 
-      {/* ⚠️ OUTSTANDING RENT PAYMENT DUE ALERT BANNER */}
-      {(pendingInvoice || outstandingBalance > 0) && (
+      {/* ⚠️ OUTSTANDING RENT PAYMENT DUE / STATUS ALERT BANNER */}
+      {duesCalculation.isPayable ? (
         <motion.div 
           initial={{ scale: 0.98, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -345,10 +319,10 @@ export default function TenantDashboard() {
               <span>OUTSTANDING RENT PAYMENT DUE</span>
             </div>
             <h3 className="text-2xl font-black text-slate-900 dark:text-white">
-              Rent Due: {formatINR(pendingInvoice?.amount || outstandingBalance || rentAmount)}
+              Rent Due: {formatINR(duesCalculation.remainingOutstanding)}
             </h3>
             <p className="text-xs text-rose-600/90 dark:text-rose-300 font-bold">
-              Your monthly hostel rent tariff is pending. Please complete your payment to keep your account in good standing.
+              Due Date: {duesCalculation.dueDate}. Please complete your payment on the Billing Desk to keep your account in good standing.
             </p>
           </div>
 
@@ -356,16 +330,58 @@ export default function TenantDashboard() {
             onClick={() => { window.location.href = '/tenant/billing'; }}
             className="px-7 py-3.5 rounded-2xl bg-rose-600 text-white font-black text-xs uppercase tracking-wider shadow-xl hover:bg-rose-700 hover:scale-105 transition-all cursor-pointer shrink-0"
           >
-            💳 PAY RENT NOW
+            💳 VIEW & PAY RENT →
           </button>
         </motion.div>
+      ) : duesCalculation.isUnderVerification ? (
+        <div className="p-6 rounded-[32px] bg-purple-500/10 border-2 border-purple-500/30 text-left shadow-xl backdrop-blur-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 font-black text-xs uppercase tracking-wider">
+              <Clock className="w-4 h-4 animate-spin text-purple-500" />
+              <span>PAYMENT UNDER OWNER VERIFICATION ⏳</span>
+            </div>
+            <h3 className="text-2xl font-black text-purple-900 dark:text-purple-200">
+              Submitted: {formatINR(duesCalculation.totalPendingVerification)}
+            </h3>
+            <p className="text-xs text-purple-600/90 dark:text-purple-300 font-bold">
+              Your transaction reference is currently under review by hostel management.
+            </p>
+          </div>
+          <button
+            onClick={() => { window.location.href = '/tenant/billing'; }}
+            className="px-7 py-3.5 rounded-2xl bg-purple-600 text-white font-black text-xs uppercase tracking-wider shadow-xl hover:bg-purple-700 hover:scale-105 transition-all cursor-pointer shrink-0"
+          >
+            VIEW BILLING DESK →
+          </button>
+        </div>
+      ) : (
+        <div className="p-6 rounded-[32px] bg-emerald-500/10 border-2 border-emerald-500/30 text-left shadow-xl backdrop-blur-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-black text-xs uppercase tracking-wider">
+              <ShieldCheck className="w-4 h-4 text-emerald-500" />
+              <span>RENT PAID IN FULL ✓</span>
+            </div>
+            <h3 className="text-2xl font-black text-emerald-900 dark:text-emerald-200">
+              Outstanding: ₹0
+            </h3>
+            <p className="text-xs text-emerald-600/90 dark:text-emerald-300 font-bold">
+              Your account is in good standing. All rent tariffs are settled.
+            </p>
+          </div>
+          <button
+            onClick={() => { window.location.href = '/tenant/billing'; }}
+            className="px-7 py-3.5 rounded-2xl bg-emerald-600 text-white font-black text-xs uppercase tracking-wider shadow-xl hover:bg-emerald-700 hover:scale-105 transition-all cursor-pointer shrink-0"
+          >
+            VIEW PAYMENT HISTORY →
+          </button>
+        </div>
       )}
 
       {/* 📊 2. SUMMARY METRICS CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <motion.div 
           whileHover={{ y: -4, scale: 1.02 }}
-          onClick={() => setShowRentModal(true)}
+          onClick={() => { window.location.href = '/tenant/billing'; }}
           className="p-5 rounded-[28px] bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-white/80 dark:border-[#293832] shadow-xl backdrop-blur-2xl hover:tenant-border-accent transition-all cursor-pointer flex flex-col justify-between space-y-3 group"
         >
           <div className="flex justify-between items-start">
@@ -376,7 +392,7 @@ export default function TenantDashboard() {
           </div>
           <div>
             <div className="text-2xl font-black text-[#1C2522] dark:text-[#F2F5F2] group-hover:tenant-text-accent transition-colors">
-              {formatINR(rentAmount)}
+              {formatINR(duesCalculation.monthlyRent)}
             </div>
             <p className="text-[11px] font-extrabold tenant-text-accent mt-1">Monthly Room Tariff</p>
           </div>
@@ -409,27 +425,29 @@ export default function TenantDashboard() {
 
         <motion.div 
           whileHover={{ y: -4, scale: 1.02 }}
-          onClick={() => setShowRentModal(true)}
+          onClick={() => { window.location.href = '/tenant/billing'; }}
           className="p-5 rounded-[28px] bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-white/80 dark:border-[#293832] shadow-xl backdrop-blur-2xl hover:tenant-border-accent transition-all cursor-pointer flex flex-col justify-between space-y-3 group"
         >
           <div className="flex justify-between items-start">
             <span className="text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-widest">ACCOUNT STATUS</span>
             <div className={`w-9 h-9 rounded-2xl flex items-center justify-center font-black shadow-sm ${
-              pendingInvoice ? 'bg-amber-500/15 text-amber-400' : 'bg-emerald-500/15 text-emerald-400'
+              duesCalculation.isFullyPaid ? 'bg-emerald-500/15 text-emerald-400' : duesCalculation.isUnderVerification ? 'bg-purple-500/15 text-purple-400' : 'bg-amber-500/15 text-amber-400'
             }`}>
               <ShieldCheck className="w-4 h-4" />
             </div>
           </div>
           <div>
-            <div className={`text-2xl font-black ${pendingInvoice ? 'text-amber-400' : 'text-emerald-400'}`}>
-              {pendingInvoice ? (pendingInvoice.status === 'OVERDUE' ? 'OVERDUE' : 'DUE') : 'ALL CLEAR'}
+            <div className={`text-2xl font-black ${
+              duesCalculation.isFullyPaid ? 'text-emerald-400' : duesCalculation.isUnderVerification ? 'text-purple-400' : 'text-amber-400'
+            }`}>
+              {duesCalculation.primaryStatus}
             </div>
             <p className="text-[11px] font-extrabold text-slate-400 mt-1">
-              {pendingInvoice ? `Due: ${formatDate(pendingInvoice.dueDate)}` : 'Good Standing'}
+              {duesCalculation.isFullyPaid ? 'Good Standing' : `Due: ${duesCalculation.dueDate}`}
             </p>
           </div>
           <div className="w-full bg-[#F1EEE7] dark:bg-[#1A2621] h-1.5 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full ${pendingInvoice ? 'bg-amber-500 w-3/4' : 'bg-emerald-500 w-full'}`} />
+            <div className={`h-full rounded-full ${duesCalculation.isFullyPaid ? 'bg-emerald-500 w-full' : duesCalculation.isUnderVerification ? 'bg-purple-500 w-3/4' : 'bg-amber-500 w-1/2'}`} />
           </div>
         </motion.div>
 
@@ -459,7 +477,7 @@ export default function TenantDashboard() {
       {/* 💳 3. PROMINENT RENT & PAYMENTS CARD */}
       <motion.div 
         whileHover={{ y: -2 }}
-        onClick={() => setShowRentModal(true)}
+        onClick={() => { window.location.href = '/tenant/billing'; }}
         className="p-6 sm:p-8 rounded-[32px] bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-white/80 dark:border-[#293832] shadow-xl backdrop-blur-2xl hover:tenant-border-accent transition-all space-y-5 cursor-pointer group"
       >
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#DDD8CE] dark:border-[#293832] pb-5">
@@ -470,43 +488,43 @@ export default function TenantDashboard() {
                 Rent & Lease Payments
               </h3>
               <span className={`text-[10px] font-black px-3 py-0.5 rounded-full border ${
-                pendingInvoice 
-                  ? pendingInvoice.status === 'OVERDUE' ? 'bg-rose-50 dark:bg-[#F27676]/15 text-[#C94B4B] dark:text-[#F27676] border-rose-200 dark:border-[#F27676]/30' : 'bg-amber-50 dark:bg-[#F2C15D]/15 text-[#B7791F] dark:text-[#F2C15D] border-amber-200 dark:border-[#F2C15D]/30'
-                  : 'tenant-bg-soft tenant-text-accent tenant-border-accent'
+                duesCalculation.isFullyPaid 
+                  ? 'tenant-bg-soft tenant-text-accent tenant-border-accent'
+                  : duesCalculation.isUnderVerification
+                  ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800'
+                  : 'bg-rose-50 dark:bg-[#F27676]/15 text-[#C94B4B] dark:text-[#F27676] border-rose-200 dark:border-[#F27676]/30'
               }`}>
-                {pendingInvoice ? (pendingInvoice.status === 'OVERDUE' ? 'OVERDUE' : 'PAYMENT DUE') : 'PAID ✓'}
+                {duesCalculation.primaryStatus}
               </span>
             </div>
             <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] font-medium mt-0.5">Real-time invoice settlement via online banking or UPI</p>
           </div>
 
-          {pendingInvoice && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowPayModal(true);
-              }}
-              className="py-3.5 px-7 rounded-2xl tenant-bg-accent font-black text-xs uppercase tracking-wider shadow-lg hover:scale-105 transition-transform cursor-pointer shrink-0"
-            >
-              PAY NOW →
-            </button>
-          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              window.location.href = '/tenant/billing';
+            }}
+            className="py-3.5 px-7 rounded-2xl tenant-bg-accent font-black text-xs uppercase tracking-wider shadow-lg hover:scale-105 transition-transform cursor-pointer shrink-0"
+          >
+            BILLING DESK →
+          </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div className="p-4.5 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832] space-y-1">
             <span className="text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider block">CURRENT OUTSTANDING DUE</span>
-            <div className="text-3xl font-black text-[#1C2522] dark:text-[#F2F5F2]">{formatINR(outstandingBalance)}</div>
+            <div className="text-3xl font-black text-[#1C2522] dark:text-[#F2F5F2]">{formatINR(duesCalculation.remainingOutstanding)}</div>
             <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] font-medium">
-              {pendingInvoice ? `Due date: ${formatDate(pendingInvoice.dueDate)}` : 'All invoices cleared'}
+              {duesCalculation.remainingOutstanding === 0 ? 'All rent dues cleared ✓' : `Due date: ${duesCalculation.dueDate}`}
             </p>
           </div>
 
           <div className="p-4.5 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832] space-y-1">
-            <span className="text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider block">LAST SETTLED PAYMENT</span>
-            <div className="text-3xl font-black tenant-text-accent">{latestPaidInvoice ? formatINR(latestPaidInvoice.paidAmount || latestPaidInvoice.amount) : '₹0'}</div>
+            <span className="text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider block">TOTAL APPROVED PAYMENTS</span>
+            <div className="text-3xl font-black tenant-text-accent">{formatINR(duesCalculation.totalApprovedPaid)}</div>
             <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] font-medium">
-              {latestPaidInvoice ? `Paid on ${formatDate(latestPaidInvoice.dateCreated)} ✓` : 'No prior payment logs'}
+              Settled and verified by hostel management
             </p>
           </div>
         </div>
@@ -706,19 +724,19 @@ export default function TenantDashboard() {
             <div className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold text-[#68736E] dark:text-[#9BAAA4]">Total Outstanding Dues</span>
-                <span className="text-2xl font-black text-[#1C2522] dark:text-[#F2F5F2]">{formatINR(outstandingBalance)}</span>
+                <span className="text-2xl font-black text-[#1C2522] dark:text-[#F2F5F2]">{formatINR(duesCalculation.remainingOutstanding)}</span>
               </div>
-              {pendingInvoice && (
+              {duesCalculation.isPayable && (
                 <div className="flex justify-between items-center pt-2 border-t border-[#DDD8CE] dark:border-[#293832]">
-                  <span className="text-xs font-bold text-[#68736E] dark:text-[#9BAAA4]">Due Date: {formatDate(pendingInvoice.dueDate)}</span>
+                  <span className="text-xs font-bold text-[#68736E] dark:text-[#9BAAA4]">Due Date: {formatDate(duesCalculation.dueDate)}</span>
                   <button
                     onClick={() => {
                       setShowRentModal(false);
-                      setShowPayModal(true);
+                      window.location.href = '/tenant/billing';
                     }}
                     className="py-2 px-5 rounded-xl tenant-bg-accent font-black text-xs shadow-md cursor-pointer"
                   >
-                    Pay Invoice Now →
+                    Go to Billing Desk →
                   </button>
                 </div>
               )}
@@ -1046,52 +1064,7 @@ export default function TenantDashboard() {
         </NeonModal>
       )}
 
-      {/* 6. PAY RENT NOW POPUP MODAL */}
-      {showPayModal && pendingInvoice && (
-        <NeonModal
-          isOpen={true}
-          onClose={() => setShowPayModal(false)}
-          title={`Settle Rent Invoice #${pendingInvoice.number || pendingInvoice.id.slice(0, 8)}`}
-          subtitle="Instant online rent payment gateway."
-          size="md"
-          accentColor="emerald"
-        >
-          <form onSubmit={handlePayNow} className="space-y-4 text-left font-sans">
-            <div className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] space-y-2">
-              <div className="flex justify-between items-center text-xs font-bold">
-                <span className="text-[#68736E] dark:text-[#9BAAA4]">Total Outstanding Dues</span>
-                <span className="text-2xl font-black text-[#1C2522] dark:text-[#F2F5F2]">{formatINR(pendingInvoice.amount)}</span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-bold border-t border-[#DDD8CE] dark:border-[#293832] pt-2">
-                <span className="text-[#68736E] dark:text-[#9BAAA4]">Due Date</span>
-                <span className="text-[#1C2522] dark:text-[#F2F5F2]">{formatDate(pendingInvoice.dueDate)}</span>
-              </div>
-            </div>
 
-            <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 space-y-1">
-              <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wider block">SECURE ONLINE UPI / BANKING</span>
-              <p className="text-xs text-emerald-300 font-medium">Your payment is processed securely with immediate digital receipt generation.</p>
-            </div>
-
-            <div className="pt-2 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowPayModal(false)}
-                className="py-2.5 px-5 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] text-[#1C2522] dark:text-[#F2F5F2] font-bold text-xs cursor-pointer border border-[#DDD8CE] dark:border-[#293832]"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={paying}
-                className="py-2.5 px-6 rounded-2xl tenant-bg-accent font-black text-xs cursor-pointer shadow-lg hover:scale-105 transition-all"
-              >
-                {paying ? 'Processing...' : 'CONFIRM & PAY NOW →'}
-              </button>
-            </div>
-          </form>
-        </NeonModal>
-      )}
 
       {/* 7. NOTICE DETAIL POPUP MODAL */}
       {selectedNotice && (

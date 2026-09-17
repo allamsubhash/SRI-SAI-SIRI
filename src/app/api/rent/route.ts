@@ -1,12 +1,32 @@
 import { NextResponse } from 'next/server';
 import { dbService } from '@/lib/db';
+import { computeTenantBillingState } from '@/lib/billingService';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const invoices = await dbService.getInvoices();
-    return NextResponse.json(invoices, {
+    const tenants = await dbService.getTenants();
+    const rawInvoices = await dbService.getInvoices();
+    const rawPayments = await dbService.getAllPayments();
+
+    const allSyncedInvoices: any[] = [];
+    const processedTenantIds = new Set<string>();
+
+    for (const tenant of tenants) {
+      processedTenantIds.add(tenant.id);
+      const billing = computeTenantBillingState(tenant, rawInvoices, rawPayments);
+      allSyncedInvoices.push(...billing.invoices);
+    }
+
+    // Include any standalone invoices not linked to active tenants
+    for (const inv of rawInvoices) {
+      if (!processedTenantIds.has(inv.tenantId)) {
+        allSyncedInvoices.push(inv);
+      }
+    }
+
+    return NextResponse.json(allSyncedInvoices, {
       headers: {
         'Cache-Control': 'no-store, max-age=0, must-revalidate'
       }

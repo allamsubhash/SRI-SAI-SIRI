@@ -580,16 +580,23 @@ export const dbService = {
           }
         });
 
-        // 4. Update Bed occupancy in database
-        if (targetBedId) {
-          await tx.bed.update({
-            where: { id: targetBedId },
-            data: {
-              tenantId: createdTenant.id,
-              isAvailable: false
-            }
-          });
-        }
+        // 5. Create initial rent invoice for newly registered tenant
+        const now = new Date();
+        const currentMonthStr = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+        const dueDate = new Date(now.getFullYear(), now.getMonth(), 5);
+        const invNumber = `INV-${Date.now().toString().slice(-6)}`;
+        await tx.invoice.create({
+          data: {
+            id: `inv-${createdTenant.id}`,
+            number: invNumber,
+            tenantId: createdTenant.id,
+            amount: data.rentAmount || 8500,
+            paidAmount: 0,
+            dueDate: dueDate,
+            status: now.getDate() > 5 ? 'OVERDUE' : 'PENDING',
+            itemsJson: JSON.stringify([{ description: `Monthly Hostel Rent - ${currentMonthStr}`, amount: data.rentAmount || 8500 }])
+          }
+        });
 
         return {
           id: createdTenant.id,
@@ -1951,15 +1958,22 @@ export const dbService = {
           data: { status: 'APPROVED' }
         });
 
-        if (existing.invoiceId) {
-          const inv = await tx.invoice.findUnique({
-            where: { id: existing.invoiceId }
-          });
-          if (inv) {
-            const newPaid = (inv.paidAmount || 0) + existing.amount;
+        // Synchronize all open/unpaid invoices for this tenant
+        const openInvoices = await tx.invoice.findMany({
+          where: {
+            OR: [
+              { tenantId: existing.tenantId },
+              ...(existing.invoiceId ? [{ id: existing.invoiceId }] : [])
+            ]
+          }
+        });
+
+        if (openInvoices.length > 0) {
+          for (const inv of openInvoices) {
+            const newPaid = Math.min(inv.amount, (inv.paidAmount || 0) + existing.amount);
             const newStatus = newPaid >= inv.amount ? 'PAID' : 'PARTIAL';
             await tx.invoice.update({
-              where: { id: existing.invoiceId },
+              where: { id: inv.id },
               data: {
                 paidAmount: newPaid,
                 status: newStatus
