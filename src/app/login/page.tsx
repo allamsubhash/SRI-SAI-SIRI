@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import React, { useState, useEffect, Suspense } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
 import { 
   ShieldCheck, 
   UserCheck, 
@@ -16,7 +17,10 @@ import {
   Check, 
   AlertCircle, 
   Sun, 
-  Moon
+  Moon,
+  Home as HomeIcon,
+  FileText,
+  LogIn
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import LiveBackground from '@/components/backgrounds/LiveBackground';
@@ -258,26 +262,55 @@ function LoginContent() {
           </div>
         </div>
 
-        <button
-          onClick={() => setIsDarkMode(!isDarkMode)}
-          className={`p-2.5 rounded-full border backdrop-blur-md text-xs transition-all cursor-pointer flex items-center gap-2 font-bold ${
-            isDarkMode 
-              ? 'border-white/10 bg-white/5 text-slate-300 hover:text-white' 
-              : 'border-slate-300 bg-white text-slate-700 hover:text-slate-900 shadow-sm'
-          }`}
-        >
-          {isDarkMode ? (
-            <>
-              <Sun className="w-4 h-4 text-amber-400" />
-              <span className="text-[10px] font-black text-slate-300 uppercase tracking-wider">Light Mode</span>
-            </>
-          ) : (
-            <>
-              <Moon className="w-4 h-4 text-indigo-600" />
-              <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">Dark Mode</span>
-            </>
-          )}
-        </button>
+        {/* Top Header Navigation */}
+        <div className="flex items-center gap-4">
+          <nav className="hidden md:flex items-center gap-2 bg-white/5 border border-white/10 p-1.5 rounded-full backdrop-blur-2xl">
+            <Link
+              href="/guidelines"
+              className="px-4 py-1.5 rounded-full text-xs font-bold text-slate-300 hover:text-white transition-colors flex items-center gap-1.5"
+            >
+              <HomeIcon className="w-3.5 h-3.5" />
+              <span>Home</span>
+            </Link>
+            
+            <Link
+              href="/guidelines"
+              className="px-4 py-1.5 rounded-full text-xs font-bold text-slate-300 hover:text-white transition-colors flex items-center gap-1.5"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Guidelines</span>
+            </Link>
+
+            <Link
+              href="/login"
+              className="px-4 py-1.5 rounded-full text-xs font-bold text-cyan-400 bg-cyan-500/15 border border-cyan-500/30 flex items-center gap-1.5 shadow-sm"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Login</span>
+            </Link>
+          </nav>
+
+          <button
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className={`p-2.5 rounded-full border backdrop-blur-md text-xs transition-all cursor-pointer flex items-center gap-2 font-bold ${
+              isDarkMode 
+                ? 'border-white/10 bg-white/5 text-slate-300 hover:text-white' 
+                : 'border-slate-300 bg-white text-slate-700 hover:text-slate-900 shadow-sm'
+            }`}
+          >
+            {isDarkMode ? (
+              <>
+                <Sun className="w-4 h-4 text-amber-400" />
+                <span className="text-[10px] font-black text-slate-300 uppercase tracking-wider hidden sm:inline">Light</span>
+              </>
+            ) : (
+              <>
+                <Moon className="w-4 h-4 text-indigo-600" />
+                <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider hidden sm:inline">Dark</span>
+              </>
+            )}
+          </button>
+        </div>
       </header>
 
       {/* Main Form Container */}
@@ -555,49 +588,6 @@ function LoginContent() {
           </AnimatePresence>
 
         </div>
-
-        {/* 📋 PUBLIC HOSTEL GUIDELINES SECTION */}
-        {guidelines.length > 0 && (
-          <div className="w-full max-w-[460px] flex flex-col items-center mt-4">
-            <button
-              onClick={() => setShowGuidelines(!showGuidelines)}
-              className={`px-4 py-2 rounded-full border text-xs font-bold transition-all cursor-pointer flex items-center gap-2 backdrop-blur-md shadow-md ${
-                isDarkMode 
-                  ? 'border-white/15 bg-white/5 text-slate-300 hover:text-white hover:bg-white/10' 
-                  : 'border-slate-300 bg-white text-slate-700 hover:text-slate-900'
-              }`}
-            >
-              <span>📜 Hostel Rules & Resident Guidelines ({guidelines.length})</span>
-              <span className="text-[10px]">{showGuidelines ? '▲ Hide' : '▼ View Rules'}</span>
-            </button>
-
-            {showGuidelines && (
-              <div className={`w-full mt-3 p-5 rounded-3xl border backdrop-blur-xl transition-all duration-300 space-y-3 shadow-xl text-left ${
-                isDarkMode ? 'bg-[#020306]/90 border-white/15 text-slate-200' : 'bg-white/95 border-slate-300 text-slate-800'
-              }`}>
-                <div className="flex items-center justify-between border-b pb-2.5 border-white/10">
-                  <h4 className="font-black text-xs uppercase tracking-wider text-blue-400">Hostel Rules & Regulations</h4>
-                  <span className="text-[10px] font-bold text-slate-400">Sri Sai Siri Boys Hostel</span>
-                </div>
-                <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
-                  {guidelines.map((g: any, index: number) => (
-                    <div key={g.id || index} className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-1">
-                      <div className="font-bold text-xs text-amber-400 flex items-center gap-1.5">
-                        <span className="w-4 h-4 rounded-full bg-amber-400/20 text-amber-400 text-[10px] font-black flex items-center justify-center">
-                          {g.order || index + 1}
-                        </span>
-                        <span>{g.title}</span>
-                      </div>
-                      <p className="text-[11px] text-slate-300 leading-relaxed pl-5">
-                        {g.content}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
       </main>
 
