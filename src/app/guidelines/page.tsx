@@ -204,39 +204,17 @@ export default function PublicGuidelinesPage() {
             </h1>
 
             <p className="text-sm sm:text-base text-slate-300 font-normal leading-relaxed max-w-2xl">
-              Please read and follow the guidelines below before joining our hostel. These rules help us maintain a safe, clean and comfortable environment for everyone.
+              Please read and follow the guidelines below. These rules help us maintain a safe, clean and comfortable living environment for all residents.
             </p>
-
-            {/* Quote Card */}
-            <div className="p-4 sm:p-5 rounded-2xl bg-[#091228]/80 border border-white/15 backdrop-blur-xl flex items-center justify-between gap-4 max-w-xl shadow-xl">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-cyan-500/10 text-cyan-400 shrink-0">
-                  <Quote className="w-5 h-5" />
-                </div>
-                <p className="text-xs sm:text-sm font-semibold italic text-cyan-200">
-                  "Discipline today, a brighter tomorrow."
-                </p>
-              </div>
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest text-right shrink-0 border-l border-white/10 pl-3">
-                SRI SAI SIRI<br /><span className="text-cyan-400">BOYS HOSTEL</span>
-              </span>
-            </div>
           </div>
 
-          <div className="lg:col-span-4 hidden lg:flex flex-col items-end justify-center text-right space-y-3 border-l border-white/10 pl-8">
-            <div className="text-[10px] font-black text-slate-400 tracking-[3px] uppercase space-y-1">
-              <div>SAFE STAY</div>
-              <div>DISCIPLINED LIFE</div>
-              <div>BRIGHT FUTURE</div>
-            </div>
-            <div className="flex gap-1.5 py-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-500/60" />
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-600/30" />
-            </div>
-            <p className="text-xs font-semibold text-slate-300 italic">
-              More than a stay,<br />a place to grow
-            </p>
+          <div className="lg:col-span-4 hidden lg:flex flex-col items-end justify-center text-right space-y-2 border-l border-white/10 pl-8">
+            <span className="font-black text-sm tracking-wider text-white block leading-none">
+              SRI SAI SIRI
+            </span>
+            <span className="text-[10px] font-black text-cyan-400 block tracking-[3px] uppercase">
+              BOYS HOSTEL
+            </span>
           </div>
 
         </div>
@@ -330,9 +308,9 @@ export default function PublicGuidelinesPage() {
               <GraduationCap className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-base sm:text-lg font-black text-white">Together for a Better Tomorrow</h3>
+              <h3 className="text-base sm:text-lg font-black text-white">Resident Cooperation & Rules</h3>
               <p className="text-xs text-slate-300 font-medium">
-                Your cooperation helps us create a safe, comfortable and disciplined living space for all residents.
+                Your cooperation helps us maintain a safe, clean and comfortable living space for all residents.
               </p>
             </div>
           </div>
@@ -359,10 +337,6 @@ export default function PublicGuidelinesPage() {
             <span className="font-black text-white text-sm block leading-none">SRI SAI SIRI</span>
             <span className="text-[9px] font-black text-cyan-400 uppercase tracking-widest mt-0.5 block">BOYS HOSTEL</span>
           </div>
-        </div>
-
-        <div className="italic text-slate-300 font-medium text-xs sm:text-sm">
-          Safe Stay <span className="text-cyan-400 font-normal">|</span> Disciplined Life <span className="text-cyan-400 font-normal">|</span> Bright Future
         </div>
 
         <div className="flex flex-wrap items-center gap-4 text-slate-300 font-medium">

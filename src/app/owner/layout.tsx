@@ -173,7 +173,6 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
     { label: 'Inventory Stock', icon: <Warehouse className="w-4 h-4" />, href: '/owner/inventory' },
     { label: 'Expenses', icon: <DollarSign className="w-4 h-4" />, href: '/owner/expenses' },
     { label: 'Notice Board', icon: <Megaphone className="w-4 h-4" />, href: '/owner/notices' },
-    { label: 'Hostel Guidelines', icon: <BookOpen className="w-4 h-4" />, href: '/owner/guidelines' },
     { label: 'Reports & Analytics', icon: <BarChart3 className="w-4 h-4" />, href: '/owner/reports' },
     { label: 'Settings', icon: <Settings className="w-4 h-4" />, href: '/owner/settings' },
   ];

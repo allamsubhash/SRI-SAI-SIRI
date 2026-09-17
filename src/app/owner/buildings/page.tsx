@@ -231,14 +231,18 @@ export default function BuildingsManagement() {
           floorsCount: parseInt(bFloors)
         })
       });
-      if (res.ok) {
+      const data = await res.json();
+      if (res.ok && data.building) {
         setShowAddBuildingModal(false);
         setAddBStep(1);
         setBName('');
         setBAddress('');
         setBFloors('3');
+        setSelectedBuildingId(data.building.id);
         setSuccessToast({ title: 'Building Created!', subtitle: `${bName} added to architectural registry.` });
         fetchInitialData();
+      } else {
+        alert(data.error || 'Failed to create building');
       }
     } catch (error) {
       console.error(error);
@@ -275,12 +279,15 @@ export default function BuildingsManagement() {
 
   const handleDeleteBuilding = async (id: string) => {
     try {
-      setBuildings(prev => prev.filter(b => b.id !== id));
-      setDeleteBConfirm(null);
-      setSuccessToast({ title: 'Building Deleted', subtitle: 'Property record permanently removed.' });
-
-      await fetch(`/api/buildings?id=${id}`, { method: 'DELETE' });
-      fetchInitialData();
+      const res = await fetch(`/api/buildings?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setDeleteBConfirm(null);
+        setSuccessToast({ title: 'Building Deleted', subtitle: 'Property record permanently removed.' });
+        fetchInitialData();
+      } else {
+        alert(data.error || 'Failed to delete building');
+      }
     } catch (e) {
       console.error(e);
     }

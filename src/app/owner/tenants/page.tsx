@@ -77,6 +77,14 @@ export default function TenantsManagement() {
   const [editRoomNumber, setEditRoomNumber] = useState('');
   const [editBedNumber, setEditBedNumber] = useState('');
   const [editRoomRent, setEditRoomRent] = useState(8500);
+  const [editAddress, setEditAddress] = useState('');
+  const [editAadhaar, setEditAadhaar] = useState('');
+  const [editEmergencyName, setEditEmergencyName] = useState('');
+  const [editEmergencyPhone, setEditEmergencyPhone] = useState('');
+  const [editGuardianName, setEditGuardianName] = useState('');
+  const [editGuardianPhone, setEditGuardianPhone] = useState('');
+  const [editOccupation, setEditOccupation] = useState('Student');
+  const [editMedicalNotes, setEditMedicalNotes] = useState('');
 
   // Custom Modal Action Dialogs
   const [vacateDialogTenant, setVacateDialogTenant] = useState<any>(null);
@@ -199,6 +207,14 @@ export default function TenantsManagement() {
     setEditRoomNumber(t.roomNumber || '');
     setEditBedNumber(t.bedNumber || '');
     setEditRoomRent(t.rentAmount || 8500);
+    setEditAddress(t.address || '');
+    setEditAadhaar(t.aadhaar || '');
+    setEditEmergencyName(t.emergencyName || t.emergencyContactName || '');
+    setEditEmergencyPhone(t.emergencyPhone || t.emergencyContactPhone || '');
+    setEditGuardianName(t.guardianName || '');
+    setEditGuardianPhone(t.guardianPhone || '');
+    setEditOccupation(t.occupation || 'Student');
+    setEditMedicalNotes(t.medicalNotes || '');
     
     const matchedRoom = allRoomsFlat.find(r => r.number === t.roomNumber);
     setEditRoomId(matchedRoom ? matchedRoom.id : '');
@@ -223,7 +239,15 @@ export default function TenantsManagement() {
           password: editPassword.trim() || undefined,
           roomNumber: editRoomNumber,
           bedNumber: editBedNumber,
-          rentAmount: editRoomRent
+          rentAmount: editRoomRent,
+          address: editAddress,
+          aadhaar: editAadhaar,
+          emergencyName: editEmergencyName,
+          emergencyPhone: editEmergencyPhone,
+          guardianName: editGuardianName,
+          guardianPhone: editGuardianPhone,
+          occupation: editOccupation,
+          medicalNotes: editMedicalNotes
         })
       });
       if (res.ok) {
@@ -1041,7 +1065,92 @@ export default function TenantsManagement() {
               </div>
             </div>
 
-            {/* Section 3: Account Credentials */}
+            {/* Section 3: Emergency, Guardian & Address Details */}
+            <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-zinc-800">
+              <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest block">EMERGENCY & GUARDIAN DETAILS</span>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">Emergency Contact Name</label>
+                  <input 
+                    type="text" 
+                    value={editEmergencyName}
+                    onChange={(e) => setEditEmergencyName(e.target.value)}
+                    placeholder="e.g. Ramesh Kumar"
+                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">Emergency Contact Phone</label>
+                  <input 
+                    type="text" 
+                    value={editEmergencyPhone}
+                    onChange={(e) => setEditEmergencyPhone(e.target.value)}
+                    placeholder="+91 98765 00000"
+                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">Guardian Name</label>
+                  <input 
+                    type="text" 
+                    value={editGuardianName}
+                    onChange={(e) => setEditGuardianName(e.target.value)}
+                    placeholder="Parent / Guardian Name"
+                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">Guardian Phone</label>
+                  <input 
+                    type="text" 
+                    value={editGuardianPhone}
+                    onChange={(e) => setEditGuardianPhone(e.target.value)}
+                    placeholder="+91 98765 00000"
+                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">Aadhaar Card Number</label>
+                  <input 
+                    type="text" 
+                    value={editAadhaar}
+                    onChange={(e) => setEditAadhaar(e.target.value)}
+                    placeholder="12-digit Aadhaar Number"
+                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">Occupation</label>
+                  <input 
+                    type="text" 
+                    value={editOccupation}
+                    onChange={(e) => setEditOccupation(e.target.value)}
+                    placeholder="Student / Working Professional"
+                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">Permanent Home Address</label>
+                <input 
+                  type="text" 
+                  value={editAddress}
+                  onChange={(e) => setEditAddress(e.target.value)}
+                  placeholder="Full permanent residential address"
+                  className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+            </div>
+
+            {/* Section 4: Account Credentials */}
             <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-zinc-800">
               <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest block">ACCOUNT CREDENTIALS</span>
               
