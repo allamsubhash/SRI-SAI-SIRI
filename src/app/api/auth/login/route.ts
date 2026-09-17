@@ -95,10 +95,11 @@ export async function POST(request: Request) {
     return response;
   } catch (error: any) {
     console.error('Login error:', error);
-    let userMsg = error.message || 'Internal Server Error';
-    if (userMsg.includes('Can\'t reach database server') || userMsg.includes('P1001') || userMsg.includes('prisma.')) {
-      userMsg = 'Database connection error. Please verify Aiven MySQL database status and environment configuration.';
-    }
-    return NextResponse.json({ error: userMsg }, { status: 500 });
+    const userMsg = error.message || 'Internal Server Error';
+    return NextResponse.json({ 
+      error: userMsg,
+      code: error.code || 'UNKNOWN',
+      name: error.name || 'Error'
+    }, { status: 500 });
   }
 }

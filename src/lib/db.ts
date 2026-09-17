@@ -51,6 +51,7 @@ export const dbService = {
     if (!email) return null;
     const cleanEmail = email.trim().toLowerCase();
     try {
+      await ensureDbInitialized();
       const user = await prisma.user.findFirst({
         where: { email: cleanEmail },
         include: {
