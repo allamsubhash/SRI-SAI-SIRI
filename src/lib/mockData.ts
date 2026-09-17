@@ -709,3 +709,43 @@ export const mockQRSettings = {
 
 export const mockNotificationReads: Set<string> = new Set();
 
+export interface MockGuideline {
+  id: string;
+  title: string;
+  content: string;
+  order: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const mockGuidelines: MockGuideline[] = [
+  {
+    id: 'guide-1',
+    title: 'Cleanliness & Hygiene',
+    content: 'Maintain cleanliness in individual rooms and common areas at all times.',
+    order: 1,
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'guide-2',
+    title: 'Visitor Timing Rules',
+    content: 'Visitors are permitted in the reception lounge area between 9:00 AM and 7:00 PM only.',
+    order: 2,
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'guide-3',
+    title: 'Rent Due Payment Date',
+    content: 'Monthly hostel rent must be settled on or before the 5th of each month.',
+    order: 3,
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+

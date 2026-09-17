@@ -37,6 +37,9 @@ export default function SettingsPage() {
     instructions: 'Pay via any UPI app (GPay, PhonePe, Paytm) and enter the 12-digit UTR/Reference number.'
   });
   const [qrSaving, setQrSaving] = useState(false);
+  const [selectedQRFile, setSelectedQRFile] = useState<File | null>(null);
+  const [qrPreviewUrl, setQrPreviewUrl] = useState<string>('');
+  const [qrDeleting, setQrDeleting] = useState(false);
 
   // Quick Action States
   const [curfewLockdown, setCurfewLockdown] = useState(false);
@@ -101,24 +104,64 @@ export default function SettingsPage() {
       .catch(() => {});
   }, []);
 
+  const handleQRFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedQRFile(file);
+      setQrPreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
   const handleSaveQRSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     setQrSaving(true);
     try {
+      const formData = new FormData();
+      formData.append('upiId', qrForm.upiId);
+      formData.append('instructions', qrForm.instructions);
+      if (selectedQRFile) {
+        formData.append('qrFile', selectedQRFile);
+      } else if (qrForm.qrCodeUrl) {
+        formData.append('qrCodeUrl', qrForm.qrCodeUrl);
+      }
+
       const res = await fetch('/api/settings/qr', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(qrForm)
+        body: formData
       });
-      if (res.ok) {
-        showToast('QR Settings Saved', 'QR code image URL, UPI ID, and payment instructions updated persistently.', 'success');
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (data.settings) setQrForm(data.settings);
+        setSelectedQRFile(null);
+        showToast('QR Settings Saved', 'QR code image, UPI ID, and payment instructions updated.', 'success');
       } else {
-        showToast('Save Failed', 'Could not update QR settings.', 'danger');
+        showToast('Save Failed', data.error || 'Could not update QR settings.', 'danger');
       }
     } catch (err) {
       showToast('Error', 'Network request failed.', 'danger');
     } finally {
       setQrSaving(false);
+    }
+  };
+
+  const handleDeleteQR = async () => {
+    if (!confirm('Are you sure you want to remove the payment QR code?')) return;
+    setQrDeleting(true);
+    try {
+      const res = await fetch('/api/settings/qr', { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (data.settings) setQrForm(data.settings);
+        setSelectedQRFile(null);
+        setQrPreviewUrl('');
+        showToast('QR Code Removed', 'Payment QR code image has been cleared.', 'success');
+      } else {
+        showToast('Delete Failed', data.error || 'Could not delete QR code.', 'danger');
+      }
+    } catch (err) {
+      showToast('Error', 'Network request failed.', 'danger');
+    } finally {
+      setQrDeleting(false);
     }
   };
 
@@ -408,13 +451,69 @@ export default function SettingsPage() {
                 Official Payment QR Code & UPI Configuration
               </h3>
               <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5 font-medium">
-                Set up the QR code image URL, UPI ID, and payment instructions shown to tenants on the Pay Rent page.
+                Upload, preview, replace, or remove your hostel payment QR code served dynamically to resident portals.
               </p>
+            </div>
+
+            {/* QR CODE PREVIEW & UPLOAD SECTION */}
+            <div className="p-5 rounded-3xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 space-y-4">
+              <label className="block text-xs font-extrabold text-slate-700 dark:text-zinc-300">
+                Payment QR Code Image Preview & Upload
+              </label>
+
+              <div className="flex flex-col sm:flex-row items-center gap-5">
+                <div className="w-36 h-36 rounded-2xl border-2 border-dashed border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 flex items-center justify-center p-2 relative overflow-hidden shrink-0 shadow-inner">
+                  {(qrPreviewUrl || qrForm.qrCodeUrl) ? (
+                    <img 
+                      src={qrPreviewUrl || qrForm.qrCodeUrl} 
+                      alt="Payment QR Code" 
+                      className="w-full h-full object-contain rounded-xl"
+                    />
+                  ) : (
+                    <span className="text-[10px] font-bold text-slate-400 text-center">No QR Code Uploaded</span>
+                  )}
+                </div>
+
+                <div className="space-y-3 flex-1 text-left">
+                  <p className="text-xs text-slate-600 dark:text-zinc-400 font-medium">
+                    Upload a high-resolution QR image (PNG, JPG, SVG) for Paytm, PhonePe, Google Pay, or BHIM.
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer transition-all shadow-sm">
+                      <span>{qrForm.qrCodeUrl || qrPreviewUrl ? 'Replace QR Image' : 'Upload QR Image'}</span>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleQRFileChange} 
+                        className="hidden" 
+                      />
+                    </label>
+
+                    {(qrForm.qrCodeUrl || qrPreviewUrl) && (
+                      <button
+                        type="button"
+                        onClick={handleDeleteQR}
+                        disabled={qrDeleting}
+                        className="px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500 text-rose-600 hover:text-white border border-rose-500/20 text-xs font-bold cursor-pointer transition-all"
+                      >
+                        {qrDeleting ? 'Removing...' : 'Delete QR Code'}
+                      </button>
+                    )}
+                  </div>
+
+                  {selectedQRFile && (
+                    <p className="text-[11px] font-bold text-emerald-500">
+                      Selected File: {selectedQRFile.name} (Click "Save QR Settings" to upload)
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div>
               <label className="block text-xs font-extrabold text-slate-700 dark:text-zinc-300 mb-1">
-                QR Code Image URL / Path
+                QR Code Image URL / Path (Manual Fallback)
               </label>
               <input
                 type="text"

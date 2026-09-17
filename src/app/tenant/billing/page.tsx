@@ -217,11 +217,22 @@ export default function TenantBilling() {
           </p>
         </div>
         
-        {duesCalculation.totalPendingApproval > 0 ? (
-          <div className="py-3 px-6 rounded-2xl bg-purple-500/20 text-purple-600 dark:text-purple-300 border border-purple-500/30 text-xs font-black flex items-center gap-2 z-10 shrink-0 shadow-md">
+        {duesCalculation.totalPendingApproval >= duesCalculation.totalDues && duesCalculation.totalPendingApproval > 0 ? (
+          <button
+            disabled
+            className="py-3.5 px-7 rounded-2xl bg-purple-500/20 text-purple-600 dark:text-purple-300 border border-purple-500/30 text-xs font-black flex items-center gap-2 z-10 shrink-0 cursor-not-allowed opacity-90 shadow-md"
+          >
             <Clock className="w-4 h-4 animate-spin text-purple-500" />
-            <span>PAYMENT SUBMITTED & AWAITING VERIFICATION ⏳</span>
-          </div>
+            <span>PAYMENT UNDER VERIFICATION ⏳</span>
+          </button>
+        ) : duesCalculation.totalDues === 0 ? (
+          <button
+            disabled
+            className="py-3.5 px-7 rounded-2xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30 text-xs font-black flex items-center gap-2 z-10 shrink-0 cursor-not-allowed opacity-90 shadow-md"
+          >
+            <CheckCircle className="w-4 h-4 text-emerald-500" />
+            <span>NO PAYMENT DUE ✓</span>
+          </button>
         ) : (
           <button
             onClick={handleOpenPayModal}
@@ -351,10 +362,15 @@ export default function TenantBilling() {
 
             <button
               onClick={handleOpenPayModal}
-              className="py-3 px-6 rounded-2xl tenant-bg-accent text-xs font-black shadow-md hover:scale-105 transition-all cursor-pointer flex items-center gap-2"
+              disabled={duesCalculation.totalDues === 0 || duesCalculation.totalPendingApproval >= duesCalculation.totalDues}
+              className={`py-3 px-6 rounded-2xl text-xs font-black shadow-md flex items-center gap-2 transition-all ${
+                duesCalculation.totalDues === 0 || duesCalculation.totalPendingApproval >= duesCalculation.totalDues
+                  ? 'bg-slate-300 dark:bg-zinc-800 text-slate-500 cursor-not-allowed opacity-60'
+                  : 'tenant-bg-accent hover:scale-105 cursor-pointer'
+              }`}
             >
               <Send className="w-4 h-4" />
-              <span>Submit Payment UTR Reference →</span>
+              <span>{duesCalculation.totalPendingApproval >= duesCalculation.totalDues && duesCalculation.totalPendingApproval > 0 ? 'Payment Under Verification ⏳' : duesCalculation.totalDues === 0 ? 'No Payment Due ✓' : 'Submit Payment UTR Reference →'}</span>
             </button>
           </div>
         </div>

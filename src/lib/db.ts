@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { mockTenants, mockBuildings, mockInvoices, mockUsers, mockPayments, mockQRSettings, mockNotificationReads } from './mockData';
+import { mockTenants, mockBuildings, mockInvoices, mockUsers, mockPayments, mockQRSettings, mockNotificationReads, mockGuidelines } from './mockData';
 
 // Avoid multiple PrismaClient instances in development / serverless executions
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
@@ -477,8 +477,7 @@ export const dbService = {
           roomNumber: t.roomNumber || targetRoomNumber || 'N/A',
           bedNumber: assignedBed ? assignedBed.number : (t.bedNumber || 'N/A'),
           occupation: t.profile.occupation || 'Resident',
-          photoUrl: t.profile.photoUrl || '',
-          moveInDate: t.moveInDate ? t.moveInDate.toISOString().split('T')[0] : '2026-01-15'
+          photoUrl: t.profile.photoUrl || ''
         };
       });
     } catch (e) {
@@ -644,20 +643,24 @@ export const dbService = {
   },
 
   async updateTenantProfile(tenantId: string, data: {
-    name: string;
-    email: string;
-    phone: string;
-    gender: string;
-    moveInDate: string;
+    name?: string;
+    email?: string;
+    phone?: string;
+    gender?: string;
+    moveInDate?: string;
     password?: string;
     roomNumber?: string;
     bedNumber?: string;
     rentAmount?: number;
+    address?: string;
+    aadhaar?: string;
+    emergencyName?: string;
+    emergencyPhone?: string;
+    guardianName?: string;
+    guardianPhone?: string;
+    occupation?: string;
+    medicalNotes?: string;
   }) {
-    const names = data.name.trim().split(' ');
-    const firstName = names[0] || 'Tenant';
-    const lastName = names.slice(1).join(' ') || '';
-
     return await prisma.$transaction(async (tx) => {
       const dbTenant = await tx.tenant.findUnique({
         where: { id: tenantId },
@@ -667,28 +670,44 @@ export const dbService = {
       if (!dbTenant) throw new Error('Tenant record not found.');
 
       // Update User email/password if provided
-      const userUpdate: any = { email: data.email.trim().toLowerCase() };
-      if (data.password) {
-        userUpdate.password = bcrypt.hashSync(data.password, 10);
+      if (data.email || data.password) {
+        const userUpdate: any = {};
+        if (data.email) userUpdate.email = data.email.trim().toLowerCase();
+        if (data.password) userUpdate.password = bcrypt.hashSync(data.password, 10);
+        await tx.user.update({
+          where: { id: dbTenant.profile.userId },
+          data: userUpdate
+        });
       }
-      await tx.user.update({
-        where: { id: dbTenant.profile.userId },
-        data: userUpdate
-      });
 
       // Update Profile
-      await tx.profile.update({
-        where: { id: dbTenant.profileId },
-        data: {
-          firstName,
-          lastName,
-          phone: data.phone,
-          gender: data.gender,
-          moveInDate: new Date(data.moveInDate)
-        }
-      });
+      const names = data.name ? data.name.trim().split(' ') : null;
+      const firstName = names ? (names[0] || 'Tenant') : undefined;
+      const lastName = names ? (names.slice(1).join(' ') || '') : undefined;
+
+      const profileUpdate: any = {};
+      if (firstName !== undefined) profileUpdate.firstName = firstName;
+      if (lastName !== undefined) profileUpdate.lastName = lastName;
+      if (data.phone !== undefined) profileUpdate.phone = data.phone;
+      if (data.gender !== undefined) profileUpdate.gender = data.gender;
+      if (data.moveInDate !== undefined) profileUpdate.moveInDate = new Date(data.moveInDate);
+      if (data.address !== undefined) profileUpdate.address = data.address;
+      if (data.aadhaar !== undefined) profileUpdate.aadhaar = data.aadhaar;
+      if (data.emergencyName !== undefined) profileUpdate.emergencyContactName = data.emergencyName;
+      if (data.emergencyPhone !== undefined) profileUpdate.emergencyContactPhone = data.emergencyPhone;
+      if (data.guardianName !== undefined) profileUpdate.guardianName = data.guardianName;
+      if (data.guardianPhone !== undefined) profileUpdate.guardianPhone = data.guardianPhone;
+      if (data.occupation !== undefined) profileUpdate.occupation = data.occupation;
+
+      if (Object.keys(profileUpdate).length > 0) {
+        await tx.profile.update({
+          where: { id: dbTenant.profileId },
+          data: profileUpdate
+        });
+      }
 
       // Handle Bed reallocation if bedNumber changed
+      let newRoomId: string | undefined = undefined;
       if (data.bedNumber && data.bedNumber !== dbTenant.bedNumber) {
         // Free old bed
         await tx.bed.updateMany({
@@ -698,7 +717,8 @@ export const dbService = {
 
         // Occupy new bed
         const newBed = await tx.bed.findFirst({
-          where: { number: { equals: data.bedNumber.trim() } }
+          where: { number: { equals: data.bedNumber.trim() } },
+          include: { room: true }
         });
 
         if (newBed) {
@@ -706,18 +726,22 @@ export const dbService = {
             where: { id: newBed.id },
             data: { tenantId: tenantId, isAvailable: false }
           });
+          newRoomId = newBed.roomId;
         }
       }
 
       // Update Tenant
+      const tenantUpdate: any = {};
+      if (data.roomNumber !== undefined) tenantUpdate.roomNumber = data.roomNumber;
+      if (data.bedNumber !== undefined) tenantUpdate.bedNumber = data.bedNumber;
+      if (data.rentAmount !== undefined) tenantUpdate.rentAmount = data.rentAmount;
+      if (data.medicalNotes !== undefined) tenantUpdate.medicalNotes = data.medicalNotes;
+      if (data.moveInDate !== undefined) tenantUpdate.moveInDate = new Date(data.moveInDate);
+      if (newRoomId) tenantUpdate.roomId = newRoomId;
+
       return await tx.tenant.update({
         where: { id: tenantId },
-        data: {
-          roomNumber: data.roomNumber,
-          bedNumber: data.bedNumber,
-          rentAmount: data.rentAmount,
-          moveInDate: data.moveInDate ? new Date(data.moveInDate) : undefined
-        }
+        data: tenantUpdate
       });
     });
   },
@@ -2209,6 +2233,125 @@ export const dbService = {
       count: createdInvoices.length,
       invoices: createdInvoices
     };
+  },
+
+  // --- HOSTEL GUIDELINES ---
+  async getGuidelines() {
+    try {
+      const guidelines = await prisma.guideline.findMany({
+        orderBy: { order: 'asc' }
+      });
+      if (guidelines && guidelines.length > 0) {
+        return guidelines.map(g => ({
+          id: g.id,
+          title: g.title,
+          content: g.content,
+          order: g.order,
+          isActive: g.isActive,
+          createdAt: g.createdAt.toISOString(),
+          updatedAt: g.updatedAt.toISOString()
+        }));
+      }
+    } catch (e) {
+      logDebug('getGuidelines DB fallback:', e);
+    }
+    return mockGuidelines;
+  },
+
+  async createGuideline(data: { title: string; content: string; order?: number; isActive?: boolean }) {
+    try {
+      const created = await prisma.guideline.create({
+        data: {
+          title: data.title,
+          content: data.content,
+          order: data.order !== undefined ? data.order : 0,
+          isActive: data.isActive !== undefined ? data.isActive : true
+        }
+      });
+      return {
+        id: created.id,
+        title: created.title,
+        content: created.content,
+        order: created.order,
+        isActive: created.isActive,
+        createdAt: created.createdAt.toISOString(),
+        updatedAt: created.updatedAt.toISOString()
+      };
+    } catch (e) {
+      logDebug('createGuideline DB fallback:', e);
+      const newGuide: any = {
+        id: `guide-${Date.now()}`,
+        title: data.title,
+        content: data.content,
+        order: data.order !== undefined ? data.order : mockGuidelines.length + 1,
+        isActive: data.isActive !== undefined ? data.isActive : true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      mockGuidelines.push(newGuide);
+      return newGuide;
+    }
+  },
+
+  async updateGuideline(id: string, data: { title?: string; content?: string; order?: number; isActive?: boolean }) {
+    try {
+      const updated = await prisma.guideline.update({
+        where: { id },
+        data: {
+          ...(data.title !== undefined ? { title: data.title } : {}),
+          ...(data.content !== undefined ? { content: data.content } : {}),
+          ...(data.order !== undefined ? { order: data.order } : {}),
+          ...(data.isActive !== undefined ? { isActive: data.isActive } : {})
+        }
+      });
+      return {
+        id: updated.id,
+        title: updated.title,
+        content: updated.content,
+        order: updated.order,
+        isActive: updated.isActive,
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString()
+      };
+    } catch (e) {
+      logDebug('updateGuideline DB fallback:', e);
+      const mockG = mockGuidelines.find(g => g.id === id);
+      if (mockG) {
+        if (data.title !== undefined) mockG.title = data.title;
+        if (data.content !== undefined) mockG.content = data.content;
+        if (data.order !== undefined) mockG.order = data.order;
+        if (data.isActive !== undefined) mockG.isActive = data.isActive;
+        mockG.updatedAt = new Date().toISOString();
+        return mockG;
+      }
+      return { id, ...data };
+    }
+  },
+
+  async deleteGuideline(id: string) {
+    try {
+      await prisma.guideline.delete({ where: { id } });
+      return true;
+    } catch (e) {
+      logDebug('deleteGuideline DB fallback:', e);
+      const idx = mockGuidelines.findIndex(g => g.id === id);
+      if (idx !== -1) mockGuidelines.splice(idx, 1);
+      return true;
+    }
+  },
+
+  async deleteQRPaymentSettings() {
+    try {
+      await prisma.setting.deleteMany({
+        where: { key: { in: ['qr_code_url'] } }
+      });
+      mockQRSettings.qrCodeUrl = '';
+      return this.getQRPaymentSettings();
+    } catch (e) {
+      logDebug('deleteQRPaymentSettings DB fallback:', e);
+      mockQRSettings.qrCodeUrl = '';
+      return mockQRSettings;
+    }
   }
 };
 

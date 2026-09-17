@@ -329,3 +329,13 @@ model NotificationRead {
 
   @@unique([userId, notificationId])
 }
+
+model Guideline {
+  id        String   @id @default(uuid())
+  title     String
+  content   String   @db.Text
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

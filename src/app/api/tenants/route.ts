@@ -130,10 +130,9 @@ export async function PUT(request: Request) {
 
     if (status) {
       await dbService.updateTenantStatus(id, status);
-    } else {
-      if (!name || !email || !phone || !gender || !moveInDate) {
-        return NextResponse.json({ error: 'Name, email, phone, gender, and moveInDate are required for profile updates' }, { status: 400 });
-      }
+    }
+
+    if (name || email || phone || gender || moveInDate || data.roomNumber || data.bedNumber || data.rentAmount !== undefined || data.emergencyName || data.guardianName || data.address || data.aadhaar) {
       await dbService.updateTenantProfile(id, { 
         name, 
         email, 
@@ -143,7 +142,15 @@ export async function PUT(request: Request) {
         password: data.password,
         roomNumber: data.roomNumber,
         bedNumber: data.bedNumber,
-        rentAmount: data.rentAmount ? parseFloat(data.rentAmount) : undefined
+        rentAmount: data.rentAmount !== undefined ? parseFloat(data.rentAmount) : undefined,
+        address: data.address,
+        aadhaar: data.aadhaar,
+        emergencyName: data.emergencyName,
+        emergencyPhone: data.emergencyPhone,
+        guardianName: data.guardianName,
+        guardianPhone: data.guardianPhone,
+        occupation: data.occupation,
+        medicalNotes: data.medicalNotes
       });
     }
 

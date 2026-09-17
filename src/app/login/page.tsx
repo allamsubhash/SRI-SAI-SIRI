@@ -60,6 +60,21 @@ function LoginContent() {
   // Theme State
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
 
+  // Guidelines State (Publicly Accessible)
+  const [guidelines, setGuidelines] = useState<any[]>([]);
+  const [showGuidelines, setShowGuidelines] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/guidelines')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setGuidelines(data);
+        }
+      })
+      .catch(err => console.error('Failed to load guidelines on login:', err));
+  }, []);
+
   // Session Check & Welcome Screen Triggering Logic
   useEffect(() => {
     if (!loading && user) {
@@ -540,6 +555,49 @@ function LoginContent() {
           </AnimatePresence>
 
         </div>
+
+        {/* 📋 PUBLIC HOSTEL GUIDELINES SECTION */}
+        {guidelines.length > 0 && (
+          <div className="w-full max-w-[460px] flex flex-col items-center mt-4">
+            <button
+              onClick={() => setShowGuidelines(!showGuidelines)}
+              className={`px-4 py-2 rounded-full border text-xs font-bold transition-all cursor-pointer flex items-center gap-2 backdrop-blur-md shadow-md ${
+                isDarkMode 
+                  ? 'border-white/15 bg-white/5 text-slate-300 hover:text-white hover:bg-white/10' 
+                  : 'border-slate-300 bg-white text-slate-700 hover:text-slate-900'
+              }`}
+            >
+              <span>📜 Hostel Rules & Resident Guidelines ({guidelines.length})</span>
+              <span className="text-[10px]">{showGuidelines ? '▲ Hide' : '▼ View Rules'}</span>
+            </button>
+
+            {showGuidelines && (
+              <div className={`w-full mt-3 p-5 rounded-3xl border backdrop-blur-xl transition-all duration-300 space-y-3 shadow-xl text-left ${
+                isDarkMode ? 'bg-[#020306]/90 border-white/15 text-slate-200' : 'bg-white/95 border-slate-300 text-slate-800'
+              }`}>
+                <div className="flex items-center justify-between border-b pb-2.5 border-white/10">
+                  <h4 className="font-black text-xs uppercase tracking-wider text-blue-400">Hostel Rules & Regulations</h4>
+                  <span className="text-[10px] font-bold text-slate-400">Sri Sai Siri Boys Hostel</span>
+                </div>
+                <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                  {guidelines.map((g: any, index: number) => (
+                    <div key={g.id || index} className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-1">
+                      <div className="font-bold text-xs text-amber-400 flex items-center gap-1.5">
+                        <span className="w-4 h-4 rounded-full bg-amber-400/20 text-amber-400 text-[10px] font-black flex items-center justify-center">
+                          {g.order || index + 1}
+                        </span>
+                        <span>{g.title}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-relaxed pl-5">
+                        {g.content}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
       </main>
 

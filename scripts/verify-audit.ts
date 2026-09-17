@@ -1,3 +1,23 @@
+import fs from 'fs';
+import path from 'path';
+
+try {
+  const envPath = path.resolve(process.cwd(), '.env');
+  if (fs.existsSync(envPath)) {
+    const envConfig = fs.readFileSync(envPath, 'utf-8');
+    for (const line of envConfig.split('\n')) {
+      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+      if (match) {
+        const key = match[1];
+        let value = match[2] || '';
+        if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+        if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
+        process.env[key] = value;
+      }
+    }
+  }
+} catch (e) {}
+
 import { dbService, prisma } from '../src/lib/db';
 import { comparePassword, hashPassword } from '../src/lib/auth';
 import { formatDate } from '../src/utils/formatters';

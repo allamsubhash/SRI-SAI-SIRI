@@ -74,3 +74,32 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message || 'Failed to save QR settings' }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const cookies = request.headers.get('cookie') || '';
+    const token = cookies
+      .split(';')
+      .find(c => c.trim().startsWith('auth_token='))
+      ?.split('=')[1];
+
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const payload = verifyToken(token);
+    if (!payload || payload.role !== 'OWNER') {
+      return NextResponse.json({ error: 'Access denied: Only owner can delete settings' }, { status: 403 });
+    }
+
+    const updated = await dbService.deleteQRPaymentSettings();
+
+    return NextResponse.json({
+      success: true,
+      message: 'QR code removed successfully',
+      settings: updated
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || 'Failed to delete QR settings' }, { status: 500 });
+  }
+}
