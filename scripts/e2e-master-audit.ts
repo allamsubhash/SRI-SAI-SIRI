@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { chromium, BrowserContext, Page } from 'playwright';
 
-const BASE_URL = 'http://localhost:3000';
+const BASE_URL = process.env.TARGET_URL || 'https://srisaisiri.vercel.app';
 
 // Evidence matrix records
 interface TestResult {
