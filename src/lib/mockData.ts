@@ -713,6 +713,8 @@ export interface MockGuideline {
   id: string;
   title: string;
   content: string;
+  category?: string;
+  icon?: string;
   order: number;
   isActive: boolean;
   createdAt: string;

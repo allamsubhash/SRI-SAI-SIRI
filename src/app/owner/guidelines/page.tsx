@@ -60,19 +60,23 @@ export default function OwnerGuidelinesPage() {
     fetchGuidelines();
   }, []);
 
+  const [category, setCategory] = useState('CLEANLINESS');
+
   const openCreateModal = () => {
     setEditingItem(null);
     setTitle('');
     setContent('');
+    setCategory('CLEANLINESS');
     setOrder(guidelines.length + 1);
     setIsActive(true);
     setModalOpen(true);
   };
 
-  const openEditModal = (item: Guideline) => {
+  const openEditModal = (item: any) => {
     setEditingItem(item);
     setTitle(item.title);
     setContent(item.content);
+    setCategory(item.category || 'CLEANLINESS');
     setOrder(item.order);
     setIsActive(item.isActive);
     setModalOpen(true);
@@ -92,8 +96,8 @@ export default function OwnerGuidelinesPage() {
       const url = '/api/guidelines';
       const method = editingItem ? 'PUT' : 'POST';
       const bodyPayload = editingItem
-        ? { id: editingItem.id, title, content, order, isActive }
-        : { title, content, order, isActive };
+        ? { id: editingItem.id, title, content, category, order, isActive }
+        : { title, content, category, order, isActive };
 
       const res = await fetch(url, {
         method,
@@ -300,6 +304,25 @@ export default function OwnerGuidelinesPage() {
                     placeholder="Provide full rule details and instructions..."
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900 text-xs font-medium focus:outline-none focus:border-blue-500"
                   />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-zinc-300">Category / Theme Icon</label>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900 text-xs font-medium focus:outline-none"
+                  >
+                    <option value="CLEANLINESS">🧹 Cleanliness & Hygiene</option>
+                    <option value="VISITORS">👥 Visitor Rules & Timings</option>
+                    <option value="PAYMENTS">₹ Rent Payment & Schedule</option>
+                    <option value="SAFETY">🛡 Safety First & Instructions</option>
+                    <option value="APPLIANCES">⚡ Electrical Appliances Usage</option>
+                    <option value="PROPERTY">🏠 Respect Hostel Property</option>
+                    <option value="SILENCE">🔇 Maintain Silence & Timings</option>
+                    <option value="ENVIRONMENT">🍃 Healthy Green Environment</option>
+                    <option value="RESPECT">❤️ Be Respectful & Kind</option>
+                  </select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

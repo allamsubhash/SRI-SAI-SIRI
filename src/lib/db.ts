@@ -2246,6 +2246,8 @@ export const dbService = {
           id: g.id,
           title: g.title,
           content: g.content,
+          category: g.category || undefined,
+          icon: g.icon || undefined,
           order: g.order,
           isActive: g.isActive,
           createdAt: g.createdAt.toISOString(),
@@ -2258,12 +2260,14 @@ export const dbService = {
     return mockGuidelines;
   },
 
-  async createGuideline(data: { title: string; content: string; order?: number; isActive?: boolean }) {
+  async createGuideline(data: { title: string; content: string; category?: string; icon?: string; order?: number; isActive?: boolean }) {
     try {
       const created = await prisma.guideline.create({
         data: {
           title: data.title,
           content: data.content,
+          category: data.category || null,
+          icon: data.icon || null,
           order: data.order !== undefined ? data.order : 0,
           isActive: data.isActive !== undefined ? data.isActive : true
         }
@@ -2272,6 +2276,8 @@ export const dbService = {
         id: created.id,
         title: created.title,
         content: created.content,
+        category: created.category || undefined,
+        icon: created.icon || undefined,
         order: created.order,
         isActive: created.isActive,
         createdAt: created.createdAt.toISOString(),
@@ -2283,6 +2289,8 @@ export const dbService = {
         id: `guide-${Date.now()}`,
         title: data.title,
         content: data.content,
+        category: data.category,
+        icon: data.icon,
         order: data.order !== undefined ? data.order : mockGuidelines.length + 1,
         isActive: data.isActive !== undefined ? data.isActive : true,
         createdAt: new Date().toISOString(),
@@ -2293,13 +2301,15 @@ export const dbService = {
     }
   },
 
-  async updateGuideline(id: string, data: { title?: string; content?: string; order?: number; isActive?: boolean }) {
+  async updateGuideline(id: string, data: { title?: string; content?: string; category?: string; icon?: string; order?: number; isActive?: boolean }) {
     try {
       const updated = await prisma.guideline.update({
         where: { id },
         data: {
           ...(data.title !== undefined ? { title: data.title } : {}),
           ...(data.content !== undefined ? { content: data.content } : {}),
+          ...(data.category !== undefined ? { category: data.category } : {}),
+          ...(data.icon !== undefined ? { icon: data.icon } : {}),
           ...(data.order !== undefined ? { order: data.order } : {}),
           ...(data.isActive !== undefined ? { isActive: data.isActive } : {})
         }
@@ -2308,6 +2318,8 @@ export const dbService = {
         id: updated.id,
         title: updated.title,
         content: updated.content,
+        category: updated.category || undefined,
+        icon: updated.icon || undefined,
         order: updated.order,
         isActive: updated.isActive,
         createdAt: updated.createdAt.toISOString(),
@@ -2319,6 +2331,8 @@ export const dbService = {
       if (mockG) {
         if (data.title !== undefined) mockG.title = data.title;
         if (data.content !== undefined) mockG.content = data.content;
+        if (data.category !== undefined) mockG.category = data.category;
+        if (data.icon !== undefined) mockG.icon = data.icon;
         if (data.order !== undefined) mockG.order = data.order;
         if (data.isActive !== undefined) mockG.isActive = data.isActive;
         mockG.updatedAt = new Date().toISOString();

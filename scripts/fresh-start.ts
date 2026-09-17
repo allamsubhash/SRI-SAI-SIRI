@@ -117,9 +117,15 @@ async function freshStart() {
     await prisma.guideline.deleteMany({});
     await prisma.guideline.createMany({
       data: [
-        { title: 'Cleanliness & Hygiene', content: 'Maintain cleanliness in individual rooms and common areas at all times.', order: 1, isActive: true },
-        { title: 'Visitor Timing Rules', content: 'Visitors are permitted in the reception lounge area between 9:00 AM and 7:00 PM only.', order: 2, isActive: true },
-        { title: 'Rent Due Payment Date', content: 'Monthly hostel rent must be settled on or before the 5th of each month.', order: 3, isActive: true }
+        { title: 'Cleanliness & Hygiene', content: 'Maintain cleanliness in individual rooms and common areas at all times. Keep your surroundings neat and hygienic.', category: 'CLEANLINESS', order: 1, isActive: true },
+        { title: 'Visitor Rules', content: 'Visitors are allowed only in the reception lounge area between 9:00 AM and 7:00 PM. Unauthorised visitors are not permitted inside the rooms.', category: 'VISITORS', order: 2, isActive: true },
+        { title: 'Rent Payment', content: 'Monthly hostel rent must be settled on or before the 5th of each month. Late payments may attract penalties as per hostel policy.', category: 'PAYMENTS', order: 3, isActive: true },
+        { title: 'Safety First', content: 'Follow all safety instructions and do not tamper with fire safety equipment. Inform the management immediately in case of any safety concerns.', category: 'SAFETY', order: 4, isActive: true },
+        { title: 'Electrical Appliances', content: 'Switch off all electrical appliances when leaving your room. Do not use high-power appliances without prior permission.', category: 'APPLIANCES', order: 5, isActive: true },
+        { title: 'Respect Property', content: 'Take care of hostel property and facilities. Any damage must be reported immediately and may be charged to the concerned student.', category: 'PROPERTY', order: 6, isActive: true },
+        { title: 'Maintain Silence', content: 'Keep noise levels low, especially during study hours and at night. Be considerate of your fellow residents.', category: 'SILENCE', order: 7, isActive: true },
+        { title: 'Healthy Environment', content: 'Avoid littering. Use dustbins and help keep the hostel clean and green. Let\'s work together for a healthier living space.', category: 'ENVIRONMENT', order: 8, isActive: true },
+        { title: 'Be Respectful', content: 'Treat all residents, staff and visitors with kindness and respect. Maintain a friendly and positive environment.', category: 'RESPECT', order: 9, isActive: true }
       ]
     });
     console.log('✓ Initialized default Hostel Guidelines.');
