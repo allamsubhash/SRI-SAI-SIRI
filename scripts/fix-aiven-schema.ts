@@ -48,8 +48,8 @@ async function fixAivenSchema() {
     `ALTER TABLE \`Payment\` ADD COLUMN \`rejectionReason\` TEXT NULL`,
     `ALTER TABLE \`Payment\` ADD COLUMN \`referenceId\` VARCHAR(191) NULL`,
     
-    // 7. Fix Setting value column
-    `ALTER TABLE \`Setting\` MODIFY COLUMN \`value\` TEXT NULL`,
+    // 7. Fix Setting value column to LONGTEXT for base64 images
+    `ALTER TABLE \`Setting\` MODIFY COLUMN \`value\` LONGTEXT NULL`,
 
     // 8. Ensure Guideline and NotificationRead tables exist
     `CREATE TABLE IF NOT EXISTS \`Guideline\` (

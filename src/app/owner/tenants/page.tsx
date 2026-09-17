@@ -1065,9 +1065,9 @@ export default function TenantsManagement() {
               </div>
             </div>
 
-            {/* Section 3: Emergency, Guardian & Address Details */}
+            {/* Section 3: Emergency & Address Details */}
             <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-zinc-800">
-              <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest block">EMERGENCY & GUARDIAN DETAILS</span>
+              <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest block">EMERGENCY CONTACT DETAILS</span>
               
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1086,29 +1086,6 @@ export default function TenantsManagement() {
                     type="text" 
                     value={editEmergencyPhone}
                     onChange={(e) => setEditEmergencyPhone(e.target.value)}
-                    placeholder="+91 98765 00000"
-                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">Guardian Name</label>
-                  <input 
-                    type="text" 
-                    value={editGuardianName}
-                    onChange={(e) => setEditGuardianName(e.target.value)}
-                    placeholder="Parent / Guardian Name"
-                    className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">Guardian Phone</label>
-                  <input 
-                    type="text" 
-                    value={editGuardianPhone}
-                    onChange={(e) => setEditGuardianPhone(e.target.value)}
                     placeholder="+91 98765 00000"
                     className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
                   />

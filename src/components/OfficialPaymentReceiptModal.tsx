@@ -14,6 +14,7 @@ export interface ReceiptItem {
 export interface OfficialReceiptData {
   receiptNo: string;
   date: string;
+  verifiedDate?: string;
   tenantId: string;
   tenantName: string;
   roomNumber: string;
@@ -293,8 +294,15 @@ export default function OfficialPaymentReceiptModal({
                 <div>
                   Receipt No : <span className="font-mono text-slate-900">{receiptData.receiptNo}</span>
                 </div>
-                <div>
-                  Date : <span className="font-mono text-slate-900">{formatDate(receiptData.date)}</span>
+                <div className="flex items-center gap-4">
+                  <div>
+                    Payment Date : <span className="font-mono text-slate-900">{formatDate(receiptData.date)}</span>
+                  </div>
+                  {receiptData.verifiedDate && (
+                    <div className="text-emerald-700 font-extrabold">
+                      Owner Verified Date : <span className="font-mono text-emerald-800">{formatDate(receiptData.verifiedDate)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 

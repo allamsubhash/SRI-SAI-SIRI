@@ -43,16 +43,8 @@ export async function POST(request: Request) {
       if (file && file.size > 0) {
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
-        const path = await import('path');
-        const fs = await import('fs');
-        const filename = `qr_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-        const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-        if (!fs.existsSync(uploadDir)) {
-          fs.mkdirSync(uploadDir, { recursive: true });
-        }
-        const filePath = path.join(uploadDir, filename);
-        fs.writeFileSync(filePath, buffer);
-        qrCodeUrl = `/uploads/${filename}`;
+        const mimeType = file.type || 'image/png';
+        qrCodeUrl = `data:${mimeType};base64,${buffer.toString('base64')}`;
       } else if (formData.get('qrCodeUrl')) {
         qrCodeUrl = formData.get('qrCodeUrl') as string;
       }

@@ -124,10 +124,19 @@ export function calculateMonthlyDues(
   );
   const totalPendingApproval = pendingPayments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
   
-  const totalDues = Math.max(0, totalCharged - totalApprovedPaid);
+  // Check if payments list includes explicit invoice records
+  const invoiceRecords = (payments || []).filter((p: any) => p.dueDate !== undefined || p.itemsJson !== undefined || p.month !== undefined);
   
+  let totalDues = 0;
+  if (invoiceRecords.length > 0) {
+    const unpaidInvoices = invoiceRecords.filter((inv: any) => inv.status !== 'PAID' && inv.status !== 'APPROVED');
+    totalDues = unpaidInvoices.reduce((sum: number, inv: any) => sum + (Number(inv.amount) || 0), 0);
+  } else {
+    // Current cycle rent tariff minus approved payments
+    totalDues = Math.max(0, monthlyRent - totalApprovedPaid);
+  }
+
   let status: 'PAID' | 'PARTIAL' | 'PENDING_APPROVAL' | 'OVERDUE' | 'UNPAID' = 'UNPAID';
-  
   if (totalDues === 0) {
     status = 'PAID';
   } else if (totalPendingApproval >= totalDues) {
@@ -135,13 +144,8 @@ export function calculateMonthlyDues(
   } else if (totalApprovedPaid > 0) {
     status = 'PARTIAL';
   } else {
-    // Check if current day of month > 5th
     const currentDay = asOfDate.getDate();
-    if (currentDay > 5) {
-      status = 'OVERDUE';
-    } else {
-      status = 'UNPAID';
-    }
+    status = currentDay > 5 ? 'OVERDUE' : 'UNPAID';
   }
 
   // Next due date: 5th of current/next month

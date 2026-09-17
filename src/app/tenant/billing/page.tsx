@@ -71,18 +71,17 @@ export default function TenantBilling() {
         }
       }
 
-      // 3. Fetch Tenant Payment History & Invoices
       const rentRes = await fetch('/api/rent');
       if (rentRes.ok) {
         const rentData = await rentRes.json();
         const rList = Array.isArray(rentData) ? rentData : [];
         const userPayments = rList.filter((inv: any) => 
-          (inv.tenantName && user?.name && inv.tenantName.toLowerCase().trim().includes(user.name.toLowerCase().trim())) ||
+          (inv.tenantId && tenantData?.id && inv.tenantId === tenantData.id) ||
           (inv.tenantId && user?.id && inv.tenantId === user.id) ||
           (inv.userId && user?.id && inv.userId === user.id) ||
-          (tenantData && inv.tenantId === tenantData.id)
+          (inv.tenantName && user?.name && inv.tenantName.toLowerCase().trim().includes(user.name.toLowerCase().trim()))
         );
-        setPayments(userPayments.length > 0 ? userPayments : rList);
+        setPayments(userPayments);
       }
     } catch (e) {
       console.error("Error loading billing data:", e);
@@ -165,6 +164,7 @@ export default function TenantBilling() {
     const formattedData: OfficialReceiptData = {
       receiptNo: `REC-${pay.id.slice(-6).toUpperCase()}`,
       date: formatDate(pay.date || pay.createdAt),
+      verifiedDate: formatDate(pay.updatedAt || pay.verifiedAt || pay.date || pay.createdAt),
       tenantId: tenantData?.id || user?.id || 'TENANT-001',
       tenantName: user?.name || tenantData?.name || 'Resident Tenant',
       roomNumber: tenantData?.roomNumber || 'A-101',
@@ -213,35 +213,9 @@ export default function TenantBilling() {
             Rent Payment & Billing Desk
           </h1>
           <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] font-medium">
-            Scan official owner QR code, submit transaction UTRs, and track your complete payment history.
+            Scan official owner QR code below, pay via any UPI app, and submit your UTR reference number for verification.
           </p>
         </div>
-        
-        {duesCalculation.totalPendingApproval >= duesCalculation.totalDues && duesCalculation.totalPendingApproval > 0 ? (
-          <button
-            disabled
-            className="py-3.5 px-7 rounded-2xl bg-purple-500/20 text-purple-600 dark:text-purple-300 border border-purple-500/30 text-xs font-black flex items-center gap-2 z-10 shrink-0 cursor-not-allowed opacity-90 shadow-md"
-          >
-            <Clock className="w-4 h-4 animate-spin text-purple-500" />
-            <span>PAYMENT UNDER VERIFICATION ⏳</span>
-          </button>
-        ) : duesCalculation.totalDues === 0 ? (
-          <button
-            disabled
-            className="py-3.5 px-7 rounded-2xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30 text-xs font-black flex items-center gap-2 z-10 shrink-0 cursor-not-allowed opacity-90 shadow-md"
-          >
-            <CheckCircle className="w-4 h-4 text-emerald-500" />
-            <span>NO PAYMENT DUE ✓</span>
-          </button>
-        ) : (
-          <button
-            onClick={handleOpenPayModal}
-            className="py-3.5 px-7 rounded-2xl tenant-bg-accent text-xs font-black shadow-lg hover:scale-105 transition-all cursor-pointer flex items-center gap-2.5 z-10 shrink-0"
-          >
-            <CreditCard className="w-4 h-4" />
-            <span>PAY RENT NOW →</span>
-          </button>
-        )}
       </div>
 
       {/* ⌛ PENDING PAYMENT VERIFICATION CARD */}
