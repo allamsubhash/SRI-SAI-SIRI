@@ -1,8 +1,25 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { mockTenants, mockBuildings, mockInvoices, mockUsers, mockPayments, mockQRSettings, mockNotificationReads, mockGuidelines } from './mockData';
+import { 
+  mockTenants, 
+  mockBuildings, 
+  mockInvoices, 
+  mockUsers, 
+  mockPayments, 
+  mockQRSettings, 
+  mockNotificationReads, 
+  mockGuidelines,
+  mockReminders,
+  mockAuditLogs
+} from './mockData';
+import { 
+  computeTenantBillingState, 
+  computeFinancialDashboardSummary, 
+  UnifiedBill, 
+  PaymentTransaction, 
+  ReminderRecord 
+} from './billingService';
 
-// Avoid multiple PrismaClient instances in development / serverless executions
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 export const prisma = globalForPrisma.prisma || new PrismaClient();
 globalForPrisma.prisma = prisma;
@@ -962,160 +979,291 @@ export const dbService = {
     return invObj;
   },
 
-  async recordPayment(invoiceId: string, amount: number, method: string, isTenantPayment: boolean = false) {
+  async recordPayment(
+    invoiceIdOrData: string | {
+      invoiceId?: string;
+      tenantId: string;
+      amount: number;
+      paymentMethod: string;
+      paymentType?: string;
+      referenceId?: string;
+      paymentDate?: string;
+      notes?: string;
+      recordedBy?: string;
+    },
+    amountArg?: number,
+    methodArg?: string,
+    isTenantPaymentArg: boolean = false
+  ) {
+    let invoiceId: string | undefined;
+    let tenantId: string | undefined;
+    let amount: number;
+    let method: string;
+    let paymentType: string = 'Monthly Rent';
+    let referenceId: string | undefined;
+    let paymentDate: string = new Date().toISOString().split('T')[0];
+    let notes: string = '';
+    let recordedBy: string = 'Manager';
+    let isTenantPayment: boolean = false;
+
+    if (typeof invoiceIdOrData === 'object') {
+      invoiceId = invoiceIdOrData.invoiceId;
+      tenantId = invoiceIdOrData.tenantId;
+      amount = Number(invoiceIdOrData.amount);
+      method = invoiceIdOrData.paymentMethod || 'UPI';
+      paymentType = invoiceIdOrData.paymentType || 'Monthly Rent';
+      referenceId = invoiceIdOrData.referenceId;
+      paymentDate = invoiceIdOrData.paymentDate || paymentDate;
+      notes = invoiceIdOrData.notes || '';
+      recordedBy = invoiceIdOrData.recordedBy || 'Manager';
+    } else {
+      invoiceId = invoiceIdOrData;
+      amount = Number(amountArg) || 0;
+      method = methodArg || 'UPI';
+      isTenantPayment = !!isTenantPaymentArg;
+    }
+
+    const receiptNo = `SSR-RCP-${Date.now().toString().slice(-6)}`;
+    const paymentId = `pay-${Date.now()}`;
+
+    // Duplicate referenceId check
+    if (referenceId && referenceId.trim().length > 0) {
+      const trimmedRef = referenceId.trim();
+      const existingRef = mockPayments.find(p => p.referenceId === trimmedRef && p.id !== paymentId && p.status !== 'REJECTED');
+      if (existingRef) {
+        throw new Error(`A transaction with reference ID '${trimmedRef}' already exists in the system.`);
+      }
+    }
+
+    try {
+      return await prisma.$transaction(async (tx) => {
+        let dbInv = invoiceId ? await tx.invoice.findUnique({
+          where: { id: invoiceId },
+          include: { tenant: { include: { profile: true } } }
+        }) : null;
+
+        if (!dbInv && tenantId) {
+          dbInv = await tx.invoice.findFirst({
+            where: { tenantId },
+            orderBy: { createdAt: 'desc' },
+            include: { tenant: { include: { profile: true } } }
+          });
+        }
+
+        const resolvedTenantId = dbInv?.tenantId || tenantId;
+        if (!resolvedTenantId) throw new Error('Target tenant or invoice record not found.');
+
+        if (isTenantPayment) {
+          return await tx.payment.create({
+            data: {
+              id: paymentId,
+              amount,
+              type: paymentType,
+              paymentMethod: method,
+              status: 'PENDING',
+              tenantId: resolvedTenantId,
+              invoiceId: dbInv ? dbInv.id : null,
+              referenceId: referenceId || null,
+              notes: notes || null
+            }
+          });
+        }
+
+        const tenantName = dbInv?.tenant ? `${dbInv.tenant.profile.firstName} ${dbInv.tenant.profile.lastName}`.trim() : 'Tenant';
+
+        const createdPayment = await tx.payment.create({
+          data: {
+            id: paymentId,
+            amount,
+            type: paymentType,
+            paymentMethod: method,
+            status: 'PAID',
+            invoiceId: dbInv ? dbInv.id : null,
+            tenantId: resolvedTenantId,
+            referenceId: referenceId || null,
+            notes: notes || null
+          }
+        });
+
+        if (dbInv) {
+          const newPaid = Math.min(dbInv.amount, (dbInv.paidAmount || 0) + amount);
+          const newStatus = newPaid >= dbInv.amount ? 'PAID' : 'PARTIAL';
+          await tx.invoice.update({
+            where: { id: dbInv.id },
+            data: { paidAmount: newPaid, status: newStatus }
+          });
+        }
+
+        // Log audit log
+        try {
+          await tx.auditLog.create({
+            data: {
+              id: `audit-${Date.now()}`,
+              action: 'PAYMENT_RECORDED',
+              details: `Recorded ₹${amount.toLocaleString()} payment for ${tenantName} via ${method}. Reference: ${referenceId || 'N/A'}`
+            }
+          });
+        } catch {}
+
+        return createdPayment;
+      });
+    } catch (e: any) {
+      logDebug('recordPayment DB fallback:', e);
+      if (e.message?.includes('already exists')) throw e;
+    }
+
+    // In-memory fallback
+    let targetInv = invoiceId ? mockInvoices.find(i => i.id === invoiceId) : null;
+    if (!targetInv && tenantId) {
+      targetInv = mockInvoices.find(i => i.tenantId === tenantId);
+    }
+
+    const resolvedTenantId = targetInv?.tenantId || tenantId || 't-1';
+    const resolvedTenant = mockTenants.find(t => t.id === resolvedTenantId);
+    const tenantName = resolvedTenant ? resolvedTenant.name : (targetInv ? targetInv.tenantName : 'Resident');
+
+    const newPaymentRecord = {
+      id: paymentId,
+      tenantId: resolvedTenantId,
+      tenantName,
+      invoiceId: targetInv ? targetInv.id : undefined,
+      amount,
+      date: paymentDate,
+      type: paymentType,
+      paymentMethod: method,
+      status: (isTenantPayment ? 'PENDING' : 'APPROVED') as any,
+      referenceId: referenceId || undefined,
+      notes: notes || undefined,
+      recordedBy,
+      receiptNumber: receiptNo,
+      createdAt: new Date().toISOString()
+    };
+    mockPayments.unshift(newPaymentRecord);
+
+    if (targetInv && !isTenantPayment) {
+      targetInv.paidAmount = Math.min(targetInv.amount, (targetInv.paidAmount || 0) + amount);
+      targetInv.status = targetInv.paidAmount >= targetInv.amount ? 'PAID' : 'PARTIAL';
+    }
+
+    // Log to mock audit logs
+    mockAuditLogs.unshift({
+      id: `audit-${Date.now()}`,
+      action: 'PAYMENT_RECORDED',
+      userName: recordedBy,
+      entityId: paymentId,
+      details: `Recorded payment of ₹${amount.toLocaleString()} for ${tenantName} (${targetInv?.billingMonth || 'Rent'}). Reference: ${referenceId || 'N/A'}`,
+      createdAt: new Date().toISOString()
+    });
+
+    return newPaymentRecord;
+  },
+
+  async verifyInvoicePayment(invoiceId: string, remarks: string = 'Verified online payment', verifiedBy: string = 'Owner') {
     try {
       return await prisma.$transaction(async (tx) => {
         const dbInv = await tx.invoice.findUnique({
           where: { id: invoiceId },
-          include: { tenant: { include: { profile: true } } }
+          include: { payments: true, tenant: { include: { profile: true } } }
         });
 
-        if (!dbInv) throw new Error('Invoice record not found.');
+        if (!dbInv) throw new Error('Invoice not found.');
 
-        if (isTenantPayment) {
-          return await tx.invoice.update({
-            where: { id: invoiceId },
-            data: {
-              status: 'PENDING_VERIFICATION',
-              payments: {
-                create: {
-                  amount,
-                  type: 'RENT',
-                  paymentMethod: method,
-                  status: 'PENDING',
-                  tenantId: dbInv.tenantId
-                }
-              }
-            }
+        const pendingPayment = dbInv.payments.find(p => p.status === 'PENDING');
+        const verifyAmount = pendingPayment ? pendingPayment.amount : Math.max(0, dbInv.amount - dbInv.paidAmount);
+
+        if (pendingPayment) {
+          await tx.payment.update({
+            where: { id: pendingPayment.id },
+            data: { status: 'PAID' }
           });
         } else {
-          const newPaid = dbInv.paidAmount + amount;
-          const status = newPaid >= dbInv.amount ? 'PAID' : 'PARTIAL';
-
-          const tenantName = dbInv.tenant ? `${dbInv.tenant.profile.firstName} ${dbInv.tenant.profile.lastName}`.trim() : 'Tenant';
-          await tx.expense.create({
-            data: {
-              title: `Rent collection - ${tenantName} (${dbInv.number})`,
-              amount: -amount,
-              category: 'SALARY',
-              date: new Date(),
-              notes: `Rent received via ${method}`
-            }
-          });
-
           await tx.payment.create({
             data: {
-              amount,
+              amount: verifyAmount,
               type: 'RENT',
-              paymentMethod: method,
+              paymentMethod: 'ONLINE',
               status: 'PAID',
-              invoiceId: dbInv.id,
-              tenantId: dbInv.tenantId
-            }
-          });
-
-          return await tx.invoice.update({
-            where: { id: invoiceId },
-            data: {
-              paidAmount: newPaid,
-              status
+              tenantId: dbInv.tenantId,
+              invoiceId: dbInv.id
             }
           });
         }
+
+        const newPaidAmount = Math.min(dbInv.amount, dbInv.paidAmount + verifyAmount);
+        const newStatus = newPaidAmount >= dbInv.amount ? 'PAID' : 'PARTIAL';
+
+        return await tx.invoice.update({
+          where: { id: invoiceId },
+          data: {
+            paidAmount: newPaidAmount,
+            status: newStatus
+          }
+        });
       });
     } catch (e) {
-      logDebug('recordPayment fallback:', e);
+      logDebug('verifyInvoicePayment fallback:', e);
     }
 
     const inv = mockInvoices.find(i => i.id === invoiceId);
     if (inv) {
-      inv.paidAmount = (inv.paidAmount || 0) + amount;
+      const pendingPayment = mockPayments.find(p => p.invoiceId === invoiceId && p.status === 'PENDING');
+      const verifyAmount = pendingPayment ? pendingPayment.amount : (inv.amount - (inv.paidAmount || 0));
+      if (pendingPayment) {
+        pendingPayment.status = 'APPROVED';
+      }
+      inv.paidAmount = Math.min(inv.amount, (inv.paidAmount || 0) + verifyAmount);
       inv.status = inv.paidAmount >= inv.amount ? 'PAID' : 'PARTIAL';
     }
-    return { id: `pay-${Date.now()}`, amount, invoiceId, status: 'PAID' };
+    return inv || { id: invoiceId, status: 'PAID' };
   },
 
-  async verifyInvoicePayment(invoiceId: string, remarks: string = 'Verified online payment') {
-    return await prisma.$transaction(async (tx) => {
-      const dbInv = await tx.invoice.findUnique({
-        where: { id: invoiceId },
-        include: { payments: true, tenant: { include: { profile: true } } }
-      });
-
-      if (!dbInv) throw new Error('Invoice not found.');
-
-      const pendingPayment = dbInv.payments.find(p => p.status === 'PENDING');
-      const verifyAmount = pendingPayment ? pendingPayment.amount : (dbInv.amount - dbInv.paidAmount);
-
-      if (pendingPayment) {
-        await tx.payment.update({
-          where: { id: pendingPayment.id },
-          data: { status: 'PAID' }
+  async revertInvoicePayment(invoiceId: string, remarks: string = 'Payment reverted by owner', reversedBy: string = 'Owner') {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const dbInv = await tx.invoice.findUnique({
+          where: { id: invoiceId },
+          include: { payments: true }
         });
-      } else {
-        await tx.payment.create({
+
+        if (!dbInv) throw new Error('Invoice not found.');
+
+        await tx.payment.updateMany({
+          where: { invoiceId },
+          data: { status: 'REVERSED' }
+        });
+
+        return await tx.invoice.update({
+          where: { id: invoiceId },
           data: {
-            amount: verifyAmount,
-            type: 'RENT',
-            paymentMethod: 'ONLINE',
-            status: 'PAID',
-            tenantId: dbInv.tenantId,
-            invoiceId: dbInv.id
+            paidAmount: 0,
+            status: 'PENDING'
           }
         });
-      }
-
-      const newPaidAmount = dbInv.paidAmount + verifyAmount;
-      const newStatus = newPaidAmount >= dbInv.amount ? 'PAID' : 'PARTIAL';
-
-      const tenantName = dbInv.tenant ? `${dbInv.tenant.profile.firstName} ${dbInv.tenant.profile.lastName}`.trim() : 'Tenant';
-      await tx.expense.create({
-        data: {
-          title: `Rent collection verified - ${tenantName} (${dbInv.number})`,
-          amount: -verifyAmount,
-          category: 'SALARY',
-          date: new Date(),
-          notes: remarks
-        }
       });
+    } catch (e) {
+      logDebug('revertInvoicePayment fallback:', e);
+    }
 
-      return await tx.invoice.update({
-        where: { id: invoiceId },
-        data: {
-          paidAmount: newPaidAmount,
-          status: newStatus
-        }
-      });
-    });
-  },
-
-  async revertInvoicePayment(invoiceId: string, remarks: string = 'Payment reverted by owner') {
-    return await prisma.$transaction(async (tx) => {
-      const dbInv = await tx.invoice.findUnique({
-        where: { id: invoiceId },
-        include: { payments: true }
-      });
-
-      if (!dbInv) throw new Error('Invoice not found.');
-
-      await tx.payment.deleteMany({
-        where: { invoiceId }
-      });
-
-      return await tx.invoice.update({
-        where: { id: invoiceId },
-        data: {
-          paidAmount: 0,
-          status: 'PENDING'
-        }
-      });
-    });
+    const inv = mockInvoices.find(i => i.id === invoiceId);
+    if (inv) {
+      inv.paidAmount = 0;
+      inv.status = 'PENDING';
+      mockPayments.filter(p => p.invoiceId === invoiceId).forEach(p => p.status = 'REVERSED');
+    }
+    return inv || { id: invoiceId, paidAmount: 0, status: 'PENDING' };
   },
 
   async deleteInvoice(invoiceId: string) {
-    return await prisma.invoice.delete({
-      where: { id: invoiceId }
-    });
+    try {
+      return await prisma.invoice.delete({
+        where: { id: invoiceId }
+      });
+    } catch (e) {
+      logDebug('deleteInvoice fallback:', e);
+    }
+    const idx = mockInvoices.findIndex(i => i.id === invoiceId);
+    if (idx !== -1) mockInvoices.splice(idx, 1);
+    return true;
   },
 
   async updateInvoice(invoiceId: string, data: { amount?: number; dueDate?: string; month?: string; status?: string }) {
@@ -1125,18 +1273,33 @@ export const dbService = {
     if (data.status) {
       updatePayload.status = data.status;
       if (data.status === 'PAID') {
-        const inv = await prisma.invoice.findUnique({ where: { id: invoiceId } });
+        const inv = await prisma.invoice.findUnique({ where: { id: invoiceId } }).catch(() => null);
         if (inv) updatePayload.paidAmount = data.amount !== undefined ? data.amount : inv.amount;
       } else if (data.status === 'PENDING') {
         updatePayload.paidAmount = 0;
       }
     }
 
-    return await prisma.invoice.update({
-      where: { id: invoiceId },
-      data: updatePayload
-    });
+    try {
+      return await prisma.invoice.update({
+        where: { id: invoiceId },
+        data: updatePayload
+      });
+    } catch (e) {
+      logDebug('updateInvoice fallback:', e);
+    }
+
+    const inv = mockInvoices.find(i => i.id === invoiceId);
+    if (inv) {
+      if (data.amount !== undefined) inv.amount = data.amount;
+      if (data.dueDate !== undefined) inv.dueDate = data.dueDate;
+      if (data.status) inv.status = data.status as any;
+      if (data.status === 'PAID') inv.paidAmount = inv.amount;
+      else if (data.status === 'PENDING') inv.paidAmount = 0;
+    }
+    return inv || { id: invoiceId, ...data };
   },
+
 
   // --- EMPLOYEES ---
   async getEmployees() {
@@ -1803,14 +1966,107 @@ export const dbService = {
     };
   },
 
-  // --- PAYMENT HISTORY & AUDIT ---
+  // --- PAYMENT HISTORY, WORKSPACE & BANK-GRADE LEDGER ---
+  async getPaymentsWorkspace(filters?: {
+    month?: string;
+    buildingId?: string;
+    status?: string;
+    search?: string;
+  }) {
+    const tenants = await this.getTenants();
+    const rawInvoices = await this.getInvoices();
+    const rawPayments = await this.getAllPayments();
+    const rawReminders = mockReminders;
+    const rawAuditLogs = mockAuditLogs;
+
+    // Compute single source of truth billing states for each tenant
+    const allUnifiedBills: UnifiedBill[] = [];
+    const processedTenantIds = new Set<string>();
+
+    for (const tenant of tenants) {
+      processedTenantIds.add(tenant.id);
+      const billingState = computeTenantBillingState(tenant, rawInvoices, rawPayments, rawReminders);
+      allUnifiedBills.push(...billingState.invoices);
+    }
+
+    // Include any standalone invoices not directly linked to current active tenants
+    for (const inv of rawInvoices) {
+      if (!processedTenantIds.has(inv.tenantId)) {
+        const dummyTenant = { id: inv.tenantId, name: inv.tenantName, roomNumber: inv.roomNumber || 'A-101' };
+        const billingState = computeTenantBillingState(dummyTenant, [inv], rawPayments, rawReminders);
+        allUnifiedBills.push(...billingState.invoices);
+      }
+    }
+
+    // Filter by Building
+    let filteredBills = allUnifiedBills;
+    if (filters?.buildingId && filters.buildingId !== 'ALL') {
+      const bId = filters.buildingId;
+      filteredBills = filteredBills.filter(b => 
+        b.buildingId === bId || 
+        b.buildingName.toLowerCase().includes(bId.toLowerCase()) ||
+        (bId === 'b-1' && b.roomNumber.startsWith('A')) ||
+        (bId === 'b-2' && b.roomNumber.startsWith('B'))
+      );
+    }
+
+    // Filter by Month
+    if (filters?.month && filters.month !== 'ALL') {
+      const m = filters.month;
+      filteredBills = filteredBills.filter(b => 
+        b.billingMonth?.toLowerCase() === m.toLowerCase() ||
+        b.billingPeriod?.toLowerCase() === m.toLowerCase() ||
+        (b.dueDate ? b.dueDate.startsWith(m) : false)
+      );
+    }
+
+    // Filter by Status
+    if (filters?.status && filters.status !== 'ALL') {
+      if (filters.status === 'VERIFICATION_PENDING') {
+        filteredBills = filteredBills.filter(b => b.status === 'VERIFICATION_PENDING' || b.pendingVerificationCount > 0);
+      } else {
+        filteredBills = filteredBills.filter(b => b.status === filters.status);
+      }
+    }
+
+    // Filter by Search Query
+    if (filters?.search && filters.search.trim().length > 0) {
+      const q = filters.search.toLowerCase().trim();
+      filteredBills = filteredBills.filter(b => 
+        b.tenantName.toLowerCase().includes(q) ||
+        b.roomNumber.toLowerCase().includes(q) ||
+        b.number.toLowerCase().includes(q) ||
+        b.transactions.some(t => (t.referenceId && t.referenceId.toLowerCase().includes(q)) || (t.id && t.id.toLowerCase().includes(q)))
+      );
+    }
+
+    // Financial metrics summary
+    const summary = computeFinancialDashboardSummary(allUnifiedBills);
+
+    // Pending Verification Queue
+    const verificationQueue = rawPayments.filter(p => p.status === 'PENDING');
+
+    // All distinct transactions ledger
+    const transactionsLedger = rawPayments;
+
+    return {
+      summary,
+      bills: filteredBills,
+      allBills: allUnifiedBills,
+      verificationQueue,
+      transactionsLedger,
+      reminders: rawReminders,
+      auditLogs: rawAuditLogs
+    };
+  },
+
   async getTenantPaymentHistory(tenantId: string) {
     try {
       const dbPayments = await prisma.payment.findMany({
         where: { tenantId },
         orderBy: { date: 'desc' }
       });
-      if (dbPayments) {
+      if (dbPayments && dbPayments.length > 0) {
         return dbPayments.map(p => ({
           id: p.id,
           tenantId: p.tenantId,
@@ -1845,7 +2101,7 @@ export const dbService = {
         },
         orderBy: { date: 'desc' }
       });
-      if (dbPayments) {
+      if (dbPayments && dbPayments.length > 0) {
         return dbPayments.map(p => ({
           id: p.id,
           tenantId: p.tenantId,
@@ -1872,10 +2128,19 @@ export const dbService = {
     amount: number;
     paymentMethod: string;
     referenceId?: string;
+    screenshotUrl?: string;
     notes?: string;
   }) {
     const paymentId = `pay-${Date.now()}`;
     const todayStr = new Date().toISOString().split('T')[0];
+
+    if (data.referenceId && data.referenceId.trim().length > 0) {
+      const trimmedRef = data.referenceId.trim();
+      const existingRef = mockPayments.find(p => p.referenceId === trimmedRef && p.status !== 'REJECTED');
+      if (existingRef) {
+        throw new Error(`A payment with transaction UTR / reference ID '${trimmedRef}' has already been submitted.`);
+      }
+    }
 
     try {
       if (data.referenceId && data.referenceId.trim().length > 0) {
@@ -1893,7 +2158,7 @@ export const dbService = {
           tenantId: data.tenantId,
           amount: data.amount,
           date: new Date(),
-          type: 'RENT',
+          type: 'Monthly Rent',
           paymentMethod: data.paymentMethod,
           status: 'PENDING',
           referenceId: data.referenceId || null,
@@ -1919,28 +2184,36 @@ export const dbService = {
       }
     }
 
-    const mockDuplicate = data.referenceId && mockPayments.find(p => p.referenceId === data.referenceId);
-    if (mockDuplicate) {
-      throw new Error(`A payment with transaction UTR / reference ID '${data.referenceId}' has already been submitted.`);
-    }
-
     const mockPayObj = {
       id: paymentId,
       tenantId: data.tenantId,
+      tenantName: mockTenants.find(t => t.id === data.tenantId)?.name || 'Resident',
       amount: data.amount,
       date: todayStr,
-      type: 'RENT',
+      type: 'Monthly Rent',
       paymentMethod: data.paymentMethod,
       status: 'PENDING' as const,
       referenceId: data.referenceId,
+      screenshotUrl: data.screenshotUrl,
       notes: data.notes,
       createdAt: new Date().toISOString()
     };
     mockPayments.unshift(mockPayObj);
+
+    // Audit log
+    mockAuditLogs.unshift({
+      id: `audit-${Date.now()}`,
+      action: 'PAYMENT_SUBMITTED',
+      userName: mockPayObj.tenantName,
+      entityId: paymentId,
+      details: `Tenant submitted ₹${data.amount.toLocaleString()} payment for verification (UTR: ${data.referenceId || 'N/A'})`,
+      createdAt: new Date().toISOString()
+    });
+
     return mockPayObj;
   },
 
-  async approvePayment(paymentId: string) {
+  async approvePayment(paymentId: string, approvedBy: string = 'Manager') {
     try {
       return await prisma.$transaction(async (tx) => {
         const existing = await tx.payment.findUnique({
@@ -1995,11 +2268,28 @@ export const dbService = {
         throw new Error(`Payment has already been processed with status '${target.status}'`);
       }
       target.status = 'APPROVED';
+
+      // Update target invoice if present
+      const inv = mockInvoices.find(i => i.id === target.invoiceId || i.tenantId === target.tenantId);
+      if (inv) {
+        inv.paidAmount = Math.min(inv.amount, (inv.paidAmount || 0) + target.amount);
+        inv.status = inv.paidAmount >= inv.amount ? 'PAID' : 'PARTIAL';
+      }
+
+      // Audit log
+      mockAuditLogs.unshift({
+        id: `audit-${Date.now()}`,
+        action: 'PAYMENT_VERIFIED',
+        userName: approvedBy,
+        entityId: paymentId,
+        details: `Approved & verified payment of ₹${target.amount.toLocaleString()} for ${target.tenantName || 'Resident'} (UTR: ${target.referenceId || 'N/A'})`,
+        createdAt: new Date().toISOString()
+      });
     }
     return target || { id: paymentId, status: 'APPROVED' };
   },
 
-  async rejectPayment(paymentId: string, rejectionReason?: string) {
+  async rejectPayment(paymentId: string, rejectionReason: string = 'Payment verification failed', rejectedBy: string = 'Manager') {
     try {
       return await prisma.$transaction(async (tx) => {
         const existing = await tx.payment.findUnique({
@@ -2030,9 +2320,138 @@ export const dbService = {
     if (target) {
       target.status = 'REJECTED';
       target.rejectionReason = rejectionReason || 'Payment verification failed';
+
+      // Audit log
+      mockAuditLogs.unshift({
+        id: `audit-${Date.now()}`,
+        action: 'PAYMENT_REJECTED',
+        userName: rejectedBy,
+        entityId: paymentId,
+        details: `Rejected payment submission of ₹${target.amount.toLocaleString()} for ${target.tenantName || 'Resident'}. Reason: ${rejectionReason}`,
+        createdAt: new Date().toISOString()
+      });
     }
     return target || { id: paymentId, status: 'REJECTED', rejectionReason };
   },
+
+  async reverseTransaction(data: { paymentId: string; reason: string; reversedBy?: string; reversalAmount?: number }) {
+    const { paymentId, reason, reversedBy = 'Manager', reversalAmount } = data;
+    
+    // Find target payment
+    const targetPayment = mockPayments.find(p => p.id === paymentId);
+    if (!targetPayment) {
+      throw new Error(`Transaction with ID '${paymentId}' not found.`);
+    }
+
+    const refundAmount = reversalAmount !== undefined ? reversalAmount : targetPayment.amount;
+    const reversalId = `rev-${Date.now()}`;
+    const reversalRecord: any = {
+      id: reversalId,
+      tenantId: targetPayment.tenantId,
+      tenantName: targetPayment.tenantName,
+      invoiceId: targetPayment.invoiceId,
+      amount: -refundAmount,
+      date: new Date().toISOString().split('T')[0],
+      type: 'Reversal / Refund',
+      paymentMethod: targetPayment.paymentMethod,
+      status: 'REFUNDED',
+      referenceId: `REFUND-${targetPayment.referenceId || Date.now().toString().slice(-6)}`,
+      notes: `Reversal for ${targetPayment.id}: ${reason}`,
+      recordedBy: reversedBy,
+      originalPaymentId: targetPayment.id,
+      receiptNumber: `SSR-REF-${Date.now().toString().slice(-6)}`,
+      createdAt: new Date().toISOString()
+    };
+
+    targetPayment.status = 'REFUNDED';
+    mockPayments.unshift(reversalRecord);
+
+    // Adjust target invoice
+    if (targetPayment.invoiceId) {
+      const inv = mockInvoices.find(i => i.id === targetPayment.invoiceId);
+      if (inv) {
+        inv.paidAmount = Math.max(0, (inv.paidAmount || 0) - refundAmount);
+        inv.status = inv.paidAmount >= inv.amount ? 'PAID' : (inv.paidAmount > 0 ? 'PARTIAL' : 'PENDING');
+      }
+    }
+
+    // Audit log
+    mockAuditLogs.unshift({
+      id: `audit-${Date.now()}`,
+      action: 'TRANSACTION_REVERSED',
+      userName: reversedBy,
+      entityId: reversalId,
+      details: `Reversed ₹${refundAmount.toLocaleString()} from transaction ${targetPayment.id} (${targetPayment.tenantName}). Reason: ${reason}`,
+      createdAt: new Date().toISOString()
+    });
+
+    return { success: true, reversal: reversalRecord };
+  },
+
+  async sendPaymentReminder(data: {
+    invoiceId: string;
+    reminderType: 'Upcoming Due' | 'Due Today' | 'Overdue' | 'Manual Reminder';
+    channel: 'WhatsApp' | 'SMS' | 'Portal' | 'Email';
+    sentBy?: string;
+  }) {
+    const { invoiceId, reminderType, channel, sentBy = 'Manager' } = data;
+
+    // Find bill
+    const inv = mockInvoices.find(i => i.id === invoiceId);
+    if (!inv) throw new Error('Invoice not found.');
+
+    const tenant = mockTenants.find(t => t.id === inv.tenantId || t.name === inv.tenantName);
+    const tenantName = tenant ? tenant.name : inv.tenantName;
+    const outstanding = Math.max(0, inv.amount - (inv.paidAmount || 0));
+
+    // Hard rule: Reminders MUST stop after payment
+    if (outstanding <= 0 || inv.status === 'PAID') {
+      throw new Error(`Cannot send reminder: This bill is already fully paid (Outstanding: ₹0).`);
+    }
+
+    // Event deduplication: check if this specific reminder event type was already sent for this invoice
+    const existing = mockReminders.find(r => r.invoiceId === invoiceId && r.type === reminderType);
+    if (existing) {
+      return {
+        alreadySent: true,
+        sentAt: existing.sentAt,
+        message: `A '${reminderType}' reminder was already sent on ${new Date(existing.sentAt).toLocaleString('en-IN')}.`,
+        reminder: existing
+      };
+    }
+
+    const reminderId = `rem-${Date.now()}`;
+    const newReminder: any = {
+      id: reminderId,
+      invoiceId,
+      tenantId: inv.tenantId,
+      type: reminderType,
+      channel,
+      sentAt: new Date().toISOString(),
+      sentBy,
+      status: 'SENT'
+    };
+
+    mockReminders.unshift(newReminder);
+
+    // Audit log
+    mockAuditLogs.unshift({
+      id: `audit-${Date.now()}`,
+      action: 'REMINDER_SENT',
+      userName: sentBy,
+      entityId: reminderId,
+      details: `Sent '${reminderType}' reminder via ${channel} to ${tenantName} for ${inv.billingMonth || 'Rent'} (Outstanding: ₹${outstanding.toLocaleString()})`,
+      createdAt: new Date().toISOString()
+    });
+
+    return {
+      success: true,
+      alreadySent: false,
+      message: `Reminder sent successfully to ${tenantName} via ${channel}.`,
+      reminder: newReminder
+    };
+  },
+
 
   // --- QR PAYMENT SETTINGS ---
   async getQRPaymentSettings() {

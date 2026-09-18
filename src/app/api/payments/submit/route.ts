@@ -22,10 +22,14 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { tenantId, amount, paymentMethod, referenceId, notes } = body;
+    const { tenantId, amount, paymentMethod, referenceId, screenshotUrl, notes } = body;
 
-    if (!amount || amount <= 0) {
+    if (!amount || Number(amount) <= 0) {
       return NextResponse.json({ error: 'Valid payment amount is required' }, { status: 400 });
+    }
+
+    if (!referenceId || referenceId.trim().length === 0) {
+      return NextResponse.json({ error: 'Transaction ID / UTR number is required for verification' }, { status: 400 });
     }
 
     // Resolve tenant ID if not passed directly or if user is tenant
@@ -42,17 +46,19 @@ export async function POST(request: Request) {
     const payment = await dbService.submitTenantPayment({
       tenantId: resolvedTenantId,
       amount: Number(amount),
-      paymentMethod: paymentMethod || 'ONLINE',
-      referenceId: referenceId || '',
-      notes: notes || ''
+      paymentMethod: paymentMethod || 'UPI',
+      referenceId: referenceId.trim(),
+      screenshotUrl: screenshotUrl || undefined,
+      notes: notes?.trim() || undefined
     });
 
     return NextResponse.json({
       success: true,
-      message: 'Payment submitted successfully and pending owner approval',
+      message: 'Payment submitted successfully and pending owner verification',
       payment
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Failed to submit payment' }, { status: 500 });
+    console.error('API Payments Submit error:', error);
+    return NextResponse.json({ error: error.message || 'Failed to submit payment' }, { status: 400 });
   }
 }

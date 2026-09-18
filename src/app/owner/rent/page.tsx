@@ -32,988 +32,1292 @@ import {
   Check,
   Zap,
   ChevronRight,
-  FileText
+  FileText,
+  ShieldCheck,
+  RotateCcw,
+  QrCode,
+  Share2,
+  Printer,
+  History,
+  AlertTriangle,
+  ArrowRight,
+  ExternalLink,
+  Copy
 } from 'lucide-react';
 import NeonModal from '@/components/NeonModal';
 import { useToast } from '@/components/ToastProvider';
-import { formatINR, formatDate } from '@/utils/formatters';
+import { formatINR, formatDate, formatDateTime } from '@/utils/formatters';
 import OfficialPaymentReceiptModal, { OfficialReceiptData } from '@/components/OfficialPaymentReceiptModal';
-import QuickInvoiceModal from '@/components/QuickInvoiceModal';
+import { UnifiedBill, PaymentTransaction, ReminderRecord, FinancialAuditLog } from '@/lib/billingService';
 
-export default function RentPage() {
+export default function OwnerPaymentsPage() {
   const { showToast } = useToast();
   
-  // Data state
-  const [tenants, setTenants] = useState<any[]>([]);
-  const [invoices, setInvoices] = useState<any[]>([]);
+  // Primary Workspace Data
+  const [bills, setBills] = useState<UnifiedBill[]>([]);
+  const [allBills, setAllBills] = useState<UnifiedBill[]>([]);
+  const [verificationQueue, setVerificationQueue] = useState<PaymentTransaction[]>([]);
+  const [transactionsLedger, setTransactionsLedger] = useState<PaymentTransaction[]>([]);
+  const [auditLogs, setAuditLogs] = useState<FinancialAuditLog[]>([]);
+  const [summary, setSummary] = useState<any>({
+    totalExpected: 0,
+    totalCollected: 0,
+    totalOutstanding: 0,
+    totalOverdue: 0,
+    collectionRate: 0,
+    counts: { all: 0, paid: 0, partial: 0, due: 0, overdue: 0, verificationPending: 0 }
+  });
   const [loading, setLoading] = useState(true);
 
-  // Tabs & Filters
-  const [activeTab, setActiveTab] = useState<'all' | 'verification' | 'paid' | 'pending' | 'overdue'>('all');
+  // Slicers and Filters
+  const [selectedMonth, setSelectedMonth] = useState('ALL');
+  const [selectedBuilding, setSelectedBuilding] = useState('ALL');
+  const [activeTab, setActiveTab] = useState<'bills' | 'verification' | 'ledger' | 'audit' | 'qr'>('bills');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PAID' | 'PARTIAL' | 'DUE' | 'OVERDUE' | 'VERIFICATION_PENDING'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedMonthFilter, setSelectedMonthFilter] = useState('ALL');
-  const [showFilterPopover, setShowFilterPopover] = useState(false);
 
-  // Toggle state for the Quick Rent Issuer
-  const [showQuickIssuer, setShowQuickIssuer] = useState(false);
+  // Modals & Side Panel State
+  const [selectedBillForDetails, setSelectedBillForDetails] = useState<UnifiedBill | null>(null);
+  const [showDetailsDrawer, setShowDetailsDrawer] = useState(false);
 
-  // Resident selector popover state
-  const [showResidentDropdown, setShowResidentDropdown] = useState(false);
-  const [selectedTenantForInvoice, setSelectedTenantForInvoice] = useState<any>(null);
-
-  // Quick Rent Issuer Form
-  const [issuerForm, setIssuerForm] = useState({
-    tenantId: '',
-    amount: 8500,
-    dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    billingMonth: 'August 2026',
-    itemDescription: 'Monthly Room Rent'
-  });
-
-  // Invoice Preview Modal
-  const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const [previewSuccess, setPreviewSuccess] = useState(false);
-  const [generatedInvoiceId, setGeneratedInvoiceId] = useState('');
-
-  // Side Panel state for Invoice Details
-  const [selectedSideInvoice, setSelectedSideInvoice] = useState<any>(null);
-
-  // Payment Verification Modal State
-  const [verifyModalInvoice, setVerifyModalInvoice] = useState<any>(null);
-  const [verifyRemarks, setVerifyRemarks] = useState('');
-
-  // Record Payment Modal State
-  const [showRecordPaymentModal, setShowRecordPaymentModal] = useState(false);
+  // Record Payment Modal
+  const [showRecordModal, setShowRecordModal] = useState(false);
   const [recordTenantId, setRecordTenantId] = useState('');
-  const [recordAmount, setRecordAmount] = useState(8500);
-  const [recordMethod, setRecordMethod] = useState<'UPI' | 'Cash' | 'Bank Transfer' | 'Card'>('UPI');
+  const [recordInvoiceId, setRecordInvoiceId] = useState('');
+  const [recordAmount, setRecordAmount] = useState<number | ''>(8500);
+  const [recordMethod, setRecordMethod] = useState<'UPI' | 'Cash' | 'Bank Transfer' | 'Card' | 'Other'>('UPI');
+  const [recordType, setRecordType] = useState('Monthly Rent');
   const [recordTxnId, setRecordTxnId] = useState('');
   const [recordDate, setRecordDate] = useState(new Date().toISOString().split('T')[0]);
-  const [recordSuccess, setRecordSuccess] = useState(false);
+  const [recordNotes, setRecordNotes] = useState('');
+  const [recordingLoading, setRecordingLoading] = useState(false);
 
-  // Payment Reminder Modal
-  const [reminderModalTenant, setReminderModalTenant] = useState<any>(null);
+  // Success Modal State
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successData, setSuccessData] = useState<{
+    tenantName: string;
+    amount: number;
+    remaining: number;
+    status: string;
+    receiptData: OfficialReceiptData | null;
+  } | null>(null);
+
+  // Verification Review Modal
+  const [selectedVerificationTxn, setSelectedVerificationTxn] = useState<PaymentTransaction | null>(null);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [rejectReasonPrompt, setRejectReasonPrompt] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('Transaction reference mismatch');
+  const [actionLoading, setActionLoading] = useState(false);
+
+  // Send Reminder Modal
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [reminderTargetBill, setReminderTargetBill] = useState<UnifiedBill | null>(null);
+  const [reminderType, setReminderType] = useState<'Upcoming Due' | 'Due Today' | 'Overdue' | 'Manual Reminder'>('Upcoming Due');
   const [reminderChannel, setReminderChannel] = useState<'WhatsApp' | 'SMS' | 'Portal'>('WhatsApp');
-  const [reminderSuccess, setReminderSuccess] = useState(false);
+  const [reminderStatusFeedback, setReminderStatusFeedback] = useState<{ alreadySent: boolean; message: string; sentAt?: string } | null>(null);
+  const [sendingReminder, setSendingReminder] = useState(false);
 
-  // Edit / Undo Modals
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editInvoice, setEditInvoice] = useState<any>(null);
-  const [editForm, setEditForm] = useState({ amount: '', dueDate: '', status: 'PENDING' });
-  const [showRevertModal, setShowRevertModal] = useState(false);
-  const [revertInvoice, setRevertInvoice] = useState<any>(null);
-  const [revertRemarks, setRevertRemarks] = useState('');
+  // Reversal / Refund Modal
+  const [showReversalModal, setShowReversalModal] = useState(false);
+  const [reversalTargetTxn, setReversalTargetTxn] = useState<PaymentTransaction | null>(null);
+  const [reversalReason, setReversalReason] = useState('Accidental duplicate recording');
+  const [reversingLoading, setReversingLoading] = useState(false);
 
-  // Official Payment Receipt Modal
-  const [selectedReceipt, setSelectedReceipt] = useState<OfficialReceiptData | null>(null);
+  // Receipt Modal
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [receiptData, setReceiptData] = useState<OfficialReceiptData | null>(null);
 
-  const handleViewReceipt = (inv: any) => {
-    const rawNumber = inv.number ? inv.number.replace(/[^A-Za-z0-9]/g, '') : String(inv.id).slice(-6);
-    const receiptNo = `HST-RCP-2026-${rawNumber.padStart(6, '0')}`;
+  // QR Settings State
+  const [qrSettings, setQrSettings] = useState({
+    qrCodeUrl: '/uploads/sample_qr.png',
+    upiId: 'srisaisiri@upi',
+    instructions: 'Scan & Pay using any UPI app (GPay, PhonePe, Paytm) and enter 12-digit UTR reference.'
+  });
+  const [savingQR, setSavingQR] = useState(false);
 
-    let parsedItems: any[] = [];
-    try {
-      if (Array.isArray(inv.items)) parsedItems = inv.items;
-      else if (typeof inv.itemsJson === 'string') parsedItems = JSON.parse(inv.itemsJson);
-    } catch (e) {
-      parsedItems = [];
-    }
-
-    const items = parsedItems.length > 0
-      ? parsedItems.map((it: any, idx: number) => ({
-          sNo: idx + 1,
-          accountHead: it.description || 'HOSTEL RENT COLLECTION',
-          amount: Number(it.amount || inv.paidAmount || inv.amount)
-        }))
-      : [
-          {
-            sNo: 1,
-            accountHead: `HOSTEL RENT – ${formatDate(inv.dueDate || inv.dateCreated)}`,
-            amount: Number(inv.paidAmount || inv.amount || 6500)
-          }
-        ];
-
-    const matchedTenant = tenants.find(t => t.id === inv.tenantId || t.name === inv.tenantName);
-
-    const data: OfficialReceiptData = {
-      receiptNo,
-      date: inv.dateCreated || inv.dueDate || new Date().toISOString(),
-      tenantId: matchedTenant?.id || inv.tenantId || 'TEN-001',
-      tenantName: inv.tenantName || matchedTenant?.name || 'SUBHASH',
-      roomNumber: inv.roomNumber || matchedTenant?.roomNumber || 'A-101',
-      mobileNumber: matchedTenant?.phone || '9876543210',
-      items,
-      totalAmount: Number(inv.paidAmount || inv.amount || 6500),
-      paymentType: inv.status === 'PARTIAL' ? 'Partial Payment' : 'Full Payment',
-      remainingDue: inv.status === 'PARTIAL' ? (inv.amount - (inv.paidAmount || 0)) : 0
-    };
-
-    setSelectedReceipt(data);
-    setShowReceiptModal(true);
-  };
-
-  // Quick Action Floating Radial Menu State
-  const [radialMenuOpen, setRadialMenuOpen] = useState(false);
-
-  // Status Change Handler for Popup Modal
-  const handleUpdateInvoiceStatus = async (invoiceId: string, newStatus: string) => {
-    try {
-      if (newStatus === 'PAID' || newStatus === 'APPROVED') {
-        await fetch('/api/payments/approve', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paymentId: invoiceId })
-        });
-        showToast('Payment Approved', `Payment ${invoiceId} status updated to APPROVED`, 'success');
-      } else if (newStatus === 'REJECTED') {
-        const reason = prompt('Enter rejection reason for audit log:', 'Invalid UTR / Reference ID');
-        if (reason !== null) {
-          await fetch('/api/payments/reject', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ paymentId: invoiceId, rejectionReason: reason })
-          });
-          showToast('Payment Rejected', `Payment rejected and stored in DB audit history.`, 'info');
-        }
-      } else {
-        await fetch('/api/rent', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'UPDATE',
-            invoiceId,
-            status: newStatus
-          })
-        });
-        showToast('Payment Status Updated', `Status changed to ${newStatus}`, 'success');
-      }
-    } catch (err) {
-      showToast('Payment Status Updated', `Status changed to ${newStatus}`, 'success');
-    }
-
-    // Update local state instantly & sync across components
-    setInvoices((prev: any[]) => prev.map((inv: any) => inv.id === invoiceId ? { ...inv, status: newStatus, paidAmount: newStatus === 'PAID' ? (inv.amount || 8500) : 0 } : inv));
-    setSelectedSideInvoice((prev: any) => prev ? { ...prev, status: newStatus, paidAmount: newStatus === 'PAID' ? (prev.amount || 8500) : 0 } : null);
-  };
-
-  const [autoGenerating, setAutoGenerating] = useState(false);
-
-  const fetchInitialData = (isInitial: boolean = false) => {
+  // Fetch Payments Workspace Data
+  const fetchWorkspaceData = async (isInitial: boolean = false) => {
     if (isInitial) setLoading(true);
-    Promise.all([
-      fetch('/api/tenants').then(res => res.json()),
-      fetch('/api/rent').then(res => res.json())
-    ])
-      .then(([tenantsData, rentData]) => {
-        const tList = Array.isArray(tenantsData) ? tenantsData : [];
-        const iList = Array.isArray(rentData) ? rentData : [];
-        setTenants(tList);
-        setInvoices(iList);
-        if (tList.length > 0 && !selectedTenantForInvoice) {
-          setSelectedTenantForInvoice(tList[0]);
-          setIssuerForm(prev => ({
-            ...prev,
-            tenantId: tList[0].id,
-            amount: tList[0].rentAmount || 8500
-          }));
+    try {
+      const params = new URLSearchParams();
+      if (selectedMonth !== 'ALL') params.set('month', selectedMonth);
+      if (selectedBuilding !== 'ALL') params.set('buildingId', selectedBuilding);
+      if (statusFilter !== 'ALL') params.set('status', statusFilter);
+      if (searchQuery.trim()) params.set('search', searchQuery.trim());
+
+      const res = await fetch(`/api/payments?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setBills(data.bills || []);
+        setAllBills(data.allBills || []);
+        setSummary(data.summary || {
+          totalExpected: 0,
+          totalCollected: 0,
+          totalOutstanding: 0,
+          totalOverdue: 0,
+          collectionRate: 0,
+          counts: { all: 0, paid: 0, partial: 0, due: 0, overdue: 0, verificationPending: 0 }
+        });
+        setVerificationQueue(data.verificationQueue || []);
+        setTransactionsLedger(data.transactionsLedger || []);
+        setAuditLogs(data.auditLogs || []);
+
+        // Also sync selected bill in details drawer if open
+        if (selectedBillForDetails) {
+          const updated = (data.allBills || []).find((b: UnifiedBill) => b.id === selectedBillForDetails.id);
+          if (updated) setSelectedBillForDetails(updated);
         }
-        if (isInitial) setLoading(false);
-      })
-      .catch(err => {
-        console.error('Fetch rent error:', err);
-        if (isInitial) setLoading(false);
-      });
+      }
+
+      // Fetch QR Settings
+      const qrRes = await fetch('/api/settings/qr');
+      if (qrRes.ok) {
+        const qrData = await qrRes.json();
+        if (qrData.settings) {
+          setQrSettings({
+            qrCodeUrl: qrData.settings.qrCodeUrl || '/uploads/sample_qr.png',
+            upiId: qrData.settings.upiId || 'srisaisiri@upi',
+            instructions: qrData.settings.instructions || ''
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching payments workspace:', e);
+    } finally {
+      if (isInitial) setLoading(false);
+    }
   };
 
   useEffect(() => {
-    fetchInitialData(true);
-    const interval = setInterval(() => fetchInitialData(false), 5000);
+    fetchWorkspaceData(true);
+    const interval = setInterval(() => fetchWorkspaceData(false), 8000);
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedMonth, selectedBuilding, statusFilter, searchQuery]);
 
-  const handleAutoGenerateInvoices = async () => {
-    setAutoGenerating(true);
-    try {
-      const res = await fetch('/api/rent/auto-generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ billingMonth: selectedMonthFilter === 'ALL' ? 'September 2026' : selectedMonthFilter })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showToast('Auto-Invoices Generated', data.message, 'success');
-        fetchInitialData();
-      } else {
-        showToast('Generation Failed', data.error || 'Could not auto-generate invoices', 'danger');
-      }
-    } catch (e: any) {
-      showToast('Error', e.message || 'Network error', 'danger');
-    } finally {
-      setAutoGenerating(false);
-    }
-  };
-
-  // Summary Metrics calculations
-  const totalBilling = useMemo(() => invoices.reduce((sum, inv) => sum + (inv.amount || 0), 0), [invoices]);
-  const totalCollected = useMemo(() => invoices.reduce((sum, inv) => sum + (inv.paidAmount || (inv.status === 'PAID' || inv.status === 'APPROVED' ? inv.amount : 0)), 0), [invoices]);
-  const totalPending = useMemo(() => invoices.reduce((sum, inv) => {
-    if (inv.status === 'PENDING_VERIFICATION' || inv.status === 'PENDING') {
-      return sum + (inv.amount - (inv.paidAmount || 0));
-    }
-    return sum;
-  }, 0), [invoices]);
-  const totalOverdue = useMemo(() => invoices.reduce((sum, inv) => {
-    const isOverdue = inv.status === 'OVERDUE' || (inv.status === 'PENDING' && new Date(inv.dueDate) < new Date());
-    if (isOverdue) {
-      return sum + (inv.amount - (inv.paidAmount || 0));
-    }
-    return sum;
-  }, 0), [invoices]);
-
-  const collectionPercentage = totalBilling > 0 ? Math.round((totalCollected / totalBilling) * 100) : 84;
-
-  const countVerification = invoices.filter(inv => inv.status === 'PENDING_VERIFICATION' || inv.status === 'VERIFICATION').length;
-  const countPaid = invoices.filter(inv => inv.status === 'PAID' || inv.status === 'APPROVED').length;
-  const countPending = invoices.filter(inv => inv.status === 'PENDING').length;
-  const countOverdue = invoices.filter(inv => inv.status === 'OVERDUE' || (inv.status === 'PENDING' && new Date(inv.dueDate) < new Date())).length;
-
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter(r => {
-      const matchesSearch = searchQuery === '' || 
-        (r.tenantName || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-        (r.roomNumber || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (r.number || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (r.id || '').toLowerCase().includes(searchQuery.toLowerCase());
-
-      const isOverdue = r.status === 'OVERDUE' || (r.status === 'PENDING' && new Date(r.dueDate) < new Date());
-
-      let matchesTab = true;
-      if (activeTab === 'verification') matchesTab = r.status === 'PENDING_VERIFICATION' || r.status === 'VERIFICATION';
-      else if (activeTab === 'paid') matchesTab = r.status === 'PAID' || r.status === 'APPROVED';
-      else if (activeTab === 'pending') matchesTab = r.status === 'PENDING';
-      else if (activeTab === 'overdue') matchesTab = isOverdue;
-
-      let matchesMonth = true;
-      if (selectedMonthFilter !== 'ALL') {
-        const invMonth = r.billingMonth || (r.dateCreated ? new Date(r.dateCreated).toLocaleString('en-US', { month: 'long', year: 'numeric' }) : '');
-        matchesMonth = invMonth.toLowerCase().includes(selectedMonthFilter.toLowerCase());
-      }
-
-      return matchesSearch && matchesTab && matchesMonth;
+  // Available Months Generator
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+    allBills.forEach(b => {
+      if (b.billingMonth) set.add(b.billingMonth);
+      if (b.billingPeriod) set.add(b.billingPeriod);
     });
-  }, [invoices, searchQuery, activeTab, selectedMonthFilter]);
+    const list = Array.from(set);
+    if (!list.includes('September 2026')) list.unshift('September 2026');
+    if (!list.includes('August 2026')) list.push('August 2026');
+    if (!list.includes('July 2026')) list.push('July 2026');
+    return list;
+  }, [allBills]);
 
-  const handleSelectResidentForIssuer = (t: any) => {
-    setSelectedTenantForInvoice(t);
-    setIssuerForm(prev => ({
-      ...prev,
-      tenantId: t.id,
-      amount: t.rentAmount || 8500
-    }));
-    setShowResidentDropdown(false);
-  };
-
-  const handleOpenPreviewModal = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!issuerForm.tenantId) {
-      alert('Please select a resident.');
-      return;
+  // Target Bill for Record Modal calculation
+  const targetRecordBill = useMemo(() => {
+    if (recordInvoiceId) {
+      return allBills.find(b => b.id === recordInvoiceId) || null;
     }
-    setPreviewSuccess(false);
-    setShowPreviewModal(true);
-  };
-
-  const handleConfirmGenerateInvoice = async () => {
-    try {
-      const res = await fetch('/api/rent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenantId: issuerForm.tenantId,
-          amount: parseFloat(String(issuerForm.amount)),
-          dueDate: issuerForm.dueDate,
-          items: [{ description: issuerForm.itemDescription, amount: parseFloat(String(issuerForm.amount)) }]
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setGeneratedInvoiceId(data.invoice?.number || `INV-${Date.now().toString().slice(-6)}`);
-        setPreviewSuccess(true);
-        fetchInitialData();
-      } else {
-        const err = await res.json();
-        alert(err.error || 'Failed to generate invoice');
-      }
-    } catch (err) {
-      console.error(err);
+    if (recordTenantId) {
+      return allBills.find(b => b.tenantId === recordTenantId) || null;
     }
+    return null;
+  }, [allBills, recordInvoiceId, recordTenantId]);
+
+  // Live calculation for Record Payment Modal
+  const liveCalculation = useMemo(() => {
+    const totalBill = targetRecordBill ? targetRecordBill.amount : 8500;
+    const alreadyPaid = targetRecordBill ? targetRecordBill.paidAmount : 0;
+    const payment = typeof recordAmount === 'number' ? recordAmount : 0;
+    const remaining = Math.max(0, totalBill - (alreadyPaid + payment));
+    return {
+      totalBill,
+      alreadyPaid,
+      newPayment: payment,
+      remaining,
+      resultingStatus: remaining <= 0 ? 'PAID' : (alreadyPaid + payment > 0 ? 'PARTIAL' : 'DUE')
+    };
+  }, [targetRecordBill, recordAmount]);
+
+  // Helper to open Record Payment modal for a specific bill
+  const handleOpenRecordForBill = (bill: UnifiedBill) => {
+    setRecordTenantId(bill.tenantId);
+    setRecordInvoiceId(bill.id);
+    setRecordAmount(bill.outstandingAmount > 0 ? bill.outstandingAmount : bill.amount);
+    setRecordMethod('UPI');
+    setRecordType(bill.billType || 'Monthly Rent');
+    setRecordTxnId('');
+    setRecordDate(new Date().toISOString().split('T')[0]);
+    setRecordNotes('');
+    setShowRecordModal(true);
   };
 
-  const handleVerifySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!verifyModalInvoice) return;
-    try {
-      const res = await fetch('/api/rent', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          invoiceId: verifyModalInvoice.id,
-          action: 'VERIFY',
-          remarks: verifyRemarks || 'Payment verified via online proof'
-        })
-      });
-      if (res.ok) {
-        setVerifyModalInvoice(null);
-        showToast('Payment Verified', `Approved invoice ${verifyModalInvoice.number || verifyModalInvoice.id}`, 'success');
-        fetchInitialData();
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
+  // Record Payment Submission Handler
   const handleRecordPaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const targetTenant = tenants.find(t => t.id === recordTenantId);
+    if (!recordTenantId && !recordInvoiceId) {
+      showToast('Please select a resident to record payment.', 'error');
+      return;
+    }
+    if (!recordAmount || Number(recordAmount) <= 0) {
+      showToast('Please enter a valid payment amount.', 'error');
+      return;
+    }
+
+    setRecordingLoading(true);
     try {
-      const res = await fetch('/api/rent', {
+      const res = await fetch('/api/payments/record', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tenantId: recordTenantId,
-          amount: parseFloat(String(recordAmount)),
-          dueDate: recordDate,
-          items: [{ description: `Payment via ${recordMethod}`, amount: parseFloat(String(recordAmount)) }]
+          invoiceId: recordInvoiceId || undefined,
+          amount: Number(recordAmount),
+          paymentMethod: recordMethod,
+          paymentType: recordType,
+          referenceId: recordTxnId.trim() || undefined,
+          paymentDate: recordDate,
+          notes: recordNotes.trim() || undefined
         })
       });
-      if (res.ok) {
-        setRecordSuccess(true);
-        fetchInitialData();
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
-  const handleSendReminder = async () => {
-    setReminderSuccess(true);
-    if (reminderModalTenant) {
-      try {
-        const targetTenantId = reminderModalTenant.tenantId || reminderModalTenant.id || reminderModalTenant.userId;
-        await fetch('/api/notices', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: `Rent Due Reminder: ₹${(reminderModalTenant.amount || 8500).toLocaleString('en-IN')}`,
-            content: `Dear ${reminderModalTenant.tenantName || 'Resident'}, your rent payment of ₹${(reminderModalTenant.amount || 8500).toLocaleString('en-IN')} is due. Please process payment via your Tenant Portal.`,
-            target: `TENANT_${targetTenantId}`,
-            isEmergency: false
-          })
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        showToast(data.error || 'Failed to record payment.', 'error');
+      } else {
+        showToast('Payment recorded successfully!', 'success');
+        setShowRecordModal(false);
+
+        // Prepare Success Modal Data
+        const tenantName = targetRecordBill?.tenantName || 'Resident';
+        const receipt: OfficialReceiptData = {
+          receiptNo: data.payment?.receiptNumber || `SSR-RCP-2026-${Date.now().toString().slice(-6)}`,
+          date: recordDate,
+          tenantId: targetRecordBill?.tenantId || recordTenantId,
+          tenantName: tenantName,
+          roomNumber: targetRecordBill?.roomNumber || 'A-101',
+          buildingName: targetRecordBill?.buildingName,
+          mobileNumber: targetRecordBill?.tenantPhone || '9876543210',
+          billingPeriod: targetRecordBill?.billingPeriod || 'Current Month',
+          paymentMethod: recordMethod,
+          referenceId: recordTxnId || 'OFFICIAL_RECORDED',
+          paymentStatus: liveCalculation.resultingStatus,
+          items: [
+            {
+              sNo: 1,
+              accountHead: `${recordType} (${targetRecordBill?.billingPeriod || 'Current Period'})`,
+              amount: Number(recordAmount)
+            }
+          ],
+          totalAmount: Number(recordAmount),
+          billAmount: liveCalculation.totalBill,
+          previousPaid: liveCalculation.alreadyPaid,
+          currentPayment: Number(recordAmount),
+          remainingDue: liveCalculation.remaining
+        };
+
+        setSuccessData({
+          tenantName,
+          amount: Number(recordAmount),
+          remaining: liveCalculation.remaining,
+          status: liveCalculation.resultingStatus,
+          receiptData: receipt
         });
-      } catch (e) {
-        console.error('Failed to post targeted reminder notice:', e);
-      }
-    }
-    setTimeout(() => {
-      setReminderSuccess(false);
-      setReminderModalTenant(null);
-      showToast('Reminder Sent', `Payment reminder dispatched via ${reminderChannel}.`, 'success');
-    }, 1200);
-  };
+        setShowSuccessModal(true);
 
-  const handleRevertSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!revertInvoice) return;
-    try {
-      const res = await fetch('/api/rent', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          invoiceId: revertInvoice.id,
-          action: 'REVERT',
-          remarks: revertRemarks
-        })
-      });
-      if (res.ok) {
-        setShowRevertModal(false);
-        setRevertInvoice(null);
-        showToast('Status Reverted', 'Invoice status reset to verification queue', 'info');
-        fetchInitialData();
+        // Refresh Data
+        fetchWorkspaceData(false);
       }
-    } catch (e) {
-      console.error(e);
+    } catch (err: any) {
+      showToast(err.message || 'An error occurred while recording payment.', 'error');
+    } finally {
+      setRecordingLoading(false);
     }
   };
 
-  const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editInvoice) return;
+  // View Receipt Handler
+  const handleOpenReceipt = (bill: UnifiedBill, txn?: PaymentTransaction) => {
+    const rawNumber = bill.number.replace(/[^A-Za-z0-9]/g, '');
+    const receiptNo = txn?.receiptNumber || `SSR-RCP-2026-${rawNumber.slice(-6).padStart(6, '0')}`;
+
+    const items = bill.items && bill.items.length > 0 
+      ? bill.items.map((it, idx) => ({ sNo: idx + 1, accountHead: it.description || 'HOSTEL RENT', amount: Number(it.amount) }))
+      : [{ sNo: 1, accountHead: `${bill.billType || 'HOSTEL RENT'} - ${bill.billingPeriod}`, amount: Number(txn?.amount || bill.paidAmount || bill.amount) }];
+
+    const data: OfficialReceiptData = {
+      receiptNo,
+      date: txn?.date || bill.lastPaymentDate || bill.dueDate,
+      verifiedDate: txn?.status === 'APPROVED' ? txn.date : undefined,
+      tenantId: bill.tenantId,
+      tenantName: bill.tenantName,
+      roomNumber: bill.roomNumber,
+      buildingName: bill.buildingName,
+      mobileNumber: bill.tenantPhone || '9876543210',
+      billingPeriod: bill.billingPeriod,
+      paymentMethod: txn?.paymentMethod || 'UPI',
+      referenceId: txn?.referenceId || 'UTR-VERIFIED',
+      recordedBy: txn?.recordedBy || 'Manager',
+      paymentStatus: bill.status,
+      items,
+      billAmount: bill.amount,
+      previousPaid: Math.max(0, bill.paidAmount - (txn?.amount || 0)),
+      currentPayment: Number(txn?.amount || bill.paidAmount || bill.amount),
+      totalAmount: Number(txn?.amount || bill.paidAmount || bill.amount),
+      remainingDue: bill.outstandingAmount
+    };
+
+    setReceiptData(data);
+    setShowReceiptModal(true);
+  };
+
+  // Open Reminder Modal
+  const handleOpenReminderModal = (bill: UnifiedBill) => {
+    setReminderTargetBill(bill);
+    setReminderType(bill.status === 'OVERDUE' ? 'Overdue' : 'Upcoming Due');
+    setReminderChannel('WhatsApp');
+    setReminderStatusFeedback(null);
+    setShowReminderModal(true);
+  };
+
+  // Send Reminder Handler
+  const handleSendReminderSubmit = async () => {
+    if (!reminderTargetBill) return;
+    setSendingReminder(true);
+    setReminderStatusFeedback(null);
+
     try {
-      const res = await fetch('/api/rent', {
-        method: 'PUT',
+      const res = await fetch('/api/payments/remind', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          invoiceId: editInvoice.id,
-          action: 'UPDATE',
-          amount: parseFloat(editForm.amount),
-          dueDate: editForm.dueDate,
-          status: editForm.status
+          invoiceId: reminderTargetBill.id,
+          reminderType,
+          channel: reminderChannel
         })
       });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        showToast(data.error || 'Failed to send reminder.', 'error');
+      } else {
+        if (data.alreadySent) {
+          setReminderStatusFeedback({
+            alreadySent: true,
+            message: `A '${reminderType}' reminder was already sent to ${reminderTargetBill.tenantName} on ${new Date(data.sentAt).toLocaleString('en-IN')}.`,
+            sentAt: data.sentAt
+          });
+          showToast('Reminder already recorded as sent.', 'info');
+        } else {
+          setReminderStatusFeedback({
+            alreadySent: false,
+            message: `✓ Reminder logged and sent successfully via ${reminderChannel}!`
+          });
+          showToast(`Reminder sent to ${reminderTargetBill.tenantName}!`, 'success');
+          fetchWorkspaceData(false);
+
+          // If WhatsApp channel, optionally open WhatsApp web link
+          if (reminderChannel === 'WhatsApp' && reminderTargetBill.tenantPhone) {
+            const cleanPhone = reminderTargetBill.tenantPhone.replace(/[^0-9]/g, '');
+            const msg = encodeURIComponent(
+              `Hello ${reminderTargetBill.tenantName},\nThis is a gentle payment reminder from Sri Sai Siri Boys Hostel.\n\n` +
+              `Bill: ${reminderTargetBill.billingPeriod} Rent\nAmount: ₹${reminderTargetBill.amount.toLocaleString('en-IN')}\n` +
+              `Paid: ₹${reminderTargetBill.paidAmount.toLocaleString('en-IN')}\nOutstanding: ₹${reminderTargetBill.outstandingAmount.toLocaleString('en-IN')}\n` +
+              `Due Date: ${formatDate(reminderTargetBill.dueDate)}\n\nPlease settle your dues at your earliest convenience. Thank you!`
+            );
+            window.open(`https://wa.me/${cleanPhone.startsWith('91') ? cleanPhone : '91' + cleanPhone}?text=${msg}`, '_blank');
+          }
+        }
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Error sending reminder.', 'error');
+    } finally {
+      setSendingReminder(false);
+    }
+  };
+
+  // Payment Verification Handlers
+  const handleApproveVerification = async (paymentId: string) => {
+    setActionLoading(true);
+    try {
+      const res = await fetch('/api/payments/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentId })
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        showToast(data.error || 'Failed to approve payment.', 'error');
+      } else {
+        showToast('Payment verified and approved successfully!', 'success');
+        setShowVerificationModal(false);
+        fetchWorkspaceData(false);
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Error approving payment.', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRejectVerification = async (paymentId: string) => {
+    setActionLoading(true);
+    try {
+      const res = await fetch('/api/payments/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentId, rejectionReason })
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        showToast(data.error || 'Failed to reject payment.', 'error');
+      } else {
+        showToast('Payment submission rejected and audit log recorded.', 'info');
+        setShowVerificationModal(false);
+        setRejectReasonPrompt(false);
+        fetchWorkspaceData(false);
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Error rejecting payment.', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Reversal Handler
+  const handleReversalSubmit = async () => {
+    if (!reversalTargetTxn) return;
+    setReversingLoading(true);
+    try {
+      const res = await fetch('/api/payments/reverse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentId: reversalTargetTxn.id,
+          reason: reversalReason
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        showToast(data.error || 'Failed to reverse transaction.', 'error');
+      } else {
+        showToast('Transaction reversed successfully. Audit trail preserved.', 'success');
+        setShowReversalModal(false);
+        fetchWorkspaceData(false);
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Error reversing transaction.', 'error');
+    } finally {
+      setReversingLoading(false);
+    }
+  };
+
+  // Save QR Settings Handler
+  const handleSaveQRSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingQR(true);
+    try {
+      const res = await fetch('/api/settings/qr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(qrSettings)
+      });
       if (res.ok) {
-        setShowEditModal(false);
-        setEditInvoice(null);
-        showToast('Invoice Updated', 'Bill configuration saved successfully.', 'success');
-        fetchInitialData();
+        showToast('Hostel UPI QR & Payment settings updated!', 'success');
+      } else {
+        showToast('Failed to save QR settings.', 'error');
       }
     } catch (err) {
-      console.error(err);
+      showToast('Error saving settings.', 'error');
+    } finally {
+      setSavingQR(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-slate-400">
-          <div className="w-8 h-8 rounded-full border-2 border-purple-600 border-t-transparent animate-spin" />
-          <span className="text-xs font-black uppercase tracking-wider">Loading Financial Command Center...</span>
-        </div>
-      </div>
-    );
-  }
+  // Export CSV Handler
+  const handleExportCSV = () => {
+    const headers = ['Transaction ID', 'Date', 'Tenant Name', 'Room', 'Building', 'Payment Type', 'Method', 'Amount (INR)', 'Reference / UTR', 'Status', 'Recorded By'];
+    const rows = transactionsLedger.map(t => [
+      t.id,
+      t.date,
+      `"${t.tenantName || 'Resident'}"`,
+      t.roomNumber || 'A-101',
+      `"${t.buildingName || 'Hostel'}"`,
+      t.type,
+      t.paymentMethod,
+      t.amount,
+      `"${t.referenceId || 'N/A'}"`,
+      t.status,
+      `"${t.recordedBy || 'Manager'}"`
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Hostel_Financial_Transactions_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Transaction statement CSV exported successfully!', 'success');
+  };
+
+  // Status Badge Helper
+  const renderStatusBadge = (status: string) => {
+    switch (status) {
+      case 'PAID':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            PAID
+          </span>
+        );
+      case 'PARTIAL':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+            <Clock className="w-3.5 h-3.5" />
+            PARTIAL
+          </span>
+        );
+      case 'OVERDUE':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 animate-pulse">
+            <AlertCircle className="w-3.5 h-3.5" />
+            OVERDUE
+          </span>
+        );
+      case 'VERIFICATION_PENDING':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            PROOF PENDING
+          </span>
+        );
+      case 'DUE':
+      default:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+            <Clock className="w-3.5 h-3.5" />
+            DUE
+          </span>
+        );
+    }
+  };
 
   return (
-    <div className="space-y-7 page-entrance text-left font-sans transition-colors duration-200 select-none pb-24 relative">
+    <div className="space-y-6 pb-20 max-w-[1600px] mx-auto text-left select-none">
       
-      {/* 👑 1. HEADER HERO CARD */}
-      <div className="relative p-6 sm:p-8 rounded-[32px] bg-[#FFFDF9] dark:bg-[#141D19] text-[#1C2522] dark:text-[#F2F5F2] border border-[#DDD8CE] dark:border-[#293832] shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 group">
-        <div className="space-y-2 z-10">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full tenant-bg-soft tenant-text-accent border tenant-border-accent">
-              FINANCIAL COMMAND & RENT LEDGER
-            </span>
-            <span className="flex items-center gap-1.5 text-[10px] font-extrabold tenant-text-accent tenant-bg-soft px-3 py-1 rounded-full border tenant-border-accent">
-              <span className="w-1.5 h-1.5 rounded-full tenant-bg-accent-raw animate-pulse" />
-              {collectionPercentage}% COLLECTED THIS MONTH
-            </span>
+      {/* ========================================================
+          🏛️ 1. TOP HEADER & GLOBAL PRIMARY ACTION
+         ======================================================== */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/80 p-5 sm:p-6 rounded-3xl shadow-sm">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
+              <Receipt className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                Payments
+              </h1>
+              <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400">
+                Track rent, collections, outstanding balances and transactions.
+              </p>
+            </div>
           </div>
-
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-[#1C2522] dark:text-[#F2F5F2] group-hover:tenant-text-accent transition-colors">
-            Rent & Ledger Settlement
-          </h1>
-          
-          <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] font-medium">
-            Track monthly rent collections, verify resident payment receipts, issue bills, and manage outstanding balances.
-          </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0 z-10">
+        <div className="flex items-center gap-3">
           <button
-            onClick={handleAutoGenerateInvoices}
-            disabled={autoGenerating}
-            className="py-2.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-md transition-all cursor-pointer flex items-center gap-2"
+            onClick={() => {
+              setRecordTenantId('');
+              setRecordInvoiceId('');
+              setRecordAmount(8500);
+              setRecordMethod('UPI');
+              setRecordTxnId('');
+              setRecordDate(new Date().toISOString().split('T')[0]);
+              setRecordNotes('');
+              setShowRecordModal(true);
+            }}
+            className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all cursor-pointer"
           >
-            <Sparkles className="w-4 h-4" />
-            <span>{autoGenerating ? 'Generating...' : 'Auto-Generate Monthly Invoices'}</span>
+            <Plus className="w-4 h-4" />
+            <span>+ Record Payment</span>
           </button>
-
-          {/* Quick Invoice Generator Refined Toggle */}
-          <div className="flex items-center gap-3 bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] rounded-2xl px-4 py-2 shrink-0">
-            <span className="text-xs font-black text-[#1C2522] dark:text-[#F2F5F2]">Quick Generator</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={showQuickIssuer}
-              onClick={() => setShowQuickIssuer(!showQuickIssuer)}
-              className={`w-11 h-6 rounded-full p-0.5 transition-colors duration-300 cursor-pointer flex items-center shrink-0 border ${
-                showQuickIssuer 
-                  ? 'tenant-bg-accent border-transparent' 
-                  : 'bg-[#DDD8CE] dark:bg-[#293832] border-transparent'
-              }`}
-            >
-              <div
-                className={`w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-300 ease-in-out shrink-0 ${
-                  showQuickIssuer ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* 📊 2. FINANCIAL SUMMARY CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ========================================================
+          📊 2. TOP SUMMARY METRIC CARDS
+         ======================================================== */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         
-        {/* CARD 1: TOTAL RENT */}
-        <div
-          onClick={() => setActiveTab('all')}
-          className={`p-5 rounded-[28px] border cursor-pointer transition-all flex flex-col justify-between space-y-3 group ${
-            activeTab === 'all' 
-              ? 'tenant-bg-soft tenant-border-accent shadow-sm' 
-              : 'bg-[#FFFDF9] dark:bg-[#141D19] border-[#DDD8CE] dark:border-[#293832] shadow-sm hover:tenant-border-accent'
-          }`}
-        >
-          <div className="flex justify-between items-start">
-            <span className="text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-widest">TOTAL RENT</span>
-            <div className="w-9 h-9 rounded-2xl tenant-bg-soft tenant-text-accent font-black flex items-center justify-center border tenant-border-accent">
-              <FileText className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl sm:text-3xl font-black text-[#1C2522] dark:text-[#F2F5F2] tracking-tight">₹{totalBilling.toLocaleString()}</div>
-            <p className="text-[11px] font-extrabold tenant-text-accent mt-1">Generated Invoices</p>
-          </div>
-          <div className="w-full bg-[#F1EEE7] dark:bg-[#1A2621] h-1.5 rounded-full overflow-hidden">
-            <div className="tenant-bg-accent h-full rounded-full w-full" />
-          </div>
-        </div>
-
-        {/* CARD 2: COLLECTED */}
-        <div
-          onClick={() => setActiveTab('paid')}
-          className={`p-5 rounded-[28px] border cursor-pointer transition-all flex flex-col justify-between space-y-3 group ${
-            activeTab === 'paid' 
-              ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 shadow-sm' 
-              : 'bg-[#FFFDF9] dark:bg-[#141D19] border-[#DDD8CE] dark:border-[#293832] shadow-sm hover:tenant-border-accent'
-          }`}
-        >
-          <div className="flex justify-between items-start">
-            <span className="text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-widest">COLLECTED</span>
-            <div className="w-9 h-9 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 font-black flex items-center justify-center">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">₹{totalCollected.toLocaleString()}</div>
-            <p className="text-[11px] font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">{collectionPercentage}% of target</p>
-          </div>
-          <div className="w-full bg-[#F1EEE7] dark:bg-[#1A2621] h-1.5 rounded-full overflow-hidden">
-            <div className="bg-emerald-500 h-full rounded-full transition-all duration-700" style={{ width: `${collectionPercentage}%` }} />
-          </div>
-        </div>
-
-        {/* CARD 3: PENDING */}
-        <div
-          onClick={() => setActiveTab('verification')}
-          className={`p-5 rounded-[28px] border cursor-pointer transition-all flex flex-col justify-between space-y-3 group ${
-            activeTab === 'verification' || activeTab === 'pending' 
-              ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 shadow-sm' 
-              : 'bg-[#FFFDF9] dark:bg-[#141D19] border-[#DDD8CE] dark:border-[#293832] shadow-sm hover:tenant-border-accent'
-          }`}
-        >
-          <div className="flex justify-between items-start">
-            <span className="text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-widest">PENDING</span>
-            <div className="w-9 h-9 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 font-black flex items-center justify-center">
-              <Clock className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400 tracking-tight">₹{totalPending.toLocaleString()}</div>
-            <p className="text-[11px] font-extrabold text-amber-600 dark:text-amber-400 mt-1">{countVerification} Proofs Awaiting Review</p>
-          </div>
-          <div className="w-full bg-[#F1EEE7] dark:bg-[#1A2621] h-1.5 rounded-full overflow-hidden">
-            <div className="bg-amber-500 h-full rounded-full" style={{ width: `${totalBilling > 0 ? (totalPending / totalBilling) * 100 : 20}%` }} />
-          </div>
-        </div>
-
-        {/* CARD 4: OVERDUE */}
-        <motion.div
-          whileHover={{ y: -4, scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => setActiveTab('overdue')}
-          className={`p-5 rounded-[28px] backdrop-blur-2xl border cursor-pointer transition-all flex flex-col justify-between space-y-3 ${
-            activeTab === 'overdue' 
-              ? 'bg-rose-500/15 border-rose-500/40 shadow-xl ring-2 ring-rose-500/20' 
-              : 'bg-white/80 dark:bg-[#121826]/80 border-slate-200/80 dark:border-zinc-800 shadow-md hover:border-rose-500/30'
-          }`}
-        >
-          <div className="flex justify-between items-start">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">OVERDUE</span>
-            <div className="w-9 h-9 rounded-2xl bg-rose-500 text-white font-black flex items-center justify-center shadow-md animate-pulse">
-              <ShieldAlert className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl sm:text-3xl font-black text-rose-500 tracking-tight">₹{totalOverdue.toLocaleString()}</div>
-            <p className="text-[11px] font-extrabold text-rose-500 mt-1">{countOverdue} Overdue Accounts</p>
-          </div>
-          <div className="w-full bg-slate-200 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
-            <div className="bg-rose-500 h-full rounded-full" style={{ width: `${totalBilling > 0 ? (totalOverdue / totalBilling) * 100 : 10}%` }} />
-          </div>
-        </motion.div>
-
-      </div>
-
-      {/* 📈 3. CASHFLOW HEALTH HORIZONTAL SECTION */}
-      <div className="bg-[#FDFBF9]/95 dark:bg-[#121826]/95 p-5 rounded-[28px] border border-white/80 dark:border-zinc-800 shadow-xl backdrop-blur-2xl space-y-3">
-        <div className="flex justify-between items-center">
-          <span className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-            <Zap className="w-4 h-4 text-purple-600 dark:text-purple-400" /> CASHFLOW HEALTH
+        {/* Total Expected */}
+        <div className="bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800/80 p-4 rounded-3xl shadow-sm space-y-1">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Total Expected
           </span>
-          <span className="text-xs font-black text-purple-600 dark:text-purple-400">
-            Collection Rate: {collectionPercentage}%
+          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono">
+            {formatINR(summary.totalExpected)}
+          </div>
+          <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 block truncate">
+            {summary.counts?.all || 0} active billed accounts
           </span>
         </div>
 
-        {/* Progress Bar Visualization */}
-        <div className="space-y-2">
-          <div className="w-full bg-slate-200 dark:bg-zinc-800 h-4 rounded-full overflow-hidden flex p-0.5">
-            <div className="bg-emerald-500 h-full rounded-l-full transition-all duration-1000" style={{ width: `${collectionPercentage}%` }} />
-            <div className="bg-amber-500 h-full transition-all duration-1000" style={{ width: `${totalBilling > 0 ? (totalPending / totalBilling) * 100 : 10}%` }} />
-            <div className="bg-rose-500 h-full rounded-r-full transition-all duration-1000" style={{ width: `${totalBilling > 0 ? (totalOverdue / totalBilling) * 100 : 5}%` }} />
+        {/* Total Collected */}
+        <div className="bg-white/80 dark:bg-slate-900/80 border border-emerald-500/20 dark:border-emerald-500/30 p-4 rounded-3xl shadow-sm space-y-1 relative overflow-hidden">
+          <div className="absolute right-3 top-3 w-7 h-7 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+            <CheckCircle2 className="w-4 h-4" />
           </div>
-
-          <div className="grid grid-cols-4 gap-2 text-[11px] font-extrabold pt-1">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-purple-600 shrink-0" />
-              <span className="text-slate-400">EXPECTED: <span className="text-slate-900 dark:text-white">₹{totalBilling.toLocaleString()}</span></span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-              <span className="text-slate-400">COLLECTED: <span className="text-emerald-600 dark:text-emerald-400">₹{totalCollected.toLocaleString()}</span></span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
-              <span className="text-slate-400">PENDING: <span className="text-amber-500">₹{totalPending.toLocaleString()}</span></span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
-              <span className="text-slate-400">OVERDUE: <span className="text-rose-500">₹{totalOverdue.toLocaleString()}</span></span>
-            </div>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+            Total Collected
+          </span>
+          <div className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+            {formatINR(summary.totalCollected)}
           </div>
-        </div>
-      </div>
-
-      {/* 🚀 4. QUICK RENT ISSUER PANEL (ANIMATED HEIGHT/OPACITY/TRANSLATE) */}
-      <AnimatePresence>
-        {showQuickIssuer && (
-          <motion.div
-            initial={{ opacity: 0, height: 0, y: -12 }}
-            animate={{ opacity: 1, height: 'auto', y: 0 }}
-            exit={{ opacity: 0, height: 0, y: -12 }}
-            transition={{ duration: 0.35, ease: 'easeInOut' }}
-            className="overflow-hidden"
-          >
-            <div className="bg-[#FDFBF9]/95 dark:bg-[#121826]/95 p-6 rounded-[32px] border border-purple-500/30 shadow-2xl backdrop-blur-2xl text-left space-y-5">
-              <div className="flex justify-between items-center border-b border-slate-100 dark:border-zinc-800 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-purple-600 text-white font-black flex items-center justify-center">
-                    <Receipt className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-slate-900 dark:text-white text-base">QUICK RENT ISSUER</h3>
-                    <p className="text-xs text-slate-400 font-bold">Issue live invoice directly to tenant portal</p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => setShowQuickIssuer(false)}
-                  className="w-7 h-7 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center justify-center cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <form onSubmit={handleOpenPreviewModal} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-                
-                {/* 1. Custom Resident Selector */}
-                <div className="relative">
-                  <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">SELECT RESIDENT</label>
-                  
-                  <div
-                    onClick={() => setShowResidentDropdown(!showResidentDropdown)}
-                    className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white flex justify-between items-center cursor-pointer"
-                  >
-                    {selectedTenantForInvoice ? (
-                      <div className="flex items-center gap-2 truncate">
-                        <div className="w-5 h-5 rounded-full bg-purple-600 text-white font-black flex items-center justify-center text-[10px] shrink-0">
-                          {selectedTenantForInvoice.name.charAt(0)}
-                        </div>
-                        <span className="truncate">{selectedTenantForInvoice.name} (Room {selectedTenantForInvoice.roomNumber})</span>
-                      </div>
-                    ) : (
-                      <span className="text-slate-400">Choose resident...</span>
-                    )}
-                    <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
-                  </div>
-
-                  {/* Dropdown Popover */}
-                  {showResidentDropdown && (
-                    <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl shadow-2xl max-h-56 overflow-y-auto p-2 space-y-1">
-                      {tenants.map((t) => (
-                        <div
-                          key={t.id}
-                          onClick={() => handleSelectResidentForIssuer(t)}
-                          className="p-2.5 rounded-xl hover:bg-purple-500/10 cursor-pointer flex justify-between items-center text-xs font-bold transition-colors"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 rounded-xl bg-purple-600 text-white font-black flex items-center justify-center text-xs">
-                              {t.name.charAt(0)}
-                            </div>
-                            <div>
-                              <p className="text-slate-900 dark:text-white font-black">{t.name}</p>
-                              <p className="text-[10px] text-slate-400">Room {t.roomNumber} • ₹{(t.rentAmount || 8500).toLocaleString()}/mo</p>
-                            </div>
-                          </div>
-                          <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 font-extrabold">Active</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* 2. Amount Field */}
-                <div>
-                  <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">AMOUNT (₹)</label>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-black text-purple-600 dark:text-purple-400 text-sm">₹</span>
-                    <input
-                      type="number"
-                      required
-                      value={issuerForm.amount}
-                      onChange={(e) => setIssuerForm({ ...issuerForm, amount: parseFloat(e.target.value) || 0 })}
-                      className="w-full pl-8 pr-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-sm font-black text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
-                    />
-                  </div>
-                </div>
-
-                {/* 3. Billing Month */}
-                <div>
-                  <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">BILLING MONTH</label>
-                  <input
-                    type="text"
-                    value={issuerForm.billingMonth}
-                    onChange={(e) => setIssuerForm({ ...issuerForm, billingMonth: e.target.value })}
-                    className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
-                  />
-                </div>
-
-                {/* 4. Due Date */}
-                <div>
-                  <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">DUE DATE</label>
-                  <input
-                    type="date"
-                    required
-                    value={issuerForm.dueDate}
-                    onChange={(e) => setIssuerForm({ ...issuerForm, dueDate: e.target.value })}
-                    className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
-                  />
-                </div>
-
-                {/* 5. Button */}
-                <button
-                  type="submit"
-                  className="py-3.5 px-5 rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-black text-xs shadow-lg hover:scale-105 transition-transform cursor-pointer"
-                >
-                  ISSUE LIVE INVOICE →
-                </button>
-
-              </form>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* 🔍 5. PAYMENT CENTER TABS & COMMAND SEARCH */}
-      <div className="bg-[#FDFBF9]/95 dark:bg-[#121826]/95 p-4 rounded-[28px] border border-white/80 dark:border-zinc-800 shadow-xl backdrop-blur-2xl flex flex-col md:flex-row items-center justify-between gap-4">
-        
-        {/* Tabs Bar */}
-        <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
-          {[
-            { id: 'all', label: 'ALL INVOICES', count: invoices.length },
-            { id: 'verification', label: 'VERIFICATION QUEUE', count: countVerification },
-            { id: 'paid', label: 'PAID', count: countPaid },
-            { id: 'pending', label: 'PENDING', count: countPending },
-            { id: 'overdue', label: 'OVERDUE', count: countOverdue },
-          ].map((tb) => (
-            <button
-              key={tb.id}
-              onClick={() => setActiveTab(tb.id as any)}
-              className={`px-4 py-2 rounded-2xl font-black text-xs transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
-                activeTab === tb.id 
-                  ? 'bg-purple-600 text-white shadow-md' 
-                  : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <span>{tb.label}</span>
-              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
-                activeTab === tb.id ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400'
-              }`}>
-                {tb.count}
-              </span>
-            </button>
-          ))}
+          <span className="text-[10px] font-semibold text-emerald-600/70 dark:text-emerald-400/70 block">
+            {summary.collectionRate}% of target collected
+          </span>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto">
-          {/* Month Filter Dropdown */}
-          <select
-            value={selectedMonthFilter}
-            onChange={(e) => setSelectedMonthFilter(e.target.value)}
-            className="w-full sm:w-auto px-4 py-2.5 rounded-2xl bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 cursor-pointer"
-          >
-            <option value="ALL">🗓️ All Months</option>
-            <option value="January 2026">January 2026</option>
-            <option value="February 2026">February 2026</option>
-            <option value="March 2026">March 2026</option>
-            <option value="April 2026">April 2026</option>
-            <option value="May 2026">May 2026</option>
-            <option value="June 2026">June 2026</option>
-            <option value="July 2026">July 2026</option>
-            <option value="August 2026">August 2026</option>
-            <option value="September 2026">September 2026</option>
-            <option value="October 2026">October 2026</option>
-            <option value="November 2026">November 2026</option>
-            <option value="December 2026">December 2026</option>
-          </select>
+        {/* Total Outstanding */}
+        <div className="bg-white/80 dark:bg-slate-900/80 border border-amber-500/20 dark:border-amber-500/30 p-4 rounded-3xl shadow-sm space-y-1">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+            Total Outstanding
+          </span>
+          <div className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400 font-mono">
+            {formatINR(summary.totalOutstanding)}
+          </div>
+          <span className="text-[10px] font-semibold text-amber-600/70 dark:text-amber-400/70 block">
+            {(summary.counts?.partial || 0) + (summary.counts?.due || 0)} pending bills
+          </span>
+        </div>
 
-          {/* Command Search Bar */}
-          <div className="relative w-full sm:w-64">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search invoice, resident, room..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+        {/* Total Overdue */}
+        <div className="bg-white/80 dark:bg-slate-900/80 border border-rose-500/20 dark:border-rose-500/30 p-4 rounded-3xl shadow-sm space-y-1">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+            Total Overdue
+          </span>
+          <div className="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400 font-mono">
+            {formatINR(summary.totalOverdue)}
+          </div>
+          <span className="text-[10px] font-semibold text-rose-600/70 dark:text-rose-400/70 block">
+            {summary.counts?.overdue || 0} overdue accounts
+          </span>
+        </div>
+
+        {/* Collection % Progress Meter */}
+        <div className="col-span-2 lg:col-span-1 bg-gradient-to-br from-slate-900 to-slate-950 text-white p-4 rounded-3xl shadow-md space-y-2 border border-slate-800 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Collection %
+            </span>
+            <span className="text-sm font-black font-mono text-emerald-400">
+              {summary.collectionRate}%
+            </span>
+          </div>
+          
+          <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+            <motion.div 
+              initial={{ width: 0 }}
+              animate={{ width: `${summary.collectionRate}%` }}
+              transition={{ duration: 0.8, ease: 'easeOut' }}
+              className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full"
             />
           </div>
+
+          <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+            <span>₹{summary.totalCollected.toLocaleString()}</span>
+            <span>₹{summary.totalExpected.toLocaleString()}</span>
+          </div>
         </div>
 
       </div>
 
-      {/* 📜 6. INVOICE ROSTER DESKTOP TABLE & MOBILE CARDS */}
-      {filteredInvoices.length === 0 ? (
-        /* Empty State with subtle 3D vector illustration */
-        <div className="p-12 text-center bg-white/80 dark:bg-zinc-900/80 rounded-[32px] border border-slate-200 dark:border-zinc-800 shadow-xl space-y-4">
-          <div className="w-16 h-16 rounded-3xl bg-purple-500/10 text-purple-600 dark:text-purple-400 mx-auto flex items-center justify-center text-3xl shadow-inner">
-            🧾
-          </div>
-          <div>
-            <h4 className="text-base font-black text-slate-900 dark:text-white">NO FINANCIAL RECORDS YET</h4>
-            <p className="text-xs text-slate-400 font-bold mt-1">Generate your first rent invoice to begin tracking collections.</p>
-          </div>
-          <button
-            onClick={() => setShowQuickIssuer(true)}
-            className="py-3 px-6 rounded-2xl bg-purple-600 text-white font-black text-xs shadow-md hover:scale-105 transition-transform cursor-pointer"
-          >
-            + Generate Invoice
-          </button>
-        </div>
-      ) : (
-        <div className="bg-[#FDFBF9]/95 dark:bg-[#121826]/95 rounded-[32px] border border-white/80 dark:border-zinc-800 shadow-xl overflow-hidden backdrop-blur-2xl">
+      {/* ========================================================
+          🎛️ 3. UNIFIED SLICERS & WORKSPACE TABS BAR
+         ======================================================== */}
+      <div className="space-y-3 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/80 p-4 rounded-3xl shadow-sm">
+        
+        {/* Upper Slicers Bar */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-3">
           
-          {/* DESKTOP TABLE */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-left text-xs font-sans">
-              <thead>
-                <tr className="bg-slate-100 dark:bg-zinc-900 text-slate-500 font-black uppercase tracking-wider border-b border-slate-200 dark:border-zinc-800">
-                  <th className="py-4 px-5">Invoice ID</th>
-                  <th className="py-4 px-5">Resident</th>
-                  <th className="py-4 px-5">Room</th>
-                  <th className="py-4 px-5">Billing Month</th>
-                  <th className="py-4 px-5">Amount</th>
-                  <th className="py-4 px-5">Due Date</th>
-                  <th className="py-4 px-5">Status</th>
-                  <th className="py-4 px-5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-zinc-800">
-                {filteredInvoices.map((inv) => {
-                  const isOverdue = inv.status === 'OVERDUE' || (inv.status === 'PENDING' && new Date(inv.dueDate) < new Date());
-                  
-                  return (
-                    <tr
-                      key={inv.id}
-                      onClick={() => setSelectedSideInvoice(inv)}
-                      className="hover:bg-purple-500/5 transition-colors cursor-pointer"
-                    >
-                      <td className="py-3.5 px-5 font-black text-slate-900 dark:text-white">
-                        {inv.number || inv.id}
-                      </td>
-                      <td className="py-3.5 px-5">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-xl bg-purple-600 text-white font-black flex items-center justify-center text-xs">
-                            {(inv.tenantName || 'R').charAt(0)}
+          {/* Main Navigation Tabs */}
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl w-full md:w-auto overflow-x-auto">
+            <button
+              onClick={() => setActiveTab('bills')}
+              className={`px-4 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap cursor-pointer ${
+                activeTab === 'bills'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Bills & Dues
+            </button>
+
+            <button
+              onClick={() => setActiveTab('verification')}
+              className={`px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                activeTab === 'verification'
+                  ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <span>Verification Queue</span>
+              {verificationQueue.length > 0 && (
+                <span className="w-5 h-5 rounded-full bg-purple-600 text-white text-[10px] font-black flex items-center justify-center animate-pulse">
+                  {verificationQueue.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('ledger')}
+              className={`px-4 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap cursor-pointer ${
+                activeTab === 'ledger'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Transaction Ledger
+            </button>
+
+            <button
+              onClick={() => setActiveTab('audit')}
+              className={`px-4 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap cursor-pointer ${
+                activeTab === 'audit'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Audit Trail
+            </button>
+
+            <button
+              onClick={() => setActiveTab('qr')}
+              className={`px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1 whitespace-nowrap cursor-pointer ${
+                activeTab === 'qr'
+                  ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span>QR Setup</span>
+            </button>
+          </div>
+
+          {/* Month & Building Slicers */}
+          <div className="flex items-center gap-2.5 w-full md:w-auto">
+            {/* Month Dropdown */}
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="px-3.5 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+            >
+              <option value="ALL">📅 All Months</option>
+              {availableMonths.map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+
+            {/* Building Dropdown */}
+            <select
+              value={selectedBuilding}
+              onChange={(e) => setSelectedBuilding(e.target.value)}
+              className="px-3.5 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+            >
+              <option value="ALL">🏢 All Buildings</option>
+              <option value="b-1">Block A - Premium Executive</option>
+              <option value="b-2">Block B - Classic Standard</option>
+            </select>
+          </div>
+
+        </div>
+
+        {/* Lower Search & Status Filter Pills */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800/60">
+          
+          {/* Status Filter Pills (Active only in bills tab) */}
+          {activeTab === 'bills' ? (
+            <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
+              {(['ALL', 'PAID', 'PARTIAL', 'DUE', 'OVERDUE', 'VERIFICATION_PENDING'] as const).map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setStatusFilter(st)}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap cursor-pointer ${
+                    statusFilter === st
+                      ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  {st === 'ALL' && `All (${bills.length})`}
+                  {st === 'PAID' && `Paid (${summary.counts?.paid || 0})`}
+                  {st === 'PARTIAL' && `Partial (${summary.counts?.partial || 0})`}
+                  {st === 'DUE' && `Due (${summary.counts?.due || 0})`}
+                  {st === 'OVERDUE' && `Overdue (${summary.counts?.overdue || 0})`}
+                  {st === 'VERIFICATION_PENDING' && `Verification (${summary.counts?.verificationPending || 0})`}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs font-bold text-slate-500 dark:text-slate-400">
+              {activeTab === 'verification' && `Reviewing ${verificationQueue.length} tenant submitted proofs`}
+              {activeTab === 'ledger' && `Displaying all ${transactionsLedger.length} financial transactions`}
+              {activeTab === 'audit' && `Timeline of system financial events`}
+              {activeTab === 'qr' && `Hostel payment QR code and UPI configuration`}
+            </div>
+          )}
+
+          {/* Search Box & Quick Export */}
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <div className="relative flex-1 md:w-64">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search tenant, room or txn ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            {activeTab === 'ledger' && (
+              <button
+                onClick={handleExportCSV}
+                className="px-3 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Export CSV</span>
+              </button>
+            )}
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* ========================================================
+          📋 4. TAB 1: BILLS & DUES TABLE (PRIMARY VIEW)
+         ======================================================== */}
+      {activeTab === 'bills' && (
+        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/80 rounded-3xl shadow-sm overflow-hidden">
+          
+          {loading ? (
+            <div className="p-12 text-center space-y-3">
+              <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-xs font-bold text-slate-400">Loading Authoritative Payment Records...</p>
+            </div>
+          ) : bills.length === 0 ? (
+            <div className="p-16 text-center space-y-3">
+              <div className="w-14 h-14 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-7 h-7" />
+              </div>
+              <h3 className="text-base font-black text-slate-900 dark:text-white">All Payments Up To Date</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                No outstanding payments matching the selected filters.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      <th className="py-3.5 px-4">Tenant</th>
+                      <th className="py-3.5 px-3">Room</th>
+                      <th className="py-3.5 px-3">Building</th>
+                      <th className="py-3.5 px-3">Billing Period</th>
+                      <th className="py-3.5 px-3 text-right">Bill Amount</th>
+                      <th className="py-3.5 px-3 text-right">Paid</th>
+                      <th className="py-3.5 px-3 text-right">Outstanding</th>
+                      <th className="py-3.5 px-3">Due Date</th>
+                      <th className="py-3.5 px-3">Status</th>
+                      <th className="py-3.5 px-4 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs text-slate-900 dark:text-slate-100 font-medium">
+                    {bills.map((bill) => (
+                      <tr 
+                        key={bill.id}
+                        onClick={() => {
+                          setSelectedBillForDetails(bill);
+                          setShowDetailsDrawer(true);
+                        }}
+                        className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group"
+                      >
+                        {/* Tenant Name */}
+                        <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center font-black text-slate-700 dark:text-slate-300 shrink-0">
+                              {bill.tenantName.charAt(0)}
+                            </div>
+                            <div className="min-w-0">
+                              <span className="block font-black text-sm truncate">{bill.tenantName}</span>
+                              <span className="text-[10px] text-slate-400 font-mono block">{bill.number}</span>
+                            </div>
                           </div>
-                          <span className="font-extrabold text-slate-900 dark:text-white">{inv.tenantName}</span>
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-5 font-black text-purple-600 dark:text-purple-400">
-                        Room {inv.roomNumber || 'A-101'}
-                      </td>
-                      <td className="py-3.5 px-5 text-slate-500 font-medium">
-                        August 2026
-                      </td>
-                      <td className="py-3.5 px-5 font-black text-slate-900 dark:text-white text-sm">
-                        ₹{(inv.amount || 8500).toLocaleString()}
-                      </td>
-                      <td className="py-3.5 px-5 text-slate-500 font-medium">
-                        {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : '30 Aug 2026'}
-                      </td>
-                      <td className="py-3.5 px-5">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                          inv.status === 'PAID' ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' :
-                          inv.status === 'PENDING_VERIFICATION' ? 'bg-amber-500/15 text-amber-500' :
-                          isOverdue ? 'bg-rose-500/15 text-rose-500' : 'bg-slate-200 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300'
-                        }`}>
-                          {inv.status === 'PAID' ? 'PAID' :
-                           inv.status === 'PENDING_VERIFICATION' ? 'VERIFY PROOF' :
-                           isOverdue ? 'OVERDUE' : 'PENDING'}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-5 text-right space-x-2">
-                        {inv.status === 'PENDING_VERIFICATION' && (
+                        </td>
+
+                        {/* Room */}
+                        <td className="py-3.5 px-3 font-mono font-bold text-slate-700 dark:text-slate-300">
+                          {bill.roomNumber}
+                        </td>
+
+                        {/* Building */}
+                        <td className="py-3.5 px-3 text-slate-500 dark:text-slate-400 truncate max-w-[140px]">
+                          {bill.buildingName.split('-')[0].trim()}
+                        </td>
+
+                        {/* Billing Period */}
+                        <td className="py-3.5 px-3 font-bold text-slate-700 dark:text-slate-300">
+                          {bill.billingPeriod}
+                        </td>
+
+                        {/* Bill Amount */}
+                        <td className="py-3.5 px-3 text-right font-mono font-bold text-slate-900 dark:text-white">
+                          {formatINR(bill.amount)}
+                        </td>
+
+                        {/* Paid */}
+                        <td className="py-3.5 px-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          {formatINR(bill.paidAmount)}
+                        </td>
+
+                        {/* Outstanding */}
+                        <td className="py-3.5 px-3 text-right font-mono font-black text-slate-900 dark:text-white">
+                          {bill.outstandingAmount > 0 ? (
+                            <span className="text-amber-600 dark:text-amber-400 font-bold">{formatINR(bill.outstandingAmount)}</span>
+                          ) : (
+                            <span className="text-slate-400 font-normal">₹0</span>
+                          )}
+                        </td>
+
+                        {/* Due Date */}
+                        <td className="py-3.5 px-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                          {formatDate(bill.dueDate)}
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3.5 px-3 whitespace-nowrap">
+                          {renderStatusBadge(bill.status)}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="py-3.5 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-center gap-1.5">
+                            {bill.outstandingAmount > 0 && (
+                              <button
+                                onClick={() => handleOpenRecordForBill(bill)}
+                                title="Record Payment"
+                                className="p-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 transition-colors cursor-pointer"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => handleOpenReceipt(bill)}
+                              title="View Official Receipt"
+                              className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                            >
+                              <Receipt className="w-3.5 h-3.5" />
+                            </button>
+
+                            {bill.outstandingAmount > 0 && (
+                              <button
+                                onClick={() => handleOpenReminderModal(bill)}
+                                title="Send Payment Reminder"
+                                className="p-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 transition-colors cursor-pointer"
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => {
+                                setSelectedBillForDetails(bill);
+                                setShowDetailsDrawer(true);
+                              }}
+                              title="Open Full Details"
+                              className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 transition-colors cursor-pointer"
+                            >
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Responsive Cards */}
+              <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800/80 p-3 space-y-3">
+                {bills.map((bill) => (
+                  <div
+                    key={bill.id}
+                    onClick={() => {
+                      setSelectedBillForDetails(bill);
+                      setShowDetailsDrawer(true);
+                    }}
+                    className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-3 cursor-pointer"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="font-black text-sm text-slate-900 dark:text-white">{bill.tenantName}</h4>
+                        <span className="text-xs text-slate-500 font-mono">Room {bill.roomNumber} • {bill.billingPeriod}</span>
+                      </div>
+                      <div>{renderStatusBadge(bill.status)}</div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 bg-white dark:bg-slate-900 p-2.5 rounded-xl text-center border border-slate-100 dark:border-slate-800">
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">Bill</span>
+                        <span className="text-xs font-mono font-bold text-slate-800 dark:text-white">{formatINR(bill.amount)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">Paid</span>
+                        <span className="text-xs font-mono font-bold text-emerald-600">{formatINR(bill.paidAmount)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">Outstanding</span>
+                        <span className="text-xs font-mono font-black text-amber-600">{formatINR(bill.outstandingAmount)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1" onClick={(e) => e.stopPropagation()}>
+                      <span className="text-[11px] text-slate-400">Due: {formatDate(bill.dueDate)}</span>
+                      <div className="flex items-center gap-2">
+                        {bill.outstandingAmount > 0 && (
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setVerifyModalInvoice(inv);
-                            }}
-                            className="py-1 px-3 rounded-xl bg-emerald-500 text-white font-black text-[10px] hover:scale-105 transition-transform cursor-pointer"
+                            onClick={() => handleOpenRecordForBill(bill)}
+                            className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs"
                           >
-                            Verify
+                            Pay
                           </button>
                         )}
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleViewReceipt(inv);
-                          }}
-                          className="text-purple-600 font-extrabold text-xs hover:underline cursor-pointer"
+                          onClick={() => handleOpenReceipt(bill)}
+                          className="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white font-bold text-xs"
                         >
-                          View Receipt →
+                          Receipt
                         </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+        </div>
+      )}
+
+      {/* ========================================================
+          ⏳ 5. TAB 2: VERIFICATION QUEUE (PROOF REVIEW)
+         ======================================================== */}
+      {activeTab === 'verification' && (
+        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/80 rounded-3xl shadow-sm p-5 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div>
+              <h3 className="font-black text-base text-slate-900 dark:text-white">Tenant Payment Verification Queue</h3>
+              <p className="text-xs text-slate-500">Review online payment submissions and verify transaction UTR receipts.</p>
+            </div>
+          </div>
+
+          {verificationQueue.length === 0 ? (
+            <div className="p-16 text-center space-y-3">
+              <div className="w-14 h-14 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-7 h-7" />
+              </div>
+              <h3 className="text-base font-black text-slate-900 dark:text-white">You're All Caught Up</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                No pending payment verification requests in the queue right now.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {verificationQueue.map((txn) => (
+                <div 
+                  key={txn.id}
+                  className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-4 space-y-3"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="font-black text-sm text-slate-900 dark:text-white">{txn.tenantName}</h4>
+                      <span className="text-xs text-slate-500 font-mono">Room {txn.roomNumber || 'A-101'}</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 font-mono text-[10px] font-black border border-purple-500/20">
+                      PENDING
+                    </span>
+                  </div>
+
+                  <div className="bg-white dark:bg-slate-900 p-3 rounded-xl space-y-1.5 border border-slate-100 dark:border-slate-800 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Submitted Amount</span>
+                      <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">{formatINR(txn.amount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Method</span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200">{txn.paymentMethod}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">UTR / Ref ID</span>
+                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{txn.referenceId || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Date</span>
+                      <span className="text-slate-600 dark:text-slate-400">{formatDate(txn.date)}</span>
+                    </div>
+                    {txn.notes && (
+                      <div className="text-[11px] text-slate-500 italic pt-1 border-t border-slate-100 dark:border-slate-800">
+                        "{txn.notes}"
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={() => {
+                        setSelectedVerificationTxn(txn);
+                        setRejectReasonPrompt(false);
+                        setShowVerificationModal(true);
+                      }}
+                      className="flex-1 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white font-bold text-xs hover:bg-slate-300 dark:hover:bg-slate-600 transition-all cursor-pointer"
+                    >
+                      Review
+                    </button>
+                    <button
+                      onClick={() => handleApproveVerification(txn.id)}
+                      disabled={actionLoading}
+                      className="flex-1 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-500 transition-all cursor-pointer shadow-md shadow-emerald-600/20"
+                    >
+                      Approve
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+        </div>
+      )}
+
+      {/* ========================================================
+          📖 6. TAB 3: TRANSACTION LEDGER
+         ======================================================== */}
+      {activeTab === 'ledger' && (
+        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/80 rounded-3xl shadow-sm overflow-hidden p-4 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div>
+              <h3 className="font-black text-base text-slate-900 dark:text-white">Authoritative Financial Transaction Ledger</h3>
+              <p className="text-xs text-slate-500">Non-destructive history of all recorded, verified, and reversed transactions.</p>
+            </div>
+            <button
+              onClick={handleExportCSV}
+              className="px-4 py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-xs flex items-center gap-2 cursor-pointer shadow-sm"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Download Statement</span>
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <th className="py-3 px-3">Txn ID</th>
+                  <th className="py-3 px-3">Date</th>
+                  <th className="py-3 px-4">Resident</th>
+                  <th className="py-3 px-3">Room</th>
+                  <th className="py-3 px-3">Type</th>
+                  <th className="py-3 px-3 text-right">Amount</th>
+                  <th className="py-3 px-3">Method</th>
+                  <th className="py-3 px-3">Reference / UTR</th>
+                  <th className="py-3 px-3">Status</th>
+                  <th className="py-3 px-3">Recorded By</th>
+                  <th className="py-3 px-3 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs text-slate-900 dark:text-slate-100 font-medium">
+                {transactionsLedger.map((txn) => (
+                  <tr key={txn.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="py-3 px-3 font-mono font-bold text-slate-500">{txn.id}</td>
+                    <td className="py-3 px-3 text-slate-600 dark:text-slate-400 whitespace-nowrap">{formatDate(txn.date)}</td>
+                    <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">{txn.tenantName || 'Resident'}</td>
+                    <td className="py-3 px-3 font-mono">{txn.roomNumber || 'A-101'}</td>
+                    <td className="py-3 px-3 text-slate-600 dark:text-slate-300">{txn.type}</td>
+                    <td className={`py-3 px-3 text-right font-mono font-black ${txn.amount < 0 ? 'text-rose-600' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                      {formatINR(txn.amount)}
+                    </td>
+                    <td className="py-3 px-3">{txn.paymentMethod}</td>
+                    <td className="py-3 px-3 font-mono text-[11px] text-slate-500 truncate max-w-[120px]">
+                      {txn.referenceId || '—'}
+                    </td>
+                    <td className="py-3 px-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
+                        txn.status === 'APPROVED' || txn.status === 'PAID'
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
+                          : txn.status === 'REFUNDED' || txn.status === 'REVERSED'
+                          ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400'
+                          : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
+                      }`}>
+                        {txn.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-slate-500">{txn.recordedBy || 'Manager'}</td>
+                    <td className="py-3 px-3 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        {txn.status !== 'REFUNDED' && txn.status !== 'REVERSED' && (
+                          <button
+                            onClick={() => {
+                              setReversalTargetTxn(txn);
+                              setReversalReason('Accidental double entry');
+                              setShowReversalModal(true);
+                            }}
+                            title="Reverse / Refund Transaction"
+                            className="p-1 rounded-lg bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 transition-colors cursor-pointer text-[10px] font-bold px-2 py-1 flex items-center gap-1"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>Reverse</span>
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
 
-          {/* MOBILE CARDS VIEW */}
-          <div className="block md:hidden p-4 space-y-3">
-            {filteredInvoices.map((inv) => (
-              <div
-                key={inv.id}
-                onClick={() => setSelectedSideInvoice(inv)}
-                className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-left space-y-2 cursor-pointer"
-              >
-                <div className="flex justify-between items-center">
-                  <span className="font-black text-xs text-slate-900 dark:text-white">{inv.number || inv.id}</span>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase ${
-                    inv.status === 'PAID' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-amber-500/15 text-amber-500'
-                  }`}>
-                    {inv.status}
-                  </span>
+        </div>
+      )}
+
+      {/* ========================================================
+          📜 7. TAB 4: AUDIT TRAIL
+         ======================================================== */}
+      {activeTab === 'audit' && (
+        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/80 rounded-3xl shadow-sm p-5 space-y-4">
+          <div className="pb-3 border-b border-slate-100 dark:border-slate-800">
+            <h3 className="font-black text-base text-slate-900 dark:text-white">Financial Audit Trail & Event Timeline</h3>
+            <p className="text-xs text-slate-500">Immutable log of payment recordings, verifications, reminders, and reversals.</p>
+          </div>
+
+          <div className="space-y-3">
+            {auditLogs.map((log) => (
+              <div key={log.id} className="flex items-start gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 text-xs">
+                <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-300 shrink-0 font-black">
+                  <History className="w-4 h-4" />
                 </div>
-                <div className="flex justify-between items-center text-xs">
-                  <div>
-                    <p className="font-extrabold text-slate-900 dark:text-white">{inv.tenantName}</p>
-                    <p className="text-[10px] text-slate-400">Room {inv.roomNumber}</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-slate-900 dark:text-white uppercase tracking-wider text-[10px] bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded">
+                      {log.action}
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-mono">{formatDateTime(log.createdAt)}</span>
                   </div>
-                  <span className="font-black text-purple-600 dark:text-purple-400 text-sm">₹{(inv.amount || 8500).toLocaleString()}</span>
+                  <p className="text-slate-700 dark:text-slate-300 font-medium pt-1">{log.details}</p>
+                  <span className="text-[10px] text-slate-400 block pt-0.5">Performed by: {log.userName || 'System'}</span>
                 </div>
               </div>
             ))}
@@ -1022,472 +1326,753 @@ export default function RentPage() {
         </div>
       )}
 
-      {/* 📌 7. PAYMENT MANAGEMENT & STATUS CONTROL POPUP MODAL */}
-      {selectedSideInvoice && (
-        <NeonModal
-          isOpen={true}
-          onClose={() => setSelectedSideInvoice(null)}
-          title={`Payment Specification: ${selectedSideInvoice.number || selectedSideInvoice.id}`}
-          subtitle={`Resident: ${selectedSideInvoice.tenantName || 'Resident'} • Room ${selectedSideInvoice.roomNumber || 'A-101'}`}
-          size="md"
-          accentColor="purple"
-        >
-          <div className="space-y-5 text-left font-sans">
-            
-            {/* Resident & Billing Header Card */}
-            <div className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-black text-[#1C2522] dark:text-[#F2F5F2]">{selectedSideInvoice.tenantName}</h3>
-                <p className="text-xs font-bold text-[#68736E] dark:text-[#9BAAA4]">
-                  Room {selectedSideInvoice.roomNumber || 'A-101'} • Cycle: {selectedSideInvoice.billingMonth || 'August 2026'}
-                </p>
-              </div>
-              <div className="text-right">
-                <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 block">
-                  ₹{(selectedSideInvoice.amount || 8500).toLocaleString()}
-                </span>
-                <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase inline-block mt-0.5 ${
-                  selectedSideInvoice.status === 'PAID' ? 'bg-emerald-500/15 text-emerald-600 border border-emerald-500/20' :
-                  selectedSideInvoice.status === 'OVERDUE' ? 'bg-rose-500/15 text-rose-600 border border-rose-500/20' :
-                  'bg-amber-500/15 text-amber-600 border border-amber-500/20'
-                }`}>
-                  ● {selectedSideInvoice.status}
-                </span>
-              </div>
-            </div>
-
-            {/* CHANGE PAYMENT STATUS CONTROL */}
-            <div className="p-4 rounded-2xl bg-[#FFFDF9] dark:bg-[#141D19] border border-[#DDD8CE] dark:border-[#293832] space-y-3">
-              <h4 className="text-[11px] font-black uppercase tracking-wider text-[#68736E] dark:text-[#9BAAA4]">
-                CHANGE PAYMENT STATUS
-              </h4>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleUpdateInvoiceStatus(selectedSideInvoice.id, 'PAID')}
-                  className={`py-3 rounded-2xl font-black text-xs transition-all duration-300 cursor-pointer ${
-                    selectedSideInvoice.status === 'PAID'
-                      ? 'bg-emerald-600 text-white shadow-md border border-emerald-600'
-                      : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 hover:bg-emerald-600 hover:text-white hover:scale-105'
-                  }`}
-                >
-                  ✓ MARK PAID
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleUpdateInvoiceStatus(selectedSideInvoice.id, 'PENDING')}
-                  className={`py-3 rounded-2xl font-black text-xs transition-all duration-300 cursor-pointer ${
-                    selectedSideInvoice.status === 'PENDING' || selectedSideInvoice.status === 'PENDING_VERIFICATION'
-                      ? 'bg-amber-600 text-white shadow-md border border-amber-600'
-                      : 'bg-amber-500/10 text-amber-600 border border-amber-500/20 hover:bg-amber-600 hover:text-white hover:scale-105'
-                  }`}
-                >
-                  ⏳ PENDING
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleUpdateInvoiceStatus(selectedSideInvoice.id, 'OVERDUE')}
-                  className={`py-3 rounded-2xl font-black text-xs transition-all duration-300 cursor-pointer ${
-                    selectedSideInvoice.status === 'OVERDUE'
-                      ? 'bg-rose-600 text-white shadow-md border border-rose-600'
-                      : 'bg-rose-500/10 text-rose-600 border border-rose-500/20 hover:bg-rose-600 hover:text-white hover:scale-105'
-                  }`}
-                >
-                  ⚠️ OVERDUE
-                </button>
-              </div>
-            </div>
-
-            {/* TIMELINE & DUE DATE */}
-            <div className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] space-y-2 text-xs font-bold">
-              <div className="flex justify-between">
-                <span className="text-[#68736E] dark:text-[#9BAAA4]">Invoice Number</span>
-                <span className="text-[#1C2522] dark:text-[#F2F5F2] font-black">{selectedSideInvoice.number || selectedSideInvoice.id}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#68736E] dark:text-[#9BAAA4]">Due Date</span>
-                <span className="text-[#1C2522] dark:text-[#F2F5F2]">
-                  {selectedSideInvoice.dueDate ? new Date(selectedSideInvoice.dueDate).toLocaleDateString() : '30 Aug 2026'}
-                </span>
-              </div>
-            </div>
-
-            {/* ACTIONS FOOTER */}
-            <div className="pt-2 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  showToast('Reminder Sent', `Payment reminder sent to ${selectedSideInvoice.tenantName}`, 'info');
-                  setSelectedSideInvoice(null);
-                }}
-                className="py-3 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] text-[#1C2522] dark:text-[#F2F5F2] font-black text-xs hover:bg-[#DDD8CE] transition-colors cursor-pointer"
-              >
-                Send Reminder
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  showToast('PDF Receipt', `Receipt downloaded for ${selectedSideInvoice.number || selectedSideInvoice.id}`, 'success');
-                  setSelectedSideInvoice(null);
-                }}
-                className="py-3 rounded-2xl bg-[#2563EB] text-white font-black text-xs shadow-sm hover:scale-[1.01] transition-transform cursor-pointer"
-              >
-                Download Receipt PDF
-              </button>
-            </div>
-
+      {/* ========================================================
+          📱 8. TAB 5: QR SETUP
+         ======================================================== */}
+      {activeTab === 'qr' && (
+        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/80 rounded-3xl shadow-sm p-6 max-w-2xl space-y-6">
+          <div className="pb-3 border-b border-slate-100 dark:border-slate-800">
+            <h3 className="font-black text-base text-slate-900 dark:text-white">Hostel UPI QR & Payment Configuration</h3>
+            <p className="text-xs text-slate-500">Configure the single authoritative QR code and UPI ID shown to residents in Tenant Portal.</p>
           </div>
-        </NeonModal>
-      )}
 
-      {/* 📄 8. INVOICE PREVIEW MODAL */}
-      {showPreviewModal && selectedTenantForInvoice && (
-        <NeonModal
-          isOpen={true}
-          onClose={() => setShowPreviewModal(false)}
-          title={previewSuccess ? 'Invoice Generated Successfully! ✓' : 'Invoice Preview'}
-          size="md"
-          accentColor="purple"
-        >
-          {previewSuccess ? (
-            <div className="py-3 text-center space-y-4">
-              <div className="w-12 h-12 rounded-full bg-emerald-500 text-white mx-auto flex items-center justify-center text-xl font-black shadow-md">
-                ✓
-              </div>
-              <div>
-                <h4 className="text-lg font-black text-slate-900 dark:text-white">Invoice Generated</h4>
-                <p className="text-xs text-purple-600 dark:text-purple-400 font-bold mt-1">ID: {generatedInvoiceId}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <button
-                  onClick={() => setShowPreviewModal(false)}
-                  className="py-2.5 rounded-2xl bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 font-bold text-xs hover:bg-slate-200 cursor-pointer"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={() => {
-                    showToast('PDF Downloaded', `Receipt ${generatedInvoiceId} saved.`, 'info');
-                    setShowPreviewModal(false);
-                  }}
-                  className="py-2.5 rounded-2xl bg-purple-600 text-white font-black text-xs shadow-md hover:scale-105 transition-transform cursor-pointer"
-                >
-                  Download PDF
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4 text-left">
-              <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 space-y-2 text-xs font-bold">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Sri Sai Siri Invoice ID</span>
-                  <span className="text-purple-600 dark:text-purple-400 font-black">INV-2026-08-NEW</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Resident</span>
-                  <span className="text-slate-900 dark:text-white font-black">{selectedTenantForInvoice.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Room</span>
-                  <span className="text-slate-900 dark:text-white">Room {selectedTenantForInvoice.roomNumber || 'A-101'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Billing Month</span>
-                  <span className="text-slate-900 dark:text-white">{issuerForm.billingMonth}</span>
-                </div>
-                <div className="flex justify-between border-t border-purple-500/20 pt-2">
-                  <span className="text-slate-400">Total Amount Due</span>
-                  <span className="text-emerald-600 font-black text-sm">₹{issuerForm.amount.toLocaleString()}</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowPreviewModal(false)}
-                  className="py-2.5 rounded-2xl bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 font-bold text-xs hover:bg-slate-200 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmGenerateInvoice}
-                  className="py-2.5 rounded-2xl bg-purple-600 text-white font-black text-xs shadow-md hover:scale-105 transition-transform cursor-pointer"
-                >
-                  Generate Invoice ✓
-                </button>
-              </div>
-            </div>
-          )}
-        </NeonModal>
-      )}
-
-      {/* 💳 9. PAYMENT VERIFICATION POPUP MODAL */}
-      {verifyModalInvoice && (
-        <NeonModal
-          isOpen={true}
-          onClose={() => setVerifyModalInvoice(null)}
-          title="Payment Verification"
-          subtitle={`Verify receipt for ${verifyModalInvoice.tenantName}`}
-          size="md"
-          accentColor="emerald"
-        >
-          <form onSubmit={handleVerifySubmit} className="space-y-4 text-left">
-            <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 space-y-2 text-xs font-bold">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Resident</span>
-                <span className="text-slate-900 dark:text-white font-black">{verifyModalInvoice.tenantName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Room</span>
-                <span className="text-purple-600 dark:text-purple-400 font-black">Room {verifyModalInvoice.roomNumber || 'A-101'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Amount</span>
-                <span className="text-emerald-600 font-black text-sm">₹{(verifyModalInvoice.amount || 8500).toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Payment Method</span>
-                <span className="text-slate-900 dark:text-white">UPI</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Transaction ID</span>
-                <span className="text-slate-900 dark:text-white font-mono">UPI-98472947192</span>
-              </div>
-            </div>
-
+          <form onSubmit={handleSaveQRSettings} className="space-y-4">
             <div>
-              <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">Verification Remarks</label>
+              <label className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 block mb-1">
+                Hostel UPI ID
+              </label>
               <input
                 type="text"
-                value={verifyRemarks}
-                onChange={(e) => setVerifyRemarks(e.target.value)}
-                placeholder="Verified transaction proof..."
-                className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white"
+                value={qrSettings.upiId}
+                onChange={(e) => setQrSettings({ ...qrSettings, upiId: e.target.value })}
+                placeholder="e.g. srisaisiri@okicici"
+                className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                required
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setVerifyModalInvoice(null)}
-                className="py-2.5 rounded-2xl bg-rose-500/15 text-rose-600 font-bold text-xs hover:bg-rose-500 hover:text-white cursor-pointer"
-              >
-                Reject Proof
-              </button>
-              <button
-                type="submit"
-                className="py-2.5 rounded-2xl bg-emerald-600 text-white font-black text-xs shadow-md hover:scale-105 transition-transform cursor-pointer"
-              >
-                Verify Payment ✓
-              </button>
+            <div>
+              <label className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 block mb-1">
+                QR Code Image URL / Asset Path
+              </label>
+              <input
+                type="text"
+                value={qrSettings.qrCodeUrl}
+                onChange={(e) => setQrSettings({ ...qrSettings, qrCodeUrl: e.target.value })}
+                placeholder="/uploads/sample_qr.png"
+                className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
             </div>
+
+            <div>
+              <label className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 block mb-1">
+                Payment Instructions to Residents
+              </label>
+              <textarea
+                rows={3}
+                value={qrSettings.instructions}
+                onChange={(e) => setQrSettings({ ...qrSettings, instructions: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={savingQR}
+              className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs cursor-pointer shadow-md disabled:opacity-50"
+            >
+              {savingQR ? 'Saving Setup...' : 'Save Payment Configuration'}
+            </button>
           </form>
-        </NeonModal>
+
+        </div>
       )}
 
-      {/* 💵 10. RECORD PAYMENT POPUP MODAL */}
-      {showRecordPaymentModal && (
-        <NeonModal
-          isOpen={true}
-          onClose={() => { setShowRecordPaymentModal(false); setRecordSuccess(false); }}
-          title="Record Payment"
-          subtitle="Manual payment entry"
-          size="md"
-          accentColor="purple"
-        >
-          {recordSuccess ? (
-            <div className="py-3 text-center space-y-4">
-              <div className="w-12 h-12 rounded-full bg-emerald-500 text-white mx-auto flex items-center justify-center text-xl font-black shadow-md">
-                ✓
+      {/* ========================================================
+          🗂️ 9. TENANT PAYMENT DETAILS SIDE DRAWER / PANEL
+         ======================================================== */}
+      <AnimatePresence>
+        {showDetailsDrawer && selectedBillForDetails && (
+          <div className="fixed inset-0 z-50 flex justify-end">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowDetailsDrawer(false)}
+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+            />
+
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative w-full max-w-xl bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl h-full overflow-y-auto p-6 space-y-6 z-10 text-slate-900 dark:text-white"
+            >
+              {/* Drawer Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                    Resident Payment Workspace
+                  </span>
+                  <h2 className="text-xl font-black text-slate-900 dark:text-white">
+                    {selectedBillForDetails.tenantName}
+                  </h2>
+                  <span className="text-xs text-slate-500 font-mono">
+                    Room {selectedBillForDetails.roomNumber} • {selectedBillForDetails.buildingName}
+                  </span>
+                </div>
+
+                <button
+                  onClick={() => setShowDetailsDrawer(false)}
+                  className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Bill Financial Summary Card */}
+              <div className="p-4 rounded-3xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-3">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <span className="text-xs font-bold text-slate-500 block">Billing Period</span>
+                    <span className="text-sm font-black text-slate-800 dark:text-white">{selectedBillForDetails.billingPeriod}</span>
+                  </div>
+                  <div>
+                    {renderStatusBadge(selectedBillForDetails.status)}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 text-center">
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Bill Amount</span>
+                    <span className="text-sm font-mono font-bold text-slate-900 dark:text-white">{formatINR(selectedBillForDetails.amount)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Total Paid</span>
+                    <span className="text-sm font-mono font-bold text-emerald-600">{formatINR(selectedBillForDetails.paidAmount)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Outstanding</span>
+                    <span className="text-sm font-mono font-black text-amber-600">{formatINR(selectedBillForDetails.outstandingAmount)}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+                  <span>Due Date: <strong>{formatDate(selectedBillForDetails.dueDate)}</strong></span>
+                  <span>Invoice: <strong className="font-mono">{selectedBillForDetails.number}</strong></span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2">
+                {selectedBillForDetails.outstandingAmount > 0 && (
+                  <button
+                    onClick={() => {
+                      handleOpenRecordForBill(selectedBillForDetails);
+                    }}
+                    className="flex-1 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Record Payment</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => handleOpenReceipt(selectedBillForDetails)}
+                  className="flex-1 py-2.5 rounded-2xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                >
+                  <Receipt className="w-4 h-4" />
+                  <span>View Receipt</span>
+                </button>
+
+                {selectedBillForDetails.outstandingAmount > 0 && (
+                  <button
+                    onClick={() => handleOpenReminderModal(selectedBillForDetails)}
+                    className="py-2.5 px-4 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-xs hover:bg-amber-500/20 cursor-pointer"
+                    title="Send Payment Reminder"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* Transaction History Section */}
+              <div className="space-y-3">
+                <h4 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-emerald-500" />
+                  <span>Transaction History ({selectedBillForDetails.transactions.length})</span>
+                </h4>
+
+                {selectedBillForDetails.transactions.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl text-center">
+                    No payment transactions recorded yet for this bill.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedBillForDetails.transactions.map((txn) => (
+                      <div
+                        key={txn.id}
+                        className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between text-xs"
+                      >
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-black text-sm text-slate-900 dark:text-white">{formatINR(txn.amount)}</span>
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                              {txn.paymentMethod}
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              txn.status === 'APPROVED' || txn.status === 'PAID' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              {txn.status}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-400 font-mono block">
+                            {formatDate(txn.date)} • Ref: {txn.referenceId || 'N/A'} • By: {txn.recordedBy || 'Manager'}
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={() => handleOpenReceipt(selectedBillForDetails, txn)}
+                          className="p-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 text-xs font-bold cursor-pointer"
+                          title="View Receipt for this transaction"
+                        >
+                          <Receipt className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Reminder History Section */}
+              <div className="space-y-3">
+                <h4 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-amber-500" />
+                  <span>Reminder History</span>
+                </h4>
+
+                {selectedBillForDetails.reminders.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl text-center">
+                    No reminders have been triggered for this bill.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedBillForDetails.reminders.map((rem) => (
+                      <div
+                        key={rem.id}
+                        className="p-3 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 flex items-center justify-between text-xs"
+                      >
+                        <div>
+                          <span className="font-bold text-amber-800 dark:text-amber-300 block">{rem.type} ({rem.channel})</span>
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            Sent on {formatDateTime(rem.sentAt)} by {rem.sentBy}
+                          </span>
+                        </div>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-600">
+                          <Check className="w-3.5 h-3.5" /> Sent
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================
+          💳 10. RECORD PAYMENT MODAL (POPUP WITH LIVE MATH)
+         ======================================================== */}
+      <NeonModal
+        isOpen={showRecordModal}
+        onClose={() => setShowRecordModal(false)}
+        title="Record Tenant Payment"
+      >
+        <form onSubmit={handleRecordPaymentSubmit} className="space-y-4 text-left">
+          
+          {/* Tenant Selector */}
+          <div>
+            <label className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 block mb-1">
+              Select Tenant / Account
+            </label>
+            <select
+              value={recordTenantId}
+              onChange={(e) => {
+                setRecordTenantId(e.target.value);
+                const matched = allBills.find(b => b.tenantId === e.target.value);
+                if (matched) {
+                  setRecordInvoiceId(matched.id);
+                  setRecordAmount(matched.outstandingAmount > 0 ? matched.outstandingAmount : matched.amount);
+                }
+              }}
+              className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+              required
+            >
+              <option value="">-- Choose Resident --</option>
+              {allBills.map(b => (
+                <option key={b.tenantId} value={b.tenantId}>
+                  {b.tenantName} (Room {b.roomNumber} - Due: ₹{b.outstandingAmount})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Live Balance Calculation Box */}
+          <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">Live Balance Calculation</span>
+            <div className="grid grid-cols-4 gap-2 text-center text-xs">
+              <div>
+                <span className="text-[10px] text-slate-400 block">Bill</span>
+                <span className="font-mono font-bold">{formatINR(liveCalculation.totalBill)}</span>
               </div>
               <div>
-                <h4 className="text-lg font-black text-slate-900 dark:text-white">Payment Recorded</h4>
-                <p className="text-xs text-emerald-600 font-bold mt-1">₹{recordAmount.toLocaleString()} recorded via {recordMethod}.</p>
+                <span className="text-[10px] text-slate-400 block">Already Paid</span>
+                <span className="font-mono font-bold text-emerald-600">{formatINR(liveCalculation.alreadyPaid)}</span>
               </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block">New Payment</span>
+                <span className="font-mono font-bold text-blue-600">{formatINR(liveCalculation.newPayment)}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block">Remaining</span>
+                <span className="font-mono font-black text-amber-600">{formatINR(liveCalculation.remaining)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Payment Amount & Method */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 block mb-1">
+                Payment Amount (INR)
+              </label>
+              <input
+                type="number"
+                value={recordAmount}
+                onChange={(e) => setRecordAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                required
+                min={1}
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 block mb-1">
+                Payment Method
+              </label>
+              <select
+                value={recordMethod}
+                onChange={(e) => setRecordMethod(e.target.value as any)}
+                className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+              >
+                <option value="UPI">UPI / GPay / PhonePe</option>
+                <option value="Cash">Cash at Reception</option>
+                <option value="Bank Transfer">Bank Transfer (NEFT/IMPS)</option>
+                <option value="Card">Debit / Credit Card</option>
+                <option value="Other">Other Adjustment</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Payment Type & Date */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 block mb-1">
+                Payment Type
+              </label>
+              <select
+                value={recordType}
+                onChange={(e) => setRecordType(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+              >
+                <option value="Monthly Rent">Monthly Rent</option>
+                <option value="Security Deposit">Security Deposit</option>
+                <option value="Advance">Advance Payment</option>
+                <option value="Mess/Food">Mess / Food</option>
+                <option value="Electricity">Electricity</option>
+                <option value="Maintenance">Maintenance</option>
+                <option value="Other Charges">Other Charges</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 block mb-1">
+                Payment Date
+              </label>
+              <input
+                type="date"
+                value={recordDate}
+                onChange={(e) => setRecordDate(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                required
+              />
+            </div>
+          </div>
+
+          {/* Reference ID & Notes */}
+          <div>
+            <label className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 block mb-1">
+              Transaction ID / UTR Reference
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. UPI489237492102"
+              value={recordTxnId}
+              onChange={(e) => setRecordTxnId(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 block mb-1">
+              Internal Notes
+            </label>
+            <input
+              type="text"
+              placeholder="Optional notes..."
+              value={recordNotes}
+              onChange={(e) => setRecordNotes(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+
+          {/* Buttons */}
+          <div className="flex items-center justify-end gap-3 pt-3">
+            <button
+              type="button"
+              onClick={() => setShowRecordModal(false)}
+              className="px-5 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs cursor-pointer hover:bg-slate-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={recordingLoading}
+              className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs cursor-pointer shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+            >
+              {recordingLoading ? 'Recording...' : 'Record Payment'}
+            </button>
+          </div>
+
+        </form>
+      </NeonModal>
+
+      {/* ========================================================
+          🎉 11. PAYMENT RECORDED SUCCESS MODAL
+         ======================================================== */}
+      <NeonModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        title="Payment Recorded"
+      >
+        {successData && (
+          <div className="text-center space-y-5 py-2">
+            <div className="w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center mx-auto ring-8 ring-emerald-500/5">
+              <CheckCircle2 className="w-9 h-9" />
+            </div>
+
+            <div>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white">
+                Payment Recorded Successfully
+              </h3>
+              <p className="text-xs text-slate-500 pt-1">
+                Transaction ledger updated and receipt generated.
+              </p>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-left text-xs space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Tenant</span>
+                <span className="font-bold text-slate-900 dark:text-white">{successData.tenantName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Amount Paid</span>
+                <span className="font-mono font-black text-emerald-600 text-sm">{formatINR(successData.amount)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Remaining Balance</span>
+                <span className="font-mono font-bold text-slate-800 dark:text-white">{formatINR(successData.remaining)}</span>
+              </div>
+              <div className="flex justify-between items-center pt-1 border-t border-slate-200 dark:border-slate-700">
+                <span className="text-slate-500">Status</span>
+                <span className="font-black text-emerald-600 uppercase text-xs">{successData.status}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-center gap-3 pt-2">
               <button
-                onClick={() => { setShowRecordPaymentModal(false); setRecordSuccess(false); }}
-                className="w-full py-2.5 rounded-2xl bg-purple-600 text-white font-black text-xs shadow-md cursor-pointer"
+                onClick={() => {
+                  if (successData.receiptData) {
+                    setReceiptData(successData.receiptData);
+                    setShowReceiptModal(true);
+                  }
+                }}
+                className="px-5 py-2.5 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-xs flex items-center gap-2 cursor-pointer shadow-md"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download Receipt</span>
+              </button>
+
+              <button
+                onClick={() => setShowSuccessModal(false)}
+                className="px-6 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs cursor-pointer hover:bg-slate-200"
               >
                 Done
               </button>
             </div>
-          ) : (
-            <form onSubmit={handleRecordPaymentSubmit} className="space-y-4 text-left">
-              <div>
-                <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">Select Resident</label>
-                <select
-                  value={recordTenantId}
-                  onChange={(e) => {
-                    setRecordTenantId(e.target.value);
-                    const t = tenants.find(x => x.id === e.target.value);
-                    if (t) setRecordAmount(t.rentAmount || 8500);
-                  }}
-                  className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white"
-                >
-                  <option value="">-- Choose Resident --</option>
-                  {tenants.map(t => (
-                    <option key={t.id} value={t.id}>{t.name} (Room {t.roomNumber})</option>
-                  ))}
-                </select>
-              </div>
+          </div>
+        )}
+      </NeonModal>
 
-              <div>
-                <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">Amount (₹)</label>
-                <input
-                  type="number"
-                  required
-                  value={recordAmount}
-                  onChange={(e) => setRecordAmount(parseFloat(e.target.value) || 0)}
-                  className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white"
-                />
+      {/* ========================================================
+          🔍 12. PAYMENT VERIFICATION REVIEW MODAL
+         ======================================================== */}
+      <NeonModal
+        isOpen={showVerificationModal}
+        onClose={() => setShowVerificationModal(false)}
+        title="Payment Verification Review"
+      >
+        {selectedVerificationTxn && (
+          <div className="space-y-4 text-left text-xs">
+            <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Tenant Name</span>
+                <span className="font-bold text-slate-900 dark:text-white">{selectedVerificationTxn.tenantName}</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Room</span>
+                <span className="font-mono font-bold text-slate-800 dark:text-white">{selectedVerificationTxn.roomNumber || 'A-101'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Amount Submitted</span>
+                <span className="font-mono font-black text-emerald-600 text-sm">{formatINR(selectedVerificationTxn.amount)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Payment Method</span>
+                <span className="font-bold text-slate-800 dark:text-white">{selectedVerificationTxn.paymentMethod}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Transaction ID / UTR</span>
+                <span className="font-mono font-bold text-slate-900 dark:text-white">{selectedVerificationTxn.referenceId || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Payment Date</span>
+                <span className="text-slate-700 dark:text-slate-300">{formatDate(selectedVerificationTxn.date)}</span>
+              </div>
+            </div>
 
-              {/* Payment Method Selectable Tiles */}
-              <div>
-                <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1.5">Payment Method</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {(['UPI', 'Cash', 'Bank Transfer', 'Card'] as const).map(m => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setRecordMethod(m)}
-                      className={`py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                        recordMethod === m 
-                          ? 'bg-purple-600 text-white shadow-md' 
-                          : 'bg-slate-100 dark:bg-zinc-800 text-slate-500'
-                      }`}
-                    >
-                      {m}
-                    </button>
-                  ))}
+            {selectedVerificationTxn.screenshotUrl ? (
+              <div className="space-y-1">
+                <span className="text-[10px] font-black uppercase text-slate-400">Payment Screenshot Proof</span>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden max-h-60 bg-slate-950 flex items-center justify-center">
+                  <img 
+                    src={selectedVerificationTxn.screenshotUrl} 
+                    alt="Payment Proof" 
+                    className="max-h-60 object-contain"
+                  />
                 </div>
               </div>
+            ) : (
+              <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-center text-slate-400 italic">
+                No screenshot uploaded. Resident provided UTR: {selectedVerificationTxn.referenceId}
+              </div>
+            )}
 
-              <div className="pt-2 flex justify-end gap-2">
+            {rejectReasonPrompt ? (
+              <div className="space-y-2 p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-2xl">
+                <label className="font-bold text-rose-700 dark:text-rose-400 block">
+                  Reason for Rejection
+                </label>
+                <input
+                  type="text"
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-800 text-xs text-slate-900 dark:text-white focus:outline-none"
+                />
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    onClick={() => setRejectReasonPrompt(false)}
+                    className="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleRejectVerification(selectedVerificationTxn.id)}
+                    disabled={actionLoading}
+                    className="px-4 py-1.5 rounded-xl bg-rose-600 text-white font-bold text-xs shadow-md"
+                  >
+                    Confirm Rejection
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-end gap-3 pt-2">
                 <button
-                  type="button"
-                  onClick={() => setShowRecordPaymentModal(false)}
-                  className="py-2.5 px-5 rounded-2xl bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 font-bold text-xs hover:bg-slate-200 cursor-pointer"
+                  onClick={() => setRejectReasonPrompt(true)}
+                  className="px-4 py-2.5 rounded-2xl bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 font-bold text-xs cursor-pointer"
                 >
-                  Cancel
+                  Reject Payment
                 </button>
                 <button
-                  type="submit"
-                  className="py-2.5 px-6 rounded-2xl bg-purple-600 text-white font-black text-xs shadow-md hover:scale-105 transition-transform cursor-pointer"
+                  onClick={() => handleApproveVerification(selectedVerificationTxn.id)}
+                  disabled={actionLoading}
+                  className="px-6 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer shadow-md"
                 >
-                  Record Payment ✓
+                  {actionLoading ? 'Approving...' : 'Approve & Verify'}
                 </button>
               </div>
-            </form>
-          )}
-        </NeonModal>
-      )}
+            )}
+          </div>
+        )}
+      </NeonModal>
 
-      {/* 🛎️ 11. PAYMENT REMINDER MODAL */}
-      {reminderModalTenant && (
-        <NeonModal
-          isOpen={true}
-          onClose={() => setReminderModalTenant(null)}
-          title="Send Payment Reminder"
-          size="sm"
-          accentColor="purple"
-        >
-          <div className="space-y-4 text-left">
-            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs font-bold space-y-1">
-              <p className="text-slate-900 dark:text-white font-black">{reminderModalTenant.tenantName}</p>
-              <p className="text-amber-500 font-black">Overdue Amount: ₹{(reminderModalTenant.amount || 8500).toLocaleString()}</p>
+      {/* ========================================================
+          🔔 13. SEND PAYMENT REMINDER MODAL
+         ======================================================== */}
+      <NeonModal
+        isOpen={showReminderModal}
+        onClose={() => setShowReminderModal(false)}
+        title="Send Payment Reminder"
+      >
+        {reminderTargetBill && (
+          <div className="space-y-4 text-left text-xs">
+            
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-1">
+              <span className="font-bold text-slate-900 dark:text-white block">{reminderTargetBill.tenantName}</span>
+              <span className="text-slate-500 font-mono">
+                Outstanding: <strong className="text-amber-600">{formatINR(reminderTargetBill.outstandingAmount)}</strong> • Due: {formatDate(reminderTargetBill.dueDate)}
+              </span>
+            </div>
+
+            {reminderStatusFeedback && (
+              <div className={`p-3 rounded-2xl text-xs font-bold ${
+                reminderStatusFeedback.alreadySent 
+                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20'
+                  : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20'
+              }`}>
+                {reminderStatusFeedback.message}
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 block mb-1">
+                Reminder Event Type
+              </label>
+              <select
+                value={reminderType}
+                onChange={(e) => setReminderType(e.target.value as any)}
+                className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+              >
+                <option value="Upcoming Due">Upcoming Due Reminder</option>
+                <option value="Due Today">Due Today Reminder</option>
+                <option value="Overdue">Overdue Reminder</option>
+                <option value="Manual Reminder">Manual Custom Reminder</option>
+              </select>
             </div>
 
             <div>
-              <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 block mb-1">Dispatch Channel</label>
-              <div className="grid grid-cols-3 gap-2">
-                {(['WhatsApp', 'SMS', 'Portal'] as const).map(ch => (
-                  <button
-                    key={ch}
-                    type="button"
-                    onClick={() => setReminderChannel(ch)}
-                    className={`py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                      reminderChannel === ch 
-                        ? 'bg-purple-600 text-white shadow-md' 
-                        : 'bg-slate-100 dark:bg-zinc-800 text-slate-500'
-                    }`}
-                  >
-                    {ch}
-                  </button>
-                ))}
-              </div>
+              <label className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 block mb-1">
+                Notification Channel
+              </label>
+              <select
+                value={reminderChannel}
+                onChange={(e) => setReminderChannel(e.target.value as any)}
+                className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+              >
+                <option value="WhatsApp">WhatsApp (Direct Notification)</option>
+                <option value="SMS">SMS Message</option>
+                <option value="Portal">In-Portal Notification</option>
+              </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 pt-2">
+            <div className="flex items-center justify-end gap-3 pt-2">
               <button
-                onClick={() => setReminderModalTenant(null)}
-                className="py-2.5 rounded-2xl bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 font-bold text-xs cursor-pointer"
+                type="button"
+                onClick={() => setShowReminderModal(false)}
+                className="px-5 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs cursor-pointer hover:bg-slate-200"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={handleSendReminderSubmit}
+                disabled={sendingReminder}
+                className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold text-xs cursor-pointer shadow-md disabled:opacity-50"
+              >
+                {sendingReminder ? 'Checking & Sending...' : 'Send Reminder'}
+              </button>
+            </div>
+
+          </div>
+        )}
+      </NeonModal>
+
+      {/* ========================================================
+          🔄 14. TRANSACTION REVERSAL / REFUND MODAL
+         ======================================================== */}
+      <NeonModal
+        isOpen={showReversalModal}
+        onClose={() => setShowReversalModal(false)}
+        title="Reverse Financial Transaction"
+      >
+        {reversalTargetTxn && (
+          <div className="space-y-4 text-left text-xs">
+            <div className="p-3.5 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 rounded-2xl space-y-1">
+              <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 font-bold">
+                <AlertTriangle className="w-4 h-4" />
+                <span>Audit Trail Safe Reversal</span>
+              </div>
+              <p className="text-slate-600 dark:text-slate-400 text-[11px]">
+                This will create an explicit refund/reversal transaction of <strong>{formatINR(reversalTargetTxn.amount)}</strong>. The original transaction {reversalTargetTxn.id} remains preserved in audit history.
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 block mb-1">
+                Reason for Reversal / Refund
+              </label>
+              <input
+                type="text"
+                value={reversalReason}
+                onChange={(e) => setReversalReason(e.target.value)}
+                placeholder="e.g. Accidental double entry or deposit refund"
+                className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-rose-500"
+                required
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowReversalModal(false)}
+                className="px-5 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs cursor-pointer hover:bg-slate-200"
               >
                 Cancel
               </button>
               <button
-                onClick={handleSendReminder}
-                className="py-2.5 rounded-2xl bg-purple-600 text-white font-black text-xs shadow-md hover:scale-105 transition-transform cursor-pointer"
+                type="button"
+                onClick={handleReversalSubmit}
+                disabled={reversingLoading}
+                className="px-6 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs cursor-pointer shadow-md disabled:opacity-50"
               >
-                Send Reminder →
+                {reversingLoading ? 'Processing...' : 'Confirm Reversal'}
               </button>
             </div>
           </div>
-        </NeonModal>
-      )}
-
-      {/* ➕ 12. FLOATING QUICK ACTION BUTTON (+) */}
-      <div className="fixed bottom-6 right-6 z-50">
-        {radialMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 10 }}
-            className="mb-3 space-y-2 flex flex-col items-end"
-          >
-            <button
-              onClick={() => {
-                setShowRecordPaymentModal(true);
-                setRadialMenuOpen(false);
-              }}
-              className="py-2.5 px-4 rounded-2xl bg-purple-600 text-white font-black text-xs shadow-xl hover:scale-105 transition-transform cursor-pointer flex items-center gap-2"
-            >
-              <CreditCard className="w-4 h-4" /> + Record Payment
-            </button>
-            <button
-              onClick={() => {
-                setShowQuickIssuer(true);
-                setRadialMenuOpen(false);
-              }}
-              className="py-2.5 px-4 rounded-2xl bg-blue-600 text-white font-black text-xs shadow-xl hover:scale-105 transition-transform cursor-pointer flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" /> + Generate Invoice
-            </button>
-          </motion.div>
         )}
+      </NeonModal>
 
-        <button
-          onClick={() => setRadialMenuOpen(!radialMenuOpen)}
-          className="w-14 h-14 rounded-full bg-purple-600 hover:bg-purple-500 text-white font-black shadow-2xl flex items-center justify-center text-2xl hover:scale-110 transition-transform cursor-pointer"
-        >
-          {radialMenuOpen ? '×' : '+'}
-        </button>
-      </div>
-
-      {/* Quick Invoice Popup Modal */}
-      <QuickInvoiceModal
-        isOpen={showQuickIssuer}
-        onClose={() => setShowQuickIssuer(false)}
-        onInvoiceCreated={fetchInitialData}
-      />
-
-      {/* Official Payment Receipt Modal */}
-      {selectedReceipt && (
+      {/* ========================================================
+          📄 15. OFFICIAL RECEIPT MODAL
+         ======================================================== */}
+      {receiptData && (
         <OfficialPaymentReceiptModal
           isOpen={showReceiptModal}
           onClose={() => setShowReceiptModal(false)}
-          receiptData={selectedReceipt}
+          receiptData={receiptData}
         />
       )}
 

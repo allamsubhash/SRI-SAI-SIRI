@@ -2,7 +2,7 @@
 
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Printer, Download, Building, ShieldCheck } from 'lucide-react';
+import { X, Printer, Download, Building, ShieldCheck, Share2, Check } from 'lucide-react';
 import { numberToWords, formatDate, formatDateTime } from '@/utils/formatters';
 
 export interface ReceiptItem {
@@ -18,10 +18,18 @@ export interface OfficialReceiptData {
   tenantId: string;
   tenantName: string;
   roomNumber: string;
+  buildingName?: string;
   mobileNumber: string;
+  billingPeriod?: string;
+  paymentMethod?: string;
+  referenceId?: string;
+  recordedBy?: string;
+  paymentStatus?: string;
   items: ReceiptItem[];
+  billAmount?: number;
+  previousPaid?: number;
+  currentPayment?: number;
   totalAmount: number;
-  paymentType?: string;
   remainingDue?: number;
   generatedOn?: string;
 }
@@ -38,6 +46,7 @@ export default function OfficialPaymentReceiptModal({
   receiptData
 }: OfficialPaymentReceiptModalProps) {
   const [downloading, setDownloading] = useState(false);
+  const [copied, setCopied] = useState(false);
   const receiptRef = useRef<HTMLDivElement | null>(null);
 
   if (!isOpen || !receiptData) return null;
@@ -45,6 +54,24 @@ export default function OfficialPaymentReceiptModal({
   const totalAmount = receiptData.totalAmount || receiptData.items.reduce((sum, item) => sum + item.amount, 0);
   const amountInWords = numberToWords(totalAmount);
   const generatedTime = receiptData.generatedOn || formatDateTime(new Date());
+
+  const handleShare = async () => {
+    const text = `Official Receipt from Sri Sai Siri Boys Hostel\nReceipt No: ${receiptData.receiptNo}\nTenant: ${receiptData.tenantName} (Room ${receiptData.roomNumber})\nAmount: ₹${totalAmount.toLocaleString('en-IN')}\nStatus: ${receiptData.paymentStatus || 'PAID'}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Receipt ${receiptData.receiptNo}`,
+          text,
+          url: window.location.href
+        });
+      } catch {}
+    } else {
+      navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
 
   const handlePrint = () => {
     window.print();
@@ -351,6 +378,28 @@ export default function OfficialPaymentReceiptModal({
                 In Words : *** {amountInWords} ***
               </div>
 
+              {/* Tenant and Payment Meta Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-sm border border-slate-200">
+                <div>
+                  <span className="text-slate-500 block">Billing Period</span>
+                  <span className="font-bold text-slate-800">{receiptData.billingPeriod || 'Current Month'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Payment Method</span>
+                  <span className="font-bold text-slate-800">{receiptData.paymentMethod || 'UPI / Online'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Transaction Reference</span>
+                  <span className="font-bold font-mono text-slate-800 truncate block">{receiptData.referenceId || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Payment Status</span>
+                  <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-black text-[10px]">
+                    {receiptData.paymentStatus || 'PAID'}
+                  </span>
+                </div>
+              </div>
+
               {/* 5. TERMS & CONDITIONS ROW */}
               <div className="flex justify-between items-center text-[11px] font-semibold text-slate-600 px-0.5">
                 <span>*Terms & Conditions Apply</span>
@@ -373,16 +422,24 @@ export default function OfficialPaymentReceiptModal({
           <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-center gap-3 no-print">
             <button
               onClick={handlePrint}
-              className="px-6 py-2.5 rounded-full bg-[#1E293B] text-white font-bold text-xs flex items-center gap-2 hover:bg-slate-800 transition-all cursor-pointer shadow-md"
+              className="px-5 py-2.5 rounded-full bg-[#1E293B] text-white font-bold text-xs flex items-center gap-2 hover:bg-slate-800 transition-all cursor-pointer shadow-md"
             >
               <Printer className="w-4 h-4" />
               <span>Print</span>
             </button>
 
             <button
+              onClick={handleShare}
+              className="px-5 py-2.5 rounded-full bg-[#334155] text-white font-bold text-xs flex items-center gap-2 hover:bg-slate-700 transition-all cursor-pointer shadow-md"
+            >
+              {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
+              <span>{copied ? 'Copied Receipt!' : 'Share'}</span>
+            </button>
+
+            <button
               onClick={handleDownloadPDF}
               disabled={downloading}
-              className="px-6 py-2.5 rounded-full bg-[#0F172A] text-white font-bold text-xs flex items-center gap-2 hover:bg-slate-800 transition-all cursor-pointer shadow-md disabled:opacity-50"
+              className="px-5 py-2.5 rounded-full bg-[#0F172A] text-white font-bold text-xs flex items-center gap-2 hover:bg-slate-800 transition-all cursor-pointer shadow-md disabled:opacity-50"
             >
               <Download className="w-4 h-4" />
               <span>{downloading ? 'Exporting PDF...' : 'Download PDF'}</span>
@@ -394,3 +451,4 @@ export default function OfficialPaymentReceiptModal({
     </AnimatePresence>
   );
 }
+

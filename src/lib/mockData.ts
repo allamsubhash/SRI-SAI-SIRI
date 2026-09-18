@@ -300,6 +300,8 @@ export interface MockInvoice {
   dueDate: string;
   status: 'PAID' | 'PARTIAL' | 'PENDING' | 'OVERDUE' | 'PENDING_VERIFICATION';
   items: { description: string; amount: number }[];
+  billingMonth?: string;
+  billingPeriod?: string;
   dateCreated: string;
 }
 
@@ -678,7 +680,7 @@ export interface MockPaymentRecord {
   date: string;
   type: string;
   paymentMethod: string;
-  status: 'PAID' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'OVERDUE';
+  status: 'PAID' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'OVERDUE' | 'REFUNDED' | 'REVERSED';
   referenceId?: string;
   notes?: string;
   rejectionReason?: string;
@@ -739,15 +741,62 @@ export const mockGuidelines: MockGuideline[] = [
     isActive: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'guide-3',
-    title: 'Rent Due Payment Date',
-    content: 'Monthly hostel rent must be settled on or before the 5th of each month.',
-    order: 3,
-    isActive: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
   }
 ];
+
+export interface MockReminderRecord {
+  id: string;
+  invoiceId: string;
+  tenantId: string;
+  type: 'Upcoming Due' | 'Due Today' | 'Overdue' | 'Manual Reminder';
+  channel: 'WhatsApp' | 'SMS' | 'Portal' | 'Email';
+  sentAt: string;
+  sentBy: string;
+  status: 'SENT' | 'DELIVERED';
+}
+
+export const mockReminders: MockReminderRecord[] = [
+  {
+    id: 'rem-001',
+    invoiceId: 'inv-4',
+    tenantId: 't-4',
+    type: 'Upcoming Due',
+    channel: 'WhatsApp',
+    sentAt: '2026-07-04T10:30:00.000Z',
+    sentBy: 'Alok Sharma (Manager)',
+    status: 'SENT'
+  }
+];
+
+export interface MockAuditLogRecord {
+  id: string;
+  action: string;
+  userId?: string;
+  userName: string;
+  entityId?: string;
+  details: string;
+  createdAt: string;
+}
+
+export const mockAuditLogs: MockAuditLogRecord[] = [
+  {
+    id: 'audit-001',
+    action: 'PAYMENT_RECORDED',
+    userId: 'u-owner-1',
+    userName: 'Alok Sharma (Owner)',
+    entityId: 'pay-sample-001',
+    details: 'Recorded ₹8,500 payment for Rohan Verma (August 2026 Rent) via ONLINE',
+    createdAt: '2026-08-01T11:00:00.000Z'
+  },
+  {
+    id: 'audit-002',
+    action: 'REMINDER_SENT',
+    userId: 'u-owner-1',
+    userName: 'Alok Sharma (Owner)',
+    entityId: 'inv-4',
+    details: 'Sent Upcoming Due reminder via WhatsApp to Sneha Reddy',
+    createdAt: '2026-07-04T10:30:00.000Z'
+  }
+];
+
 
