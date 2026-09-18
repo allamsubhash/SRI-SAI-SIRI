@@ -42,7 +42,7 @@ export default function TenantsManagement() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'ARCHIVED' | 'BLACKLISTED'>('ALL');
-  const [paymentFilter, setPaymentFilter] = useState<'ALL' | 'PAID' | 'OVERDUE'>('ALL');
+  const [roomFilter, setRoomFilter] = useState('ALL');
   const [viewMode, setViewMode] = useState<'PEOPLE' | 'TABLE'>('TABLE');
   
   // Dedicated Resident Profile Page Navigation State
@@ -299,6 +299,23 @@ export default function TenantsManagement() {
     }
   };
 
+  // Unique Rooms list across tenants and buildings for room filter dropdown
+  const availableRooms = useMemo(() => {
+    const roomSet = new Set<string>();
+    tenants.forEach(t => {
+      const r = t.roomNumber || t.room?.number;
+      if (r) roomSet.add(r);
+    });
+    buildings.forEach(b => {
+      b.floors?.forEach((f: any) => {
+        f.rooms?.forEach((r: any) => {
+          if (r.number) roomSet.add(r.number);
+        });
+      });
+    });
+    return Array.from(roomSet).sort();
+  }, [tenants, buildings]);
+
   const filteredTenants = useMemo(() => {
     return tenants.filter(t => {
       const matchesSearch = search === '' || 
@@ -308,17 +325,13 @@ export default function TenantsManagement() {
         t.roomNumber?.toLowerCase().includes(search.toLowerCase());
       
       const matchesStatus = statusFilter === 'ALL' || t.status === statusFilter;
+      
+      const tenantRoom = t.roomNumber || t.room?.number || '';
+      const matchesRoom = roomFilter === 'ALL' || tenantRoom === roomFilter;
 
-      const isOverdue = t.rentStatus === 'OVERDUE' || t.paymentStatus === 'OVERDUE' || (t.dueAmount && t.dueAmount > 0) || (t.name && t.name.length % 2 === 1);
-      const isPaid = !isOverdue;
-
-      const matchesPayment = paymentFilter === 'ALL' || 
-        (paymentFilter === 'OVERDUE' && isOverdue) || 
-        (paymentFilter === 'PAID' && isPaid);
-
-      return matchesSearch && matchesStatus && matchesPayment;
+      return matchesSearch && matchesStatus && matchesRoom;
     });
-  }, [tenants, search, statusFilter, paymentFilter]);
+  }, [tenants, search, statusFilter, roomFilter]);
 
   if (loading) {
     return (
@@ -469,38 +482,28 @@ export default function TenantsManagement() {
           />
         </div>
 
-        {/* Payment Status Overdue Filter Pills */}
-        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832]">
-          <button
-            onClick={() => setPaymentFilter('ALL')}
-            className={`px-3 py-1.5 rounded-xl font-extrabold text-xs transition-all cursor-pointer ${
-              paymentFilter === 'ALL' 
-                ? 'bg-slate-800 text-white dark:bg-zinc-800 shadow-xs' 
-                : 'text-[#68736E] dark:text-[#9BAAA4] hover:text-[#1C2522]'
-            }`}
-          >
-            All Payments
-          </button>
-          <button
-            onClick={() => setPaymentFilter('PAID')}
-            className={`px-3 py-1.5 rounded-xl font-extrabold text-xs transition-all cursor-pointer ${
-              paymentFilter === 'PAID' 
-                ? 'bg-emerald-600 text-white shadow-xs' 
-                : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10'
-            }`}
-          >
-            ✓ Paid
-          </button>
-          <button
-            onClick={() => setPaymentFilter('OVERDUE')}
-            className={`px-3 py-1.5 rounded-xl font-extrabold text-xs transition-all cursor-pointer ${
-              paymentFilter === 'OVERDUE' 
-                ? 'bg-rose-600 text-white shadow-xs' 
-                : 'text-rose-600 dark:text-rose-400 hover:bg-rose-500/10'
-            }`}
-          >
-            ⚠️ Overdue Rent
-          </button>
+        {/* Room Filter Dropdown */}
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <div className="relative w-full md:w-56">
+            <select
+              value={roomFilter}
+              onChange={(e) => setRoomFilter(e.target.value)}
+              className="w-full py-2.5 px-4 pr-9 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] text-xs font-bold text-[#1C2522] dark:text-[#F2F5F2] focus:outline-none focus:tenant-border-accent appearance-none cursor-pointer"
+            >
+              <option value="ALL">All Rooms ({tenants.length})</option>
+              {availableRooms.map(rNum => {
+                const count = tenants.filter(t => (t.roomNumber || t.room?.number) === rNum).length;
+                return (
+                  <option key={rNum} value={rNum}>
+                    Room {rNum} ({count} resident{count !== 1 ? 's' : ''})
+                  </option>
+                );
+              })}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-[#68736E] dark:text-[#9BAAA4]">
+              <ChevronRight className="w-4 h-4 rotate-90" />
+            </div>
+          </div>
         </div>
 
         {/* View Switcher (PEOPLE | TABLE) */}
@@ -620,14 +623,12 @@ export default function TenantsManagement() {
                         <th className="py-4 px-5">Phone & Email</th>
                         <th className="py-4 px-5">Room & Bed</th>
                         <th className="py-4 px-5">Monthly Rent</th>
-                        <th className="py-4 px-5">Payment Status</th>
                         <th className="py-4 px-5">Lease Status</th>
                         <th className="py-4 px-5 text-right"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#DDD8CE] dark:divide-[#293832]">
                       {filteredTenants.map((t) => {
-                        const isOverdue = t.rentStatus === 'OVERDUE' || t.paymentStatus === 'OVERDUE' || (t.dueAmount && t.dueAmount > 0);
                         return (
                           <tr 
                             key={t.id} 
@@ -662,17 +663,6 @@ export default function TenantsManagement() {
                             </td>
                             <td className="py-3.5 px-5 font-black text-[#1C2522] dark:text-[#F2F5F2]">
                               ₹{(t.rentAmount || 8500).toLocaleString()}/mo
-                            </td>
-                            <td className="py-3.5 px-5">
-                              {isOverdue ? (
-                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 flex items-center gap-1 w-fit">
-                                  ⚠️ OVERDUE (₹{(t.dueAmount || t.rentAmount || 8500).toLocaleString()})
-                                </span>
-                              ) : (
-                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 flex items-center gap-1 w-fit">
-                                  ✓ PAID
-                                </span>
-                              )}
                             </td>
                             <td className="py-3.5 px-5">
                               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border ${

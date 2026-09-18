@@ -1,28 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  User, 
   Phone, 
-  Mail, 
-  Building, 
-  Calendar, 
-  CreditCard, 
   Receipt, 
   FileText, 
-  CheckCircle2, 
-  AlertCircle, 
-  Clock, 
-  ShieldCheck, 
   Plus, 
   Edit2, 
-  ExternalLink,
-  ChevronRight,
-  Sparkles,
-  Printer,
-  Download,
-  Share2
+  ChevronRight
 } from 'lucide-react';
 import NeonModal from '@/components/NeonModal';
 import { formatINR, formatDate, formatDateTime } from '@/utils/formatters';
@@ -56,19 +41,11 @@ export default function TenantDetailsModal({
 }: TenantDetailsModalProps) {
   const [selectedReceipt, setSelectedReceipt] = useState<OfficialReceiptData | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
-  const [loadingDetails, setLoadingDetails] = useState(false);
   const [livePayments, setLivePayments] = useState<PaymentTransaction[]>(allTransactions);
   const [liveBills, setLiveBills] = useState<UnifiedBill[]>(allBills);
 
   useEffect(() => {
     if (isOpen && tenant) {
-      setLoadingDetails(true);
-      // Realistic smooth load
-      const timer = setTimeout(() => {
-        setLoadingDetails(false);
-      }, 350);
-
-      // If bills/transactions weren't provided or need fresh sync, fetch from API
       if (allTransactions.length === 0 || allBills.length === 0) {
         fetch('/api/payments')
           .then(res => res.json())
@@ -81,8 +58,6 @@ export default function TenantDetailsModal({
         setLiveBills(allBills);
         setLivePayments(allTransactions);
       }
-
-      return () => clearTimeout(timer);
     }
   }, [isOpen, tenant, allBills, allTransactions]);
 
@@ -94,7 +69,7 @@ export default function TenantDetailsModal({
 
   if (!isOpen || !tenant) return null;
 
-  const tenantName = tenant.name || tenant.profile?.firstName ? `${tenant.profile?.firstName || ''} ${tenant.profile?.lastName || ''}`.trim() : 'Resident';
+  const tenantName = tenant.name || (tenant.profile?.firstName ? `${tenant.profile?.firstName || ''} ${tenant.profile?.lastName || ''}`.trim() : 'Resident');
   const roomNumber = tenant.roomNumber || tenant.room?.number || 'A-101';
   const bedNumber = tenant.bedNumber || tenant.bed?.number || 'Bed A';
   const buildingName = tenant.buildingName || tenant.building?.name || (roomNumber.startsWith('B') ? 'Block B - Classic Standard' : 'Block A - Premium Executive');
@@ -104,8 +79,8 @@ export default function TenantDetailsModal({
   const monthlyRent = Number(tenant.rentAmount || tenant.rent || billingState?.monthlyRent || 8500);
 
   // Derived financial metrics
-  const totalPaid = billingState ? billingState.totalApprovedPaid : 0;
-  const remainingDue = billingState ? billingState.remainingOutstanding : 0;
+  const totalPaid = billingState ? billingState.totalApprovedPaid : (tenant.status === 'PAID' ? monthlyRent : 0);
+  const remainingDue = billingState ? billingState.remainingOutstanding : (tenant.status === 'PAID' ? 0 : monthlyRent);
   const paymentStatus = billingState ? billingState.primaryStatus : (tenant.status === 'PAID' ? 'PAID' : 'DUE');
 
   // Find latest approved transaction for receipt
@@ -119,28 +94,30 @@ export default function TenantDetailsModal({
 
   const handleOpenOfficialReceipt = (txn?: any) => {
     const targetTxn = txn || latestApprovedPayment;
+    const isPaid = totalPaid >= monthlyRent || (targetTxn && (targetTxn.status === 'APPROVED' || targetTxn.status === 'PAID'));
+    
     const receiptData: OfficialReceiptData = {
       receiptNo: targetTxn?.receiptNumber || `SSR-RCP-${Date.now().toString().slice(-6)}`,
       date: formatDate(targetTxn?.date || targetTxn?.createdAt || new Date()),
-      verifiedDate: formatDate(targetTxn?.updatedAt || targetTxn?.date || new Date()),
-      tenantId: tenant.id,
+      verifiedDate: targetTxn?.updatedAt ? formatDate(targetTxn.updatedAt) : undefined,
+      tenantId: tenant.id || 'TEN-001',
       tenantName: tenantName,
       roomNumber: roomNumber,
       buildingName: buildingName,
       mobileNumber: phone,
       billingPeriod: billingState?.currentBill?.billingPeriod || new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
-      paymentMethod: targetTxn?.paymentMethod || 'UPI',
-      referenceId: targetTxn?.referenceId || 'OFFICIAL_RECORDED',
-      recordedBy: targetTxn?.recordedBy || 'Hostel Management',
-      paymentStatus: 'PAID',
+      paymentMethod: targetTxn?.paymentMethod || (isPaid ? 'UPI' : 'OFFICIAL TARIFF'),
+      referenceId: targetTxn?.referenceId || (isPaid ? 'SSR-VERIFIED-TXN' : 'OFFICIAL_INVOICE'),
+      recordedBy: targetTxn?.recordedBy || 'Sri Sai Siri Management',
+      paymentStatus: isPaid ? 'PAID' : remainingDue < monthlyRent && remainingDue > 0 ? 'PARTIAL' : 'DUE',
       billAmount: monthlyRent,
       previousPaid: Math.max(0, totalPaid - (targetTxn?.amount || 0)),
-      currentPayment: targetTxn?.amount || monthlyRent,
+      currentPayment: targetTxn?.amount || (isPaid ? monthlyRent : totalPaid > 0 ? totalPaid : monthlyRent),
       items: [
         {
           sNo: 1,
-          accountHead: targetTxn?.notes || `Monthly Room Rent & Tariff (${billingState?.currentBill?.billingPeriod || 'Current Month'})`,
-          amount: targetTxn?.amount || monthlyRent
+          accountHead: targetTxn?.notes || `Room Rent & Boarding (${billingState?.currentBill?.billingPeriod || new Date().toLocaleString('default', { month: 'long', year: 'numeric' })})`,
+          amount: targetTxn?.amount || (isPaid ? monthlyRent : monthlyRent)
         }
       ],
       totalAmount: targetTxn?.amount || monthlyRent,
@@ -157,53 +134,49 @@ export default function TenantDetailsModal({
       <NeonModal
         isOpen={isOpen}
         onClose={onClose}
-        title="Resident Details & Billing"
-        subtitle={`Room ${roomNumber} · ${bedNumber} • ${buildingName}`}
-        size="lg"
+        title={`Resident Profile: ${tenantName}`}
+        subtitle={`Room ${roomNumber} (${bedNumber}) • ${buildingName}`}
+        size="md"
         accentColor="purple"
       >
-        <div className="space-y-6 text-left font-sans select-none">
+        <div className="space-y-4 text-left font-sans select-none">
           
-          {/* 🌟 1. PROFILE HEADER CARD */}
-          <div className="p-5 rounded-3xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 text-white font-black flex items-center justify-center text-xl shadow-md shrink-0">
+          {/* 🌟 1. COMPACT PROFILE HEADER */}
+          <div className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 text-white font-black flex items-center justify-center text-lg shadow-sm shrink-0">
                 {tenantName.charAt(0).toUpperCase()}
               </div>
-              <div className="space-y-0.5 min-w-0">
-                <div className="flex items-center gap-2.5">
-                  <h3 className="text-lg sm:text-xl font-black text-[#1C2522] dark:text-[#F2F5F2] truncate">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-black text-[#1C2522] dark:text-[#F2F5F2] truncate">
                     {tenantName}
                   </h3>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shrink-0 ${
                     paymentStatus === 'PAID'
                       ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                       : paymentStatus === 'PARTIAL'
                       ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
                       : paymentStatus === 'OVERDUE'
                       ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 animate-pulse'
-                      : paymentStatus === 'VERIFICATION_PENDING'
-                      ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20'
                       : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
                   }`}>
-                    ● {paymentStatus === 'PAID' ? 'RENT PAID' : paymentStatus === 'PARTIAL' ? 'PARTIAL' : paymentStatus === 'OVERDUE' ? 'OVERDUE' : paymentStatus === 'VERIFICATION_PENDING' ? 'VERIFICATION' : 'PAYMENT DUE'}
+                    ● {paymentStatus === 'PAID' ? 'PAID' : paymentStatus === 'PARTIAL' ? 'PARTIAL' : paymentStatus === 'OVERDUE' ? 'OVERDUE' : 'DUE'}
                   </span>
                 </div>
-                <p className="text-xs text-[#68736E] dark:text-[#9BAAA4] font-medium flex items-center gap-2">
-                  <span>Room {roomNumber} ({bedNumber})</span>
-                  <span>•</span>
-                  <span>{buildingName}</span>
+                <p className="text-[11px] text-[#68736E] dark:text-[#9BAAA4] font-bold mt-0.5 truncate">
+                  Room {roomNumber} · {bedNumber} • {buildingName.split('-')[0].trim()}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-1.5 shrink-0">
               <a
                 href={`tel:${phone}`}
-                className="flex-1 sm:flex-none py-2 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all"
+                className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center shadow-sm transition-transform active:scale-95"
+                title="Call Resident"
               >
                 <Phone className="w-3.5 h-3.5" />
-                <span>Call</span>
               </a>
               {onEditProfile && (
                 <button
@@ -212,7 +185,8 @@ export default function TenantDetailsModal({
                     onClose();
                     onEditProfile(tenant);
                   }}
-                  className="py-2 px-3.5 rounded-xl bg-[#FFFDF9] dark:bg-[#141D19] border border-[#DDD8CE] dark:border-[#293832] text-[#1C2522] dark:text-[#F2F5F2] font-bold text-xs hover:bg-[#E5E0D5] transition-all cursor-pointer"
+                  className="p-2.5 rounded-xl bg-[#FFFDF9] dark:bg-[#141D19] border border-[#DDD8CE] dark:border-[#293832] text-[#1C2522] dark:text-[#F2F5F2] hover:text-purple-500 font-bold text-xs transition-all cursor-pointer"
+                  title="Edit Profile"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
@@ -220,147 +194,91 @@ export default function TenantDetailsModal({
             </div>
           </div>
 
-          {/* 📋 2. CONTACT & RESIDENCY INFORMATION */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-            <div className="p-4 rounded-2xl bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-[#DDD8CE] dark:border-[#293832] space-y-1">
-              <span className="text-[10px] font-bold text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider block">Phone Number</span>
+          {/* 📋 2. CONTACT INFO GRID */}
+          <div className="grid grid-cols-2 gap-2.5 text-xs">
+            <div className="p-3 rounded-2xl bg-[#FFFDF9] dark:bg-[#141D19] border border-[#DDD8CE] dark:border-[#293832] space-y-0.5">
+              <span className="text-[10px] font-bold text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider block">Phone</span>
               <a href={`tel:${phone}`} className="font-bold text-[#1C2522] dark:text-[#F2F5F2] hover:text-blue-500 block truncate">
                 {phone}
               </a>
             </div>
 
-            <div className="p-4 rounded-2xl bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-[#DDD8CE] dark:border-[#293832] space-y-1">
-              <span className="text-[10px] font-bold text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider block">Email Address</span>
-              <a href={`mailto:${email}`} className="font-bold text-[#1C2522] dark:text-[#F2F5F2] hover:text-blue-500 block truncate">
-                {email}
-              </a>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-[#DDD8CE] dark:border-[#293832] space-y-1">
-              <span className="text-[10px] font-bold text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider block">Joining Date</span>
+            <div className="p-3 rounded-2xl bg-[#FFFDF9] dark:bg-[#141D19] border border-[#DDD8CE] dark:border-[#293832] space-y-0.5">
+              <span className="text-[10px] font-bold text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider block">Joined Date</span>
               <span className="font-bold text-[#1C2522] dark:text-[#F2F5F2] block truncate">
                 {formatDate(moveInDate)}
               </span>
             </div>
           </div>
 
-          {/* 💳 3. LIVE PAYMENT & BILLING SUMMARY */}
-          <div className="p-5 rounded-3xl bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-[#DDD8CE] dark:border-[#293832] space-y-4 shadow-sm">
-            <div className="flex justify-between items-center border-b border-[#DDD8CE] dark:border-[#293832] pb-3">
-              <div className="flex items-center gap-2">
-                <CreditCard className="w-4 h-4 text-purple-500" />
-                <h4 className="text-xs font-black uppercase tracking-wider text-[#1C2522] dark:text-[#F2F5F2]">
-                  Rent & Payment Status
-                </h4>
-              </div>
-              <span className="text-[11px] font-bold text-[#68736E] dark:text-[#9BAAA4]">
-                Cycle: {billingState?.currentBill?.billingPeriod || new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}
-              </span>
+          {/* 💳 3. LIVE FINANCIAL OVERVIEW */}
+          <div className="p-3.5 rounded-2xl bg-[#FFFDF9] dark:bg-[#141D19] border border-[#DDD8CE] dark:border-[#293832] space-y-2.5 shadow-sm">
+            <div className="flex justify-between items-center text-[11px] font-bold text-[#68736E] dark:text-[#9BAAA4]">
+              <span className="uppercase tracking-wider">Financial Overview</span>
+              <span>Cycle: {billingState?.currentBill?.billingPeriod || new Date().toLocaleString('default', { month: 'short', year: 'numeric' })}</span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-              <div className="p-3.5 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832] space-y-1">
-                <span className="text-[10px] font-bold text-[#68736E] dark:text-[#9BAAA4] uppercase block">Monthly Rent</span>
-                <div className="text-base font-black text-[#1C2522] dark:text-[#F2F5F2] font-mono">
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="p-2.5 rounded-xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832]">
+                <span className="text-[9px] font-bold text-[#68736E] dark:text-[#9BAAA4] uppercase block">Monthly Rent</span>
+                <span className="text-sm font-black text-[#1C2522] dark:text-[#F2F5F2] font-mono block mt-0.5">
                   {formatINR(monthlyRent)}
-                </div>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832] space-y-1">
-                <span className="text-[10px] font-bold text-[#68736E] dark:text-[#9BAAA4] uppercase block">Amount Paid</span>
-                <div className="text-base font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                  {formatINR(totalPaid)}
-                </div>
-              </div>
-
-              {/* Due Amount (Rendered ONLY when remainingDue > 0) */}
-              {remainingDue > 0 ? (
-                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-1">
-                  <span className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase block">Due Amount</span>
-                  <div className="text-base font-black text-amber-600 dark:text-amber-400 font-mono">
-                    {formatINR(remainingDue)}
-                  </div>
-                </div>
-              ) : (
-                <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 space-y-1">
-                  <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase block">Outstanding</span>
-                  <div className="text-base font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                    ₹0 (Settled)
-                  </div>
-                </div>
-              )}
-
-              <div className="p-3.5 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832] space-y-1">
-                <span className="text-[10px] font-bold text-[#68736E] dark:text-[#9BAAA4] uppercase block">Last Paid Date</span>
-                <div className="text-xs font-bold text-[#1C2522] dark:text-[#F2F5F2] truncate mt-1">
-                  {latestApprovedPayment?.date ? formatDate(latestApprovedPayment.date) : 'No payments yet'}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 🧾 4. PAYMENT RECEIPT SECTION */}
-          <div className="p-5 rounded-3xl bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-[#DDD8CE] dark:border-[#293832] space-y-4 shadow-sm">
-            <div className="flex justify-between items-center border-b border-[#DDD8CE] dark:border-[#293832] pb-3">
-              <div className="flex items-center gap-2">
-                <Receipt className="w-4 h-4 text-emerald-500" />
-                <h4 className="text-xs font-black uppercase tracking-wider text-[#1C2522] dark:text-[#F2F5F2]">
-                  Latest Payment Receipt
-                </h4>
-              </div>
-              {latestApprovedPayment && (
-                <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-md bg-emerald-500/10">
-                  {latestApprovedPayment.receiptNumber || 'SSR-RCP-VERIFIED'}
                 </span>
-              )}
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832]">
+                <span className="text-[9px] font-bold text-[#68736E] dark:text-[#9BAAA4] uppercase block">Total Paid</span>
+                <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono block mt-0.5">
+                  {formatINR(totalPaid)}
+                </span>
+              </div>
+
+              <div className={`p-2.5 rounded-xl border ${
+                remainingDue > 0 
+                  ? 'bg-amber-500/10 border-amber-500/30' 
+                  : 'bg-emerald-500/10 border-emerald-500/20'
+              }`}>
+                <span className={`text-[9px] font-black uppercase block ${
+                  remainingDue > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'
+                }`}>
+                  {remainingDue > 0 ? 'Due Amount' : 'Balance'}
+                </span>
+                <span className={`text-sm font-black font-mono block mt-0.5 ${
+                  remainingDue > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'
+                }`}>
+                  {remainingDue > 0 ? formatINR(remainingDue) : '₹0'}
+                </span>
+              </div>
             </div>
-
-            {latestApprovedPayment ? (
-              <div className="p-4 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832] space-y-3">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                  <div>
-                    <span className="text-[10px] text-[#68736E] dark:text-[#9BAAA4] block font-bold">Hostel</span>
-                    <strong className="text-[#1C2522] dark:text-[#F2F5F2]">Sri Sai Siri Hostel</strong>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-[#68736E] dark:text-[#9BAAA4] block font-bold">Payment Date</span>
-                    <strong className="text-[#1C2522] dark:text-[#F2F5F2]">{formatDate(latestApprovedPayment.date || latestApprovedPayment.createdAt)}</strong>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-[#68736E] dark:text-[#9BAAA4] block font-bold">Amount Paid</span>
-                    <strong className="text-emerald-600 dark:text-emerald-400 font-mono">{formatINR(latestApprovedPayment.amount)}</strong>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-[#68736E] dark:text-[#9BAAA4] block font-bold">Payment Method</span>
-                    <strong className="text-[#1C2522] dark:text-[#F2F5F2]">{latestApprovedPayment.paymentMethod || 'ONLINE UPI'}</strong>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-[#DDD8CE] dark:border-[#293832] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                  <div className="text-[11px] text-[#68736E] dark:text-[#9BAAA4]">
-                    Reference / UTR: <span className="font-mono font-bold text-[#1C2522] dark:text-[#F2F5F2]">{latestApprovedPayment.referenceId || 'N/A'}</span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleOpenOfficialReceipt(latestApprovedPayment)}
-                    className="py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>View Official Receipt →</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="p-6 text-center text-xs text-[#68736E] dark:text-[#9BAAA4] rounded-2xl bg-[#F1EEE7]/50 dark:bg-[#1A2621]/50 border border-dashed border-[#DDD8CE] dark:border-[#293832] space-y-1">
-                <Receipt className="w-8 h-8 text-slate-400 mx-auto opacity-40 mb-2" />
-                <p className="font-bold text-[#1C2522] dark:text-[#F2F5F2]">No payments recorded yet</p>
-                <p className="text-[11px]">Once a payment is recorded or approved, the official receipt will be available here.</p>
-              </div>
-            )}
           </div>
 
-          {/* ⚡ 5. MODAL FOOTER ACTIONS */}
+          {/* 🧾 4. GUARANTEED OFFICIAL RECEIPT ACTION CARD */}
+          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-transparent border border-emerald-500/30 flex items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-sm shrink-0">
+                <Receipt className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs font-black text-[#1C2522] dark:text-[#F2F5F2] truncate">
+                  Official Payment Receipt
+                </h4>
+                <p className="text-[10px] text-[#68736E] dark:text-[#9BAAA4] font-medium truncate">
+                  {latestApprovedPayment ? `Ref: ${latestApprovedPayment.receiptNumber || 'VERIFIED'}` : `Rent Tariff • ${roomNumber}`}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleOpenOfficialReceipt()}
+              className="py-2 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer shrink-0"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>View Receipt →</span>
+            </button>
+          </div>
+
+          {/* ⚡ 5. LIFECYCLE CONTROLS & FOOTER */}
           {(onVacate || onBlacklist || onDelete) && (
             <div className="grid grid-cols-3 gap-2 pt-1">
               {onVacate && (
@@ -370,7 +288,7 @@ export default function TenantDetailsModal({
                     onClose();
                     onVacate(tenant);
                   }}
-                  className="py-2.5 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] text-xs font-bold text-[#1C2522] dark:text-[#F2F5F2] hover:bg-[#DDD8CE] transition-colors cursor-pointer text-center"
+                  className="py-2 rounded-xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] text-[11px] font-bold text-[#1C2522] dark:text-[#F2F5F2] hover:bg-[#DDD8CE] transition-colors cursor-pointer text-center"
                 >
                   Vacate Room
                 </button>
@@ -382,7 +300,7 @@ export default function TenantDetailsModal({
                     onClose();
                     onBlacklist(tenant);
                   }}
-                  className="py-2.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-xs font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-500 hover:text-white transition-colors cursor-pointer text-center"
+                  className="py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-500 hover:text-white transition-colors cursor-pointer text-center"
                 >
                   Blacklist
                 </button>
@@ -394,7 +312,7 @@ export default function TenantDetailsModal({
                     onClose();
                     onDelete(tenant);
                   }}
-                  className="py-2.5 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-xs font-bold text-rose-600 hover:bg-rose-500 hover:text-white transition-colors cursor-pointer text-center"
+                  className="py-2 rounded-xl bg-rose-500/15 border border-rose-500/30 text-[11px] font-bold text-rose-600 hover:bg-rose-500 hover:text-white transition-colors cursor-pointer text-center"
                 >
                   Delete
                 </button>
@@ -402,29 +320,27 @@ export default function TenantDetailsModal({
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-[#DDD8CE] dark:border-[#293832]">
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              {onRecordPayment && remainingDue > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    onRecordPayment(tenant);
-                  }}
-                  className="w-full sm:w-auto py-3 px-5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Record Payment ({formatINR(remainingDue)})</span>
-                </button>
-              )}
-            </div>
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#DDD8CE] dark:border-[#293832]">
+            {onRecordPayment && remainingDue > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onRecordPayment(tenant);
+                }}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Record Payment ({formatINR(remainingDue)})</span>
+              </button>
+            ) : <div />}
 
             <button
               type="button"
               onClick={onClose}
-              className="w-full sm:w-auto py-3 px-6 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] text-[#1C2522] dark:text-[#F2F5F2] font-bold text-xs hover:bg-[#E5E0D5] dark:hover:bg-[#25362F] transition-all cursor-pointer"
+              className="py-2.5 px-5 rounded-xl bg-[#F1EEE7] dark:bg-[#1A2621] text-[#1C2522] dark:text-[#F2F5F2] font-bold text-xs hover:bg-[#E5E0D5] dark:hover:bg-[#25362F] transition-all cursor-pointer"
             >
-              Close Details
+              Close
             </button>
           </div>
 

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Printer, Download, Building, ShieldCheck, Share2, Check } from 'lucide-react';
 import { numberToWords, formatDate, formatDateTime } from '@/utils/formatters';
@@ -45,11 +46,16 @@ export default function OfficialPaymentReceiptModal({
   onClose,
   receiptData
 }: OfficialPaymentReceiptModalProps) {
+  const [mounted, setMounted] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [copied, setCopied] = useState(false);
   const receiptRef = useRef<HTMLDivElement | null>(null);
 
-  if (!isOpen || !receiptData) return null;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted || !isOpen || !receiptData) return null;
 
   const totalAmount = receiptData.totalAmount || receiptData.items.reduce((sum, item) => sum + item.amount, 0);
   const amountInWords = numberToWords(totalAmount);
@@ -206,7 +212,7 @@ export default function OfficialPaymentReceiptModal({
     }
   };
 
-  return (
+  return createPortal(
     <AnimatePresence>
       <div className="fixed inset-0 z-[999999] overflow-y-auto font-sans bg-slate-950/75 backdrop-blur-sm flex justify-center items-start p-2 sm:p-6 py-6 sm:py-10 no-print">
         
@@ -319,113 +325,111 @@ export default function OfficialPaymentReceiptModal({
               {/* 2. RECEIPT INFORMATION ROW */}
               <div className="border border-slate-300 rounded-sm bg-slate-50/60 px-3.5 py-2.5 flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs font-bold text-slate-900 gap-1">
                 <div>
-                  Receipt No : <span className="font-mono text-slate-900">{receiptData.receiptNo}</span>
+                  Receipt No : <span className="font-semibold text-slate-800">{receiptData.receiptNo}</span>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div>
-                    Payment Date : <span className="font-mono text-slate-900">{formatDate(receiptData.date)}</span>
-                  </div>
-                  {receiptData.verifiedDate && (
-                    <div className="text-emerald-700 font-extrabold">
-                      Owner Verified Date : <span className="font-mono text-emerald-800">{formatDate(receiptData.verifiedDate)}</span>
-                    </div>
-                  )}
+                <div>
+                  Date : <span className="font-semibold text-slate-800">{formatDate(receiptData.date)}</span>
                 </div>
               </div>
 
-              {/* 3. PAYMENT DETAILS TABLE */}
+              {/* 3. TABLE OF ACCOUNT HEADS */}
               <div className="border border-slate-300 rounded-sm overflow-hidden text-xs">
-                <table className="w-full border-collapse text-left">
+                <table className="w-full text-left">
                   <thead>
-                    <tr className="bg-slate-100/80 border-b border-slate-300 font-bold text-slate-800">
-                      <th className="py-2.5 px-3 text-center border-r border-slate-300 w-14">S.NO</th>
+                    <tr className="bg-slate-100 border-b border-slate-300 text-slate-800 font-bold">
+                      <th className="py-2.5 px-4 w-16 border-r border-slate-300 text-center">S.NO</th>
                       <th className="py-2.5 px-4 border-r border-slate-300">Account Head</th>
-                      <th className="py-2.5 px-4 text-right w-36">Amount (INR)</th>
+                      <th className="py-2.5 px-4 text-right w-40">Amount (INR)</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200 font-medium text-slate-900">
+                  <tbody className="divide-y divide-slate-300 text-slate-900">
                     {receiptData.items && receiptData.items.length > 0 ? (
                       receiptData.items.map((item, idx) => (
                         <tr key={idx}>
-                          <td className="py-2.5 px-3 text-center border-r border-slate-300 font-mono">{idx + 1}</td>
-                          <td className="py-2.5 px-4 border-r border-slate-300 font-semibold">{item.accountHead}</td>
-                          <td className="py-2.5 px-4 text-right font-mono font-bold">{item.amount.toLocaleString('en-IN')}</td>
+                          <td className="py-2.5 px-4 border-r border-slate-300 text-center font-medium">{item.sNo || idx + 1}</td>
+                          <td className="py-2.5 px-4 border-r border-slate-300 font-medium">{item.accountHead}</td>
+                          <td className="py-2.5 px-4 text-right font-bold font-mono">₹{item.amount.toLocaleString('en-IN')}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td className="py-2.5 px-3 text-center border-r border-slate-300 font-mono">1</td>
-                        <td className="py-2.5 px-4 border-r border-slate-300 font-semibold">HOSTEL RENT COLLECTION</td>
-                        <td className="py-2.5 px-4 text-right font-mono font-bold">{totalAmount.toLocaleString('en-IN')}</td>
+                        <td className="py-2.5 px-4 border-r border-slate-300 text-center font-medium">1</td>
+                        <td className="py-2.5 px-4 border-r border-slate-300 font-medium">HOSTEL RENT COLLECTION</td>
+                        <td className="py-2.5 px-4 text-right font-bold font-mono">₹{totalAmount.toLocaleString('en-IN')}</td>
                       </tr>
                     )}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-slate-300 bg-slate-50/40">
-                      <td colSpan={2} className="py-2.5 px-4 text-right font-bold text-slate-900 border-r border-slate-300">
+
+                    {/* Total Row */}
+                    <tr className="bg-slate-50 font-bold border-t border-slate-300 text-slate-900">
+                      <td colSpan={2} className="py-2.5 px-4 text-right border-r border-slate-300 font-bold uppercase tracking-wider text-[11px]">
                         Total :
                       </td>
-                      <td className="py-2.5 px-4 text-right font-black text-slate-900 font-mono text-sm">
-                        {totalAmount.toLocaleString('en-IN')}
+                      <td className="py-2.5 px-4 text-right font-mono text-sm font-black text-emerald-700 bg-emerald-50/50">
+                        ₹{totalAmount.toLocaleString('en-IN')}
                       </td>
                     </tr>
-                  </tfoot>
+                  </tbody>
                 </table>
               </div>
 
-              {/* 4. AMOUNT IN WORDS SECTION */}
-              <div className="bg-[#DCE7F9] border border-[#B8D3F8] p-3 rounded-sm text-xs font-bold text-[#1E3A8A] tracking-tight">
-                In Words : *** {amountInWords} ***
+              {/* 4. AMOUNT IN WORDS */}
+              <div className="p-3 bg-slate-50 border border-slate-300 rounded-sm text-xs">
+                <span className="font-bold text-slate-800">Total Amount In Words: </span>
+                <span className="font-medium text-slate-900 capitalize italic">{amountInWords}</span>
               </div>
 
-              {/* Tenant and Payment Meta Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-sm border border-slate-200">
-                <div>
-                  <span className="text-slate-500 block">Billing Period</span>
-                  <span className="font-bold text-slate-800">{receiptData.billingPeriod || 'Current Month'}</span>
+              {/* 5. PAYMENT METADATA & FOOTER */}
+              <div className="pt-2 text-[11px] text-slate-600 space-y-1.5">
+                <div className="flex flex-wrap justify-between gap-2">
+                  <div>
+                    Payment Mode: <strong className="text-slate-800 uppercase">{receiptData.paymentMethod || 'ONLINE UPI'}</strong>
+                    {receiptData.referenceId && (
+                      <span className="ml-2">
+                        (Ref / UTR: <span className="font-mono font-bold text-slate-800">{receiptData.referenceId}</span>)
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    Recorded By: <strong className="text-slate-800">{receiptData.recordedBy || 'Manager'}</strong>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-slate-500 block">Payment Method</span>
-                  <span className="font-bold text-slate-800">{receiptData.paymentMethod || 'UPI / Online'}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">Transaction Reference</span>
-                  <span className="font-bold font-mono text-slate-800 truncate block">{receiptData.referenceId || 'N/A'}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">Payment Status</span>
-                  <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-black text-[10px]">
-                    {receiptData.paymentStatus || 'PAID'}
-                  </span>
-                </div>
+
+                {receiptData.remainingDue !== undefined && receiptData.remainingDue > 0 && (
+                  <div className="p-2 rounded bg-amber-50 border border-amber-200 text-amber-800 font-bold text-[11px] flex justify-between">
+                    <span>Remaining Due Balance for Period:</span>
+                    <span>₹{receiptData.remainingDue.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
               </div>
 
-              {/* 5. TERMS & CONDITIONS ROW */}
-              <div className="flex justify-between items-center text-[11px] font-semibold text-slate-600 px-0.5">
-                <span>*Terms & Conditions Apply</span>
-                <span>*Payment subject to realization</span>
-              </div>
+              {/* 6. AUTHORIZED SIGNATURE & STAMP */}
+              <div className="pt-6 mt-4 border-t border-slate-200 flex justify-between items-end text-xs">
+                <div className="space-y-1">
+                  <div className="w-16 h-16 rounded-full border-2 border-dashed border-emerald-600/60 flex items-center justify-center text-[10px] font-black text-emerald-700 uppercase tracking-widest text-center rotate-[-12deg] p-1 bg-emerald-50/40">
+                    PAID & VERIFIED
+                  </div>
+                  <p className="text-[10px] text-slate-400">Generated on {generatedTime}</p>
+                </div>
 
-              {/* 6. COMPUTER GENERATED FOOTER */}
-              <div className="bg-[#FEF6D8] border border-[#F7E7A9] p-3 rounded-sm text-center text-xs font-semibold text-[#713F12] space-y-0.5">
-                <p>This is a Computer Generated Receipt. No signature is Required.</p>
-                <p className="font-mono text-[11px] text-[#854D0E]">
-                  Generated On : {generatedTime}
-                </p>
+                <div className="text-right space-y-1">
+                  <div className="h-10 border-b border-slate-400 w-44 ml-auto" />
+                  <p className="font-bold text-slate-800 text-xs">Sri Sai Siri Hostel Management</p>
+                  <p className="text-[10px] text-slate-500">Authorized Signature</p>
+                </div>
               </div>
 
             </div>
 
           </div>
 
-          {/* Bottom Action Bar */}
-          <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-center gap-3 no-print">
+          {/* Action Toolbar (Bottom Bar - Hidden on Print) */}
+          <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 no-print">
             <button
               onClick={handlePrint}
-              className="px-5 py-2.5 rounded-full bg-[#1E293B] text-white font-bold text-xs flex items-center gap-2 hover:bg-slate-800 transition-all cursor-pointer shadow-md"
+              className="px-5 py-2.5 rounded-full bg-white border border-slate-300 text-slate-800 font-bold text-xs flex items-center gap-2 hover:bg-slate-100 transition-all cursor-pointer shadow-sm"
             >
-              <Printer className="w-4 h-4" />
-              <span>Print</span>
+              <Printer className="w-4 h-4 text-slate-600" />
+              <span>Print Receipt</span>
             </button>
 
             <button
@@ -448,7 +452,8 @@ export default function OfficialPaymentReceiptModal({
 
         </motion.div>
       </div>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
 
