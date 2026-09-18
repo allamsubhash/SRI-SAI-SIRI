@@ -214,7 +214,7 @@ export default function OfficialPaymentReceiptModal({
 
   return createPortal(
     <AnimatePresence>
-      <div className="fixed inset-0 z-[999999] overflow-y-auto font-sans bg-slate-950/75 backdrop-blur-sm flex justify-center items-start p-2 sm:p-6 py-6 sm:py-10 no-print">
+      <div className="fixed inset-0 z-[999999] overflow-y-auto font-sans bg-slate-950/80 backdrop-blur-md flex justify-center items-center p-3 sm:p-4 no-print">
         
         {/* Printable CSS Rules */}
         <style jsx global>{`
@@ -245,126 +245,130 @@ export default function OfficialPaymentReceiptModal({
 
         {/* Modal Outer Container */}
         <motion.div 
-          initial={{ scale: 0.94, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.94, opacity: 0 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-          className="relative w-full max-w-[780px] bg-white rounded-3xl shadow-2xl overflow-hidden z-10 text-slate-900 border border-slate-200 text-left my-auto sm:my-4"
+          initial={{ scale: 0.95, opacity: 0, y: 10 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.95, opacity: 0, y: 10 }}
+          transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+          className="relative w-full max-w-[490px] max-h-[92vh] flex flex-col bg-white rounded-3xl shadow-2xl overflow-hidden z-10 text-slate-900 border border-slate-200 text-left my-auto"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Modal Header Bar with Close Button */}
-          <div className="flex items-center justify-between px-6 py-3.5 border-b border-slate-200 bg-slate-50 no-print">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50 shrink-0 no-print">
             <div className="flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-emerald-600" />
-              <span className="text-xs font-black text-slate-800 uppercase tracking-wider">Official Hostel Payment Receipt</span>
+              <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                <ShieldCheck className="w-3.5 h-3.5" />
+              </div>
+              <span className="text-xs font-black text-slate-800 uppercase tracking-wider">Official Payment Voucher</span>
             </div>
 
             <button
               onClick={onClose}
-              className="p-1.5 rounded-full hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
+              className="p-1 rounded-full hover:bg-slate-200 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
               title="Close Receipt"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Receipt Body Container (Full Viewable) */}
-          <div className="p-4 sm:p-8 space-y-5 bg-white">
+          {/* Receipt Body Container (Scrollable if height exceeds screen) */}
+          <div className="p-4 overflow-y-auto bg-slate-100/60">
             
-            {/* 📄 THE EXACT OFFICIAL RECEIPT BOX (MATCHING REFERENCE IMAGE) */}
+            {/* 📄 THE EXACT COMPACT OFFICIAL RECEIPT BOX */}
             <div 
               id="printable-official-receipt"
               ref={receiptRef}
-              className="bg-white p-5 sm:p-8 rounded-2xl border border-slate-300 shadow-sm space-y-4 text-slate-900 font-sans"
+              className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-300 shadow-sm space-y-3.5 text-slate-900 font-sans text-xs"
             >
               
               {/* TOP HEADER WITH EMBLEM & TITLE */}
-              <div className="text-center space-y-1">
-                <div className="flex items-center justify-center gap-2">
-                  <div className="w-9 h-9 rounded-full bg-[#702434] text-white flex items-center justify-center font-black text-sm shadow-sm">
-                    <Building className="w-5 h-5 text-white" />
+              <div className="text-center space-y-0.5">
+                <div className="flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-full bg-[#702434] text-white flex items-center justify-center font-black shadow-sm mb-1">
+                    <Building className="w-4 h-4 text-white" />
                   </div>
                 </div>
-                <h1 className="text-xl sm:text-2xl font-black text-[#702434] tracking-tight">
+                <h1 className="text-base sm:text-lg font-black text-[#702434] tracking-tight leading-tight uppercase">
                   SRI SAI SIRI BOYS HOSTEL
                 </h1>
-                <h2 className="text-base sm:text-lg font-bold text-[#702434] tracking-normal">
+                <h2 className="text-xs font-bold text-[#702434]/85 tracking-normal">
                   Online Payment Receipt
                 </h2>
               </div>
 
               {/* 1. TENANT DETAILS SECTION (2 COLUMNS BOX) */}
-              <div className="border border-slate-300 rounded-sm overflow-hidden text-xs bg-white">
-                <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-slate-300">
+              <div className="border border-slate-300 rounded-lg overflow-hidden text-[11px] bg-slate-50/40">
+                <div className="grid grid-cols-2 divide-x divide-slate-300">
                   {/* Left Column */}
-                  <div className="p-3 space-y-2">
-                    <div className="flex">
-                      <span className="w-36 font-semibold text-slate-700">Tenant ID</span>
-                      <span className="font-bold text-slate-900">: {receiptData.tenantId || 'TEN-001'}</span>
+                  <div className="p-2 sm:p-2.5 space-y-1">
+                    <div className="flex justify-between sm:justify-start gap-1">
+                      <span className="text-slate-600 font-medium">Tenant ID:</span>
+                      <span className="font-bold text-slate-900">{receiptData.tenantId || 'TEN-001'}</span>
                     </div>
-                    <div className="flex">
-                      <span className="w-36 font-semibold text-slate-700">Tenant Name</span>
-                      <span className="font-bold text-slate-900">: {receiptData.tenantName || 'SUBHASH'}</span>
+                    <div className="flex justify-between sm:justify-start gap-1">
+                      <span className="text-slate-600 font-medium">Name:</span>
+                      <span className="font-bold text-slate-900 truncate max-w-[120px]">{receiptData.tenantName || 'Resident'}</span>
                     </div>
                   </div>
 
                   {/* Right Column */}
-                  <div className="p-3 space-y-2">
-                    <div className="flex">
-                      <span className="w-36 font-semibold text-slate-700">Room Number</span>
-                      <span className="font-bold text-slate-900">: {receiptData.roomNumber || 'A-101'}</span>
+                  <div className="p-2 sm:p-2.5 space-y-1">
+                    <div className="flex justify-between sm:justify-start gap-1">
+                      <span className="text-slate-600 font-medium">Room:</span>
+                      <span className="font-bold text-slate-900">{receiptData.roomNumber || 'A-101'}</span>
                     </div>
-                    <div className="flex">
-                      <span className="w-36 font-semibold text-slate-700">Mobile Number</span>
-                      <span className="font-bold text-slate-900">: {receiptData.mobileNumber || '9876543210'}</span>
+                    <div className="flex justify-between sm:justify-start gap-1">
+                      <span className="text-slate-600 font-medium">Mobile:</span>
+                      <span className="font-bold text-slate-900">{receiptData.mobileNumber || '9876543210'}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* 2. RECEIPT INFORMATION ROW */}
-              <div className="border border-slate-300 rounded-sm bg-slate-50/60 px-3.5 py-2.5 flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs font-bold text-slate-900 gap-1">
+              <div className="border border-slate-300 rounded-lg bg-slate-50 px-3 py-1.5 flex justify-between items-center text-[11px] font-bold text-slate-900">
                 <div>
-                  Receipt No : <span className="font-semibold text-slate-800">{receiptData.receiptNo}</span>
+                  <span className="text-slate-500 font-medium">Receipt No: </span>
+                  <span className="font-mono font-bold text-slate-800">{receiptData.receiptNo}</span>
                 </div>
                 <div>
-                  Date : <span className="font-semibold text-slate-800">{formatDate(receiptData.date)}</span>
+                  <span className="text-slate-500 font-medium">Date: </span>
+                  <span className="font-semibold text-slate-800">{formatDate(receiptData.date)}</span>
                 </div>
               </div>
 
               {/* 3. TABLE OF ACCOUNT HEADS */}
-              <div className="border border-slate-300 rounded-sm overflow-hidden text-xs">
-                <table className="w-full text-left">
+              <div className="border border-slate-300 rounded-lg overflow-hidden text-[11px]">
+                <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-100 border-b border-slate-300 text-slate-800 font-bold">
-                      <th className="py-2.5 px-4 w-16 border-r border-slate-300 text-center">S.NO</th>
-                      <th className="py-2.5 px-4 border-r border-slate-300">Account Head</th>
-                      <th className="py-2.5 px-4 text-right w-40">Amount (INR)</th>
+                      <th className="py-1.5 px-2.5 w-10 border-r border-slate-300 text-center">S.No</th>
+                      <th className="py-1.5 px-3 border-r border-slate-300">Account Head</th>
+                      <th className="py-1.5 px-3 text-right w-28">Amount (INR)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-300 text-slate-900">
                     {receiptData.items && receiptData.items.length > 0 ? (
                       receiptData.items.map((item, idx) => (
                         <tr key={idx}>
-                          <td className="py-2.5 px-4 border-r border-slate-300 text-center font-medium">{item.sNo || idx + 1}</td>
-                          <td className="py-2.5 px-4 border-r border-slate-300 font-medium">{item.accountHead}</td>
-                          <td className="py-2.5 px-4 text-right font-bold font-mono">₹{item.amount.toLocaleString('en-IN')}</td>
+                          <td className="py-1.5 px-2.5 border-r border-slate-300 text-center font-medium text-slate-600">{item.sNo || idx + 1}</td>
+                          <td className="py-1.5 px-3 border-r border-slate-300 font-medium text-slate-800">{item.accountHead}</td>
+                          <td className="py-1.5 px-3 text-right font-bold font-mono">₹{item.amount.toLocaleString('en-IN')}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td className="py-2.5 px-4 border-r border-slate-300 text-center font-medium">1</td>
-                        <td className="py-2.5 px-4 border-r border-slate-300 font-medium">HOSTEL RENT COLLECTION</td>
-                        <td className="py-2.5 px-4 text-right font-bold font-mono">₹{totalAmount.toLocaleString('en-IN')}</td>
+                        <td className="py-1.5 px-2.5 border-r border-slate-300 text-center font-medium">1</td>
+                        <td className="py-1.5 px-3 border-r border-slate-300 font-medium">HOSTEL RENT COLLECTION</td>
+                        <td className="py-1.5 px-3 text-right font-bold font-mono">₹{totalAmount.toLocaleString('en-IN')}</td>
                       </tr>
                     )}
 
                     {/* Total Row */}
                     <tr className="bg-slate-50 font-bold border-t border-slate-300 text-slate-900">
-                      <td colSpan={2} className="py-2.5 px-4 text-right border-r border-slate-300 font-bold uppercase tracking-wider text-[11px]">
-                        Total :
+                      <td colSpan={2} className="py-1.5 px-3 text-right border-r border-slate-300 font-bold uppercase tracking-wider text-[10px]">
+                        Total Amount:
                       </td>
-                      <td className="py-2.5 px-4 text-right font-mono text-sm font-black text-emerald-700 bg-emerald-50/50">
+                      <td className="py-1.5 px-3 text-right font-mono text-xs font-black text-emerald-700 bg-emerald-50/60">
                         ₹{totalAmount.toLocaleString('en-IN')}
                       </td>
                     </tr>
@@ -373,19 +377,19 @@ export default function OfficialPaymentReceiptModal({
               </div>
 
               {/* 4. AMOUNT IN WORDS */}
-              <div className="p-3 bg-slate-50 border border-slate-300 rounded-sm text-xs">
-                <span className="font-bold text-slate-800">Total Amount In Words: </span>
-                <span className="font-medium text-slate-900 capitalize italic">{amountInWords}</span>
+              <div className="p-2 sm:p-2.5 bg-blue-50/60 border border-blue-200 rounded-lg text-[10px] sm:text-[11px] text-blue-900">
+                <span className="font-bold">In Words: </span>
+                <span className="font-semibold italic capitalize">{amountInWords} Only</span>
               </div>
 
               {/* 5. PAYMENT METADATA & FOOTER */}
-              <div className="pt-2 text-[11px] text-slate-600 space-y-1.5">
-                <div className="flex flex-wrap justify-between gap-2">
+              <div className="text-[10px] text-slate-600 space-y-1">
+                <div className="flex flex-wrap justify-between gap-1">
                   <div>
-                    Payment Mode: <strong className="text-slate-800 uppercase">{receiptData.paymentMethod || 'ONLINE UPI'}</strong>
+                    Payment Mode: <strong className="text-slate-800 uppercase">{receiptData.paymentMethod || 'UPI'}</strong>
                     {receiptData.referenceId && (
-                      <span className="ml-2">
-                        (Ref / UTR: <span className="font-mono font-bold text-slate-800">{receiptData.referenceId}</span>)
+                      <span className="ml-1 text-slate-500">
+                        (Ref: <span className="font-mono font-bold text-slate-800">{receiptData.referenceId}</span>)
                       </span>
                     )}
                   </div>
@@ -395,26 +399,26 @@ export default function OfficialPaymentReceiptModal({
                 </div>
 
                 {receiptData.remainingDue !== undefined && receiptData.remainingDue > 0 && (
-                  <div className="p-2 rounded bg-amber-50 border border-amber-200 text-amber-800 font-bold text-[11px] flex justify-between">
-                    <span>Remaining Due Balance for Period:</span>
-                    <span>₹{receiptData.remainingDue.toLocaleString('en-IN')}</span>
+                  <div className="p-1.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 font-bold text-[10px] flex justify-between">
+                    <span>Remaining Due for Period:</span>
+                    <span className="font-mono">₹{receiptData.remainingDue.toLocaleString('en-IN')}</span>
                   </div>
                 )}
               </div>
 
               {/* 6. AUTHORIZED SIGNATURE & STAMP */}
-              <div className="pt-6 mt-4 border-t border-slate-200 flex justify-between items-end text-xs">
-                <div className="space-y-1">
-                  <div className="w-16 h-16 rounded-full border-2 border-dashed border-emerald-600/60 flex items-center justify-center text-[10px] font-black text-emerald-700 uppercase tracking-widest text-center rotate-[-12deg] p-1 bg-emerald-50/40">
-                    PAID & VERIFIED
+              <div className="pt-2 border-t border-slate-200 flex justify-between items-end text-[10px]">
+                <div className="space-y-0.5">
+                  <div className="px-2 py-0.5 rounded-full border border-emerald-600 text-[9px] font-black text-emerald-700 uppercase tracking-wider text-center bg-emerald-50 inline-block">
+                    ✓ PAID & VERIFIED
                   </div>
-                  <p className="text-[10px] text-slate-400">Generated on {generatedTime}</p>
+                  <p className="text-[9px] text-slate-400">Generated on {generatedTime}</p>
                 </div>
 
-                <div className="text-right space-y-1">
-                  <div className="h-10 border-b border-slate-400 w-44 ml-auto" />
-                  <p className="font-bold text-slate-800 text-xs">Sri Sai Siri Hostel Management</p>
-                  <p className="text-[10px] text-slate-500">Authorized Signature</p>
+                <div className="text-right space-y-0.5">
+                  <div className="h-6 border-b border-slate-300 w-32 ml-auto" />
+                  <p className="font-bold text-slate-800 text-[10px]">Hostel Management</p>
+                  <p className="text-[9px] text-slate-400">Authorized Signatory</p>
                 </div>
               </div>
 
@@ -423,30 +427,30 @@ export default function OfficialPaymentReceiptModal({
           </div>
 
           {/* Action Toolbar (Bottom Bar - Hidden on Print) */}
-          <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 no-print">
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-slate-200 bg-slate-50 shrink-0 no-print">
             <button
               onClick={handlePrint}
-              className="px-5 py-2.5 rounded-full bg-white border border-slate-300 text-slate-800 font-bold text-xs flex items-center gap-2 hover:bg-slate-100 transition-all cursor-pointer shadow-sm"
+              className="px-3.5 py-2 rounded-xl bg-white border border-slate-300 text-slate-800 font-bold text-xs flex items-center gap-1.5 hover:bg-slate-100 transition-all cursor-pointer shadow-sm"
             >
-              <Printer className="w-4 h-4 text-slate-600" />
-              <span>Print Receipt</span>
+              <Printer className="w-3.5 h-3.5 text-slate-600" />
+              <span>Print</span>
             </button>
 
             <button
               onClick={handleShare}
-              className="px-5 py-2.5 rounded-full bg-[#334155] text-white font-bold text-xs flex items-center gap-2 hover:bg-slate-700 transition-all cursor-pointer shadow-md"
+              className="px-3.5 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
             >
-              {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
-              <span>{copied ? 'Copied Receipt!' : 'Share'}</span>
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5" />}
+              <span>{copied ? 'Copied' : 'Share'}</span>
             </button>
 
             <button
               onClick={handleDownloadPDF}
               disabled={downloading}
-              className="px-5 py-2.5 rounded-full bg-[#0F172A] text-white font-bold text-xs flex items-center gap-2 hover:bg-slate-800 transition-all cursor-pointer shadow-md disabled:opacity-50"
+              className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md disabled:opacity-50"
             >
-              <Download className="w-4 h-4" />
-              <span>{downloading ? 'Exporting PDF...' : 'Download PDF'}</span>
+              <Download className="w-3.5 h-3.5" />
+              <span>{downloading ? 'Downloading...' : 'Download PDF'}</span>
             </button>
           </div>
 

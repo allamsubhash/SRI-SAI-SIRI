@@ -6,8 +6,7 @@ import {
   Receipt, 
   FileText, 
   Plus, 
-  Edit2, 
-  ChevronRight
+  Edit2
 } from 'lucide-react';
 import NeonModal from '@/components/NeonModal';
 import { formatINR, formatDate, formatDateTime } from '@/utils/formatters';
@@ -204,9 +203,9 @@ export default function TenantDetailsModal({
             </div>
 
             <div className="p-3 rounded-2xl bg-[#FFFDF9] dark:bg-[#141D19] border border-[#DDD8CE] dark:border-[#293832] space-y-0.5">
-              <span className="text-[10px] font-bold text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider block">Joined Date</span>
-              <span className="font-bold text-[#1C2522] dark:text-[#F2F5F2] block truncate">
-                {formatDate(moveInDate)}
+              <span className="text-[10px] font-bold text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider block">Email / Login</span>
+              <span className="font-bold text-[#1C2522] dark:text-[#F2F5F2] block truncate" title={email}>
+                {email}
               </span>
             </div>
           </div>

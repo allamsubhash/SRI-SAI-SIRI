@@ -367,6 +367,20 @@ export default function OwnerPaymentsPage() {
     setShowReceiptModal(true);
   };
 
+  // Open Tenant Profile Popup Modal
+  const handleOpenTenantPopupForBill = (bill: UnifiedBill) => {
+    setSelectedTenantForPopup({
+      id: bill.tenantId,
+      name: bill.tenantName,
+      roomNumber: bill.roomNumber,
+      buildingName: bill.buildingName,
+      rentAmount: bill.amount,
+      phone: bill.tenantPhone,
+      email: bill.tenantEmail,
+      status: bill.status
+    });
+  };
+
   // Open Reminder Modal
   const handleOpenReminderModal = (bill: UnifiedBill) => {
     setReminderTargetBill(bill);
@@ -867,28 +881,11 @@ export default function OwnerPaymentsPage() {
                     {bills.map((bill) => (
                       <tr 
                         key={bill.id}
-                        onClick={() => {
-                          setSelectedBillForDetails(bill);
-                          setShowDetailsDrawer(true);
-                        }}
+                        onClick={() => handleOpenTenantPopupForBill(bill)}
                         className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group"
                       >
                         {/* Tenant Name */}
-                        <td 
-                          className="py-3.5 px-4 font-bold text-slate-900 dark:text-white"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedTenantForPopup({
-                              id: bill.tenantId,
-                              name: bill.tenantName,
-                              roomNumber: bill.roomNumber,
-                              buildingName: bill.buildingName,
-                              rentAmount: bill.amount,
-                              phone: bill.tenantPhone,
-                              email: bill.tenantEmail
-                            });
-                          }}
-                        >
+                        <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
                           <div className="flex items-center gap-2.5 hover:text-emerald-600 transition-colors">
                             <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center font-black text-slate-700 dark:text-slate-300 shrink-0">
                               {bill.tenantName.charAt(0)}
@@ -920,27 +917,25 @@ export default function OwnerPaymentsPage() {
                           {formatINR(bill.amount)}
                         </td>
 
-                        {/* Paid */}
+                        {/* Paid Amount */}
                         <td className="py-3.5 px-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
                           {formatINR(bill.paidAmount)}
                         </td>
 
-                        {/* Outstanding */}
+                        {/* Outstanding Remaining */}
                         <td className="py-3.5 px-3 text-right font-mono font-black text-slate-900 dark:text-white">
-                          {bill.outstandingAmount > 0 ? (
-                            <span className="text-amber-600 dark:text-amber-400 font-bold">{formatINR(bill.outstandingAmount)}</span>
-                          ) : (
-                            <span className="text-slate-400 font-normal">₹0</span>
-                          )}
+                          <span className={bill.outstandingAmount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}>
+                            {formatINR(bill.outstandingAmount)}
+                          </span>
                         </td>
 
                         {/* Due Date */}
-                        <td className="py-3.5 px-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                        <td className="py-3.5 px-3 text-slate-600 dark:text-slate-400 whitespace-nowrap">
                           {formatDate(bill.dueDate)}
                         </td>
 
-                        {/* Status */}
-                        <td className="py-3.5 px-3 whitespace-nowrap">
+                        {/* Status Badge */}
+                        <td className="py-3.5 px-3">
                           {renderStatusBadge(bill.status)}
                         </td>
 
@@ -950,7 +945,7 @@ export default function OwnerPaymentsPage() {
                             {bill.outstandingAmount > 0 && (
                               <button
                                 onClick={() => handleOpenRecordForBill(bill)}
-                                title="Record Payment"
+                                title="Record Manual Payment"
                                 className="p-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 transition-colors cursor-pointer"
                               >
                                 <Plus className="w-3.5 h-3.5" />
@@ -960,7 +955,7 @@ export default function OwnerPaymentsPage() {
                             <button
                               onClick={() => handleOpenReceipt(bill)}
                               title="View Official Receipt"
-                              className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
                             >
                               <Receipt className="w-3.5 h-3.5" />
                             </button>
@@ -976,12 +971,9 @@ export default function OwnerPaymentsPage() {
                             )}
 
                             <button
-                              onClick={() => {
-                                setSelectedBillForDetails(bill);
-                                setShowDetailsDrawer(true);
-                              }}
-                              title="Open Full Details"
-                              className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 transition-colors cursor-pointer"
+                              onClick={() => handleOpenTenantPopupForBill(bill)}
+                              title="Open Resident Profile Popup"
+                              className="p-1.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 transition-colors cursor-pointer"
                             >
                               <ChevronRight className="w-3.5 h-3.5" />
                             </button>
@@ -999,10 +991,7 @@ export default function OwnerPaymentsPage() {
                 {bills.map((bill) => (
                   <div
                     key={bill.id}
-                    onClick={() => {
-                      setSelectedBillForDetails(bill);
-                      setShowDetailsDrawer(true);
-                    }}
+                    onClick={() => handleOpenTenantPopupForBill(bill)}
                     className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-3 cursor-pointer"
                   >
                     <div className="flex items-start justify-between">
