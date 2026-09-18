@@ -31,6 +31,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import NeonModal from '@/components/NeonModal';
+import TenantDetailsModal from '@/components/TenantDetailsModal';
 import { useToast } from '@/components/ToastProvider';
 import { formatINR, formatDate } from '@/utils/formatters';
 
@@ -693,137 +694,16 @@ export default function TenantsManagement() {
             )}
           </motion.div>
 
-      {/* 📌 5. FULL RESIDENT PROFILE POPUP MODAL */}
-      {activeResident && (
-        <NeonModal
-          isOpen={true}
-          onClose={() => setActiveResident(null)}
-          title={`Resident Profile: ${activeResident.name}`}
-          subtitle={`Room ${activeResident.roomNumber || 'A-101'} · Bed ${activeResident.bedNumber || 'Bed A'} • Status: ${activeResident.status || 'Active'}`}
-          size="md"
-          accentColor="purple"
-        >
-          <div className="space-y-5 text-left">
-            
-            {/* Header Avatar & Summary */}
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-[#2563EB] text-white font-black flex items-center justify-center text-xl shadow-sm shrink-0">
-                {activeResident.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-black text-[#1C2522] dark:text-[#F2F5F2] truncate">{activeResident.name}</h3>
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
-                    ● {activeResident.status || 'Active'}
-                  </span>
-                </div>
-                <p className="text-xs font-bold text-[#68736E] dark:text-[#9BAAA4] mt-0.5">
-                  {activeResident.gender || 'Male'} • Room {activeResident.roomNumber || 'A-101'} · Bed {activeResident.bedNumber || 'Bed A'}
-                </p>
-              </div>
-            </div>
-
-            {/* Section 1: CONTACT */}
-            <div className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] space-y-2 text-xs">
-              <h4 className="text-[10px] font-black uppercase tracking-wider text-[#68736E] dark:text-[#9BAAA4]">CONTACT</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-bold">
-                <div>
-                  <span className="text-[#68736E] dark:text-[#9BAAA4] block">Phone</span>
-                  <a href={`tel:${activeResident.phone}`} className="font-black text-[#2563EB] dark:text-[#60A5FA] hover:underline block mt-0.5">
-                    {activeResident.phone || '+91 98765 43210'}
-                  </a>
-                </div>
-                <div>
-                  <span className="text-[#68736E] dark:text-[#9BAAA4] block">Email</span>
-                  <a href={`mailto:${activeResident.email}`} className="font-black text-[#2563EB] dark:text-[#60A5FA] hover:underline block mt-0.5 truncate">
-                    {activeResident.email || 'tenant@srisaisiri.com'}
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            {/* Section 2 & 3: ROOM & PAYMENT GRID */}
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] space-y-1">
-                <span className="text-[#68736E] dark:text-[#9BAAA4] text-[10px] font-bold block">Room & Bed</span>
-                <span className="font-black text-[#1C2522] dark:text-[#F2F5F2] block">
-                  Room {activeResident.roomNumber || 'A-101'} ({activeResident.bedNumber || 'Bed A'})
-                </span>
-              </div>
-              <div className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] space-y-1">
-                <span className="text-[#68736E] dark:text-[#9BAAA4] text-[10px] font-bold block">Monthly Rent</span>
-                <span className="font-black text-emerald-600 dark:text-emerald-400 block">
-                  ₹{(activeResident.rentAmount || 8500).toLocaleString()}/mo (Paid)
-                </span>
-              </div>
-            </div>
-
-            {/* Section 4: TENANCY */}
-            <div className="p-4 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] space-y-1 text-xs">
-              <span className="text-[#68736E] dark:text-[#9BAAA4] text-[10px] font-bold block">Joining Date & Duration</span>
-              <span className="font-black text-[#1C2522] dark:text-[#F2F5F2] block">
-                {activeResident.moveInDate || '15 Jan 2026'} • Active Resident
-              </span>
-            </div>
-
-            {/* Section 5: ACTIONS GRID */}
-            <div className="space-y-2 pt-2 border-t border-[#DDD8CE] dark:border-[#293832]">
-              <div className="grid grid-cols-2 gap-2">
-                <a
-                  href={`tel:${activeResident.phone || '+919876543210'}`}
-                  className="py-3 rounded-2xl bg-[#2563EB] text-white font-black text-xs text-center hover:scale-[1.01] transition-transform block"
-                >
-                  Call Resident
-                </a>
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleOpenEditModal(activeResident);
-                    setActiveResident(null);
-                  }}
-                  className="py-3 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] font-black text-xs text-center hover:scale-[1.01] transition-transform block cursor-pointer"
-                >
-                  Edit Profile
-                </button>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setVacateDialogTenant(activeResident);
-                    setActiveResident(null);
-                  }}
-                  className="py-2.5 rounded-2xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832] text-[#1C2522] dark:text-[#F2F5F2] font-bold hover:bg-[#DDD8CE] transition-colors cursor-pointer"
-                >
-                  Vacate
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBlacklistDialogTenant(activeResident);
-                    setActiveResident(null);
-                  }}
-                  className="py-2.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-bold hover:bg-amber-500 hover:text-white transition-colors cursor-pointer"
-                >
-                  Blacklist
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDeleteConfirmTenant(activeResident);
-                    setActiveResident(null);
-                  }}
-                  className="py-2.5 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-600 font-bold hover:bg-rose-500 hover:text-white transition-colors cursor-pointer"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-
-          </div>
-        </NeonModal>
-      )}
+      {/* 📌 5. FULL RESIDENT PROFILE POPUP MODAL (WITH LIVE BILLING & OFFICIAL RECEIPT) */}
+      <TenantDetailsModal
+        isOpen={!!activeResident}
+        onClose={() => setActiveResident(null)}
+        tenant={activeResident}
+        onEditProfile={(t) => handleOpenEditModal(t)}
+        onVacate={(t) => setVacateDialogTenant(t)}
+        onBlacklist={(t) => setBlacklistDialogTenant(t)}
+        onDelete={(t) => setDeleteConfirmTenant(t)}
+      />
 
       {/* 📝 6. UNIFIED REGISTER RESIDENT POPUP MODAL (ALL-IN-ONE POPUP) */}
       {showRegModal && (

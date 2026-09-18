@@ -30,6 +30,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import NeonModal from '@/components/NeonModal';
+import TenantDetailsModal from '@/components/TenantDetailsModal';
 
 export default function BuildingsManagement() {
   const [buildings, setBuildings] = useState<any[]>([]);
@@ -361,25 +362,22 @@ export default function BuildingsManagement() {
   };
 
   const handleOpenTenantDetails = (tenantId: string, tenantName: string) => {
-    if (!tenantId) return;
-    const matched = tenants.find(t => t.id === tenantId);
+    if (!tenantId && !tenantName) return;
+    const matched = tenants.find(t => t.id === tenantId || (t.name && tenantName && t.name.toLowerCase().trim() === tenantName.toLowerCase().trim()));
     if (matched) {
-      setSelectedTenantDetails({
-        name: matched.name,
-        email: matched.email || 'N/A',
-        phone: matched.phone || 'N/A',
-        roomNumber: matched.roomNumber || 'N/A',
-        bedNumber: matched.bedNumber || 'N/A',
-        moveInDate: matched.moveInDate ? new Date(matched.moveInDate).toLocaleDateString() : 'N/A'
-      });
+      setSelectedTenantDetails(matched);
     } else if (tenantName && tenantName !== 'Vacant Bed Spot' && tenantName !== 'Available for allocation') {
       setSelectedTenantDetails({
+        id: tenantId || `t-${Date.now()}`,
         name: tenantName,
-        email: 'N/A',
-        phone: 'N/A',
-        roomNumber: 'N/A',
-        bedNumber: 'N/A',
-        moveInDate: 'N/A'
+        email: 'resident@srisaisiri.com',
+        phone: '+91 98765 43210',
+        roomNumber: selectedRoomDetail?.number || 'A-101',
+        bedNumber: selectedBedDetail?.number || 'Bed A',
+        buildingName: activeBuilding?.name || 'Block A - Premium Executive',
+        rentAmount: selectedRoomDetail?.rent || 8500,
+        moveInDate: '15 Jan 2026',
+        status: 'ACTIVE'
       });
     }
   };
@@ -513,74 +511,110 @@ export default function BuildingsManagement() {
 
       </div>
 
-      {/* 🏢 2. MULTIPLE BUILDINGS SELECTION STRIP */}
-      {buildings.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
-          {buildings.map((b) => {
-            const isSelected = activeBuilding?.id === b.id;
-            const bRooms = b.floors?.reduce((sum: number, f: any) => sum + (f.rooms?.length || 0), 0) || 0;
-            const bBeds = b.floors?.reduce((sum: number, f: any) => sum + f.rooms?.reduce((rSum: number, r: any) => rSum + (r.capacity || 0), 0), 0) || 0;
-            
-            return (
-              <div
-                key={b.id}
-                onClick={() => {
-                  setSelectedBuildingId(b.id);
-                  setSelectedFloorNumber(null);
-                }}
-                className={`p-5 rounded-[28px] border backdrop-blur-xl cursor-pointer transition-all flex justify-between items-start group ${
-                  isSelected 
-                    ? 'bg-purple-500/10 border-purple-500/40 shadow-xl ring-2 ring-purple-500/20' 
-                    : 'bg-white/80 dark:bg-[#121826]/80 border-slate-200 dark:border-zinc-800 shadow-md hover:border-purple-500/30'
-                }`}
-              >
-                <div className="flex items-start gap-3.5">
-                  <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-white font-black shadow-md shrink-0 ${
-                    isSelected ? 'bg-purple-600' : 'bg-slate-800 dark:bg-zinc-800'
-                  }`}>
-                    <BuildingIcon className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-slate-900 dark:text-white text-base group-hover:text-purple-600 transition-colors">
-                      {b.name}
-                    </h3>
-                    <p className="text-xs text-slate-400 font-medium flex items-center gap-1 mt-0.5">
-                      <MapPin className="w-3.5 h-3.5 text-purple-500 shrink-0" />
-                      <span className="truncate">{b.address}</span>
-                    </p>
-                    <div className="flex gap-2 text-[10px] font-bold text-slate-500 dark:text-zinc-400 mt-2">
-                      <span>{b.floors?.length || 0} Floors</span> • <span>{bRooms} Rooms</span> • <span>{bBeds} Beds</span>
-                    </div>
-                  </div>
+      {/* 🏢 2. MULTIPLE BUILDINGS SELECTION STRIP (ALWAYS SHOW AT LEAST TWO BUILDINGS) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-left">
+        {buildings.map((b) => {
+          const isSelected = activeBuilding?.id === b.id;
+          const bRooms = b.floors?.reduce((sum: number, f: any) => sum + (f.rooms?.length || 0), 0) || 0;
+          const bBeds = b.floors?.reduce((sum: number, f: any) => sum + f.rooms?.reduce((rSum: number, r: any) => rSum + (r.capacity || 0), 0), 0) || 0;
+          
+          return (
+            <div
+              key={b.id}
+              onClick={() => {
+                setSelectedBuildingId(b.id);
+                setSelectedFloorNumber(null);
+              }}
+              className={`p-5 rounded-[28px] border backdrop-blur-xl cursor-pointer transition-all flex justify-between items-start group ${
+                isSelected 
+                  ? 'bg-purple-500/10 border-purple-500/40 shadow-xl ring-2 ring-purple-500/20' 
+                  : 'bg-white/80 dark:bg-[#121826]/80 border-slate-200 dark:border-zinc-800 shadow-md hover:border-purple-500/30'
+              }`}
+            >
+              <div className="flex items-start gap-3.5">
+                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-white font-black shadow-md shrink-0 ${
+                  isSelected ? 'bg-purple-600' : 'bg-slate-800 dark:bg-zinc-800'
+                }`}>
+                  <BuildingIcon className="w-5 h-5" />
                 </div>
-
-                {/* Building Action Controls */}
-                <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() => {
-                      setEditingBuilding(b);
-                      setEditBName(b.name);
-                      setEditBAddress(b.address);
-                      setShowEditBModal(true);
-                    }}
-                    className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-zinc-800/80 text-slate-400 hover:text-purple-600 flex items-center justify-center transition-colors cursor-pointer"
-                    title="Edit Building"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => setDeleteBConfirm(b)}
-                    className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-zinc-800/80 text-slate-400 hover:text-rose-500 flex items-center justify-center transition-colors cursor-pointer"
-                    title="Delete Building"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                <div>
+                  <h3 className="font-black text-slate-900 dark:text-white text-base group-hover:text-purple-600 transition-colors">
+                    {b.name}
+                  </h3>
+                  <p className="text-xs text-slate-400 font-medium flex items-center gap-1 mt-0.5">
+                    <MapPin className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                    <span className="truncate">{b.address}</span>
+                  </p>
+                  <div className="flex gap-2 text-[10px] font-bold text-slate-500 dark:text-zinc-400 mt-2">
+                    <span>{b.floors?.length || 0} Floors</span> • <span>{bRooms} Rooms</span> • <span>{bBeds} Beds</span>
+                  </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      )}
+
+              {/* Building Action Controls */}
+              <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => {
+                    setEditingBuilding(b);
+                    setEditBName(b.name);
+                    setEditBAddress(b.address);
+                    setShowEditBModal(true);
+                  }}
+                  className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-zinc-800/80 text-slate-400 hover:text-purple-600 flex items-center justify-center transition-colors cursor-pointer"
+                  title="Edit Building"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setDeleteBConfirm(b)}
+                  className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-zinc-800/80 text-slate-400 hover:text-rose-500 flex items-center justify-center transition-colors cursor-pointer"
+                  title="Delete Building"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Second Building Visual Placeholder when only 1 building exists */}
+        {buildings.length === 1 && (
+          <div
+            onClick={() => setShowAddBuildingModal(true)}
+            className="p-5 rounded-[28px] border border-dashed border-slate-300 dark:border-zinc-700 bg-white/50 dark:bg-[#121826]/50 backdrop-blur-xl cursor-pointer hover:border-purple-500/50 hover:bg-purple-500/5 transition-all flex justify-between items-start group shadow-sm"
+          >
+            <div className="flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-slate-400 dark:text-zinc-500 bg-slate-100 dark:bg-zinc-800/80 font-black shadow-sm shrink-0 group-hover:bg-purple-600 group-hover:text-white transition-colors">
+                <BuildingIcon className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-black text-slate-700 dark:text-zinc-300 text-base group-hover:text-purple-600 transition-colors">
+                    Block B - Classic Standard
+                  </h3>
+                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                    Not Configured
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 font-medium flex items-center gap-1 mt-0.5">
+                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <span>Sector 62, Noida • Click to set up</span>
+                </p>
+                <div className="flex gap-2 text-[10px] font-bold text-slate-400 dark:text-zinc-500 mt-2">
+                  <span>0 Floors</span> • <span>0 Rooms</span> • <span>0 Beds</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 shrink-0">
+              <span className="px-3 py-1.5 rounded-xl bg-purple-600/10 text-purple-600 dark:text-purple-400 font-bold text-xs group-hover:bg-purple-600 group-hover:text-white transition-all flex items-center gap-1">
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Building</span>
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* 🔮 3. MAIN ARCHITECTURAL CANVAS STAGE */}
       {activeBuilding ? (
@@ -1335,50 +1369,13 @@ export default function BuildingsManagement() {
         </NeonModal>
       )}
 
-      {/* 👤 13. TENANT PROFILE DETAIL MODAL */}
+      {/* 👤 13. TENANT DETAILS & BILLING POPUP MODAL */}
       {selectedTenantDetails && (
-        <NeonModal
+        <TenantDetailsModal
           isOpen={true}
           onClose={() => setSelectedTenantDetails(null)}
-          title="Resident Profile"
-          subtitle="Current tenant occupancy profile"
-          size="sm"
-          accentColor="purple"
-        >
-          <div className="space-y-4 text-left">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black flex items-center justify-center text-lg shadow-md">
-                {selectedTenantDetails.name.charAt(0)}
-              </div>
-              <div>
-                <h4 className="text-base font-black text-slate-900 dark:text-white">{selectedTenantDetails.name}</h4>
-                <p className="text-xs text-slate-400 font-bold">Room {selectedTenantDetails.roomNumber} • Bed {selectedTenantDetails.bedNumber}</p>
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 space-y-1.5 text-xs font-bold">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Phone</span>
-                <span className="text-slate-900 dark:text-white">{selectedTenantDetails.phone}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Email</span>
-                <span className="text-slate-900 dark:text-white">{selectedTenantDetails.email}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Move-in Date</span>
-                <span className="text-slate-900 dark:text-white">{selectedTenantDetails.moveInDate}</span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setSelectedTenantDetails(null)}
-              className="w-full py-2.5 rounded-2xl bg-purple-600 text-white font-black text-xs shadow-md hover:scale-105 transition-transform cursor-pointer"
-            >
-              Close Profile
-            </button>
-          </div>
-        </NeonModal>
+          tenant={selectedTenantDetails}
+        />
       )}
 
       {/* 📝 REGISTER TENANT POPUP MODAL */}

@@ -48,6 +48,7 @@ import NeonModal from '@/components/NeonModal';
 import { useToast } from '@/components/ToastProvider';
 import { formatINR, formatDate, formatDateTime } from '@/utils/formatters';
 import OfficialPaymentReceiptModal, { OfficialReceiptData } from '@/components/OfficialPaymentReceiptModal';
+import TenantDetailsModal from '@/components/TenantDetailsModal';
 import { UnifiedBill, PaymentTransaction, ReminderRecord, FinancialAuditLog } from '@/lib/billingService';
 
 export default function OwnerPaymentsPage() {
@@ -72,13 +73,14 @@ export default function OwnerPaymentsPage() {
   // Slicers and Filters
   const [selectedMonth, setSelectedMonth] = useState('ALL');
   const [selectedBuilding, setSelectedBuilding] = useState('ALL');
-  const [activeTab, setActiveTab] = useState<'bills' | 'verification' | 'ledger' | 'audit' | 'qr'>('bills');
+  const [activeTab, setActiveTab] = useState<'bills' | 'verification' | 'ledger' | 'audit'>('bills');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PAID' | 'PARTIAL' | 'DUE' | 'OVERDUE' | 'VERIFICATION_PENDING'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Modals & Side Panel State
   const [selectedBillForDetails, setSelectedBillForDetails] = useState<UnifiedBill | null>(null);
   const [showDetailsDrawer, setShowDetailsDrawer] = useState(false);
+  const [selectedTenantForPopup, setSelectedTenantForPopup] = useState<any>(null);
 
   // Record Payment Modal
   const [showRecordModal, setShowRecordModal] = useState(false);
@@ -645,91 +647,31 @@ export default function OwnerPaymentsPage() {
       </div>
 
       {/* ========================================================
-          📊 2. TOP SUMMARY METRIC CARDS
+          📊 2. TOP SUMMARY OVERVIEW (SHOW ONLY COLLECTED AMOUNT)
          ======================================================== */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-        
-        {/* Total Expected */}
-        <div className="bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800/80 p-4 rounded-3xl shadow-sm space-y-1">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            Total Expected
-          </span>
-          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono">
-            {formatINR(summary.totalExpected)}
+      <div className="bg-white/80 dark:bg-slate-900/80 border border-emerald-500/20 dark:border-emerald-500/30 p-6 rounded-3xl shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative overflow-hidden">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20 shrink-0">
+            <CheckCircle2 className="w-7 h-7" />
           </div>
-          <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 block truncate">
-            {summary.counts?.all || 0} active billed accounts
-          </span>
-        </div>
-
-        {/* Total Collected */}
-        <div className="bg-white/80 dark:bg-slate-900/80 border border-emerald-500/20 dark:border-emerald-500/30 p-4 rounded-3xl shadow-sm space-y-1 relative overflow-hidden">
-          <div className="absolute right-3 top-3 w-7 h-7 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
-            <CheckCircle2 className="w-4 h-4" />
-          </div>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-            Total Collected
-          </span>
-          <div className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
-            {formatINR(summary.totalCollected)}
-          </div>
-          <span className="text-[10px] font-semibold text-emerald-600/70 dark:text-emerald-400/70 block">
-            {summary.collectionRate}% of target collected
-          </span>
-        </div>
-
-        {/* Total Outstanding */}
-        <div className="bg-white/80 dark:bg-slate-900/80 border border-amber-500/20 dark:border-amber-500/30 p-4 rounded-3xl shadow-sm space-y-1">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-            Total Outstanding
-          </span>
-          <div className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400 font-mono">
-            {formatINR(summary.totalOutstanding)}
-          </div>
-          <span className="text-[10px] font-semibold text-amber-600/70 dark:text-amber-400/70 block">
-            {(summary.counts?.partial || 0) + (summary.counts?.due || 0)} pending bills
-          </span>
-        </div>
-
-        {/* Total Overdue */}
-        <div className="bg-white/80 dark:bg-slate-900/80 border border-rose-500/20 dark:border-rose-500/30 p-4 rounded-3xl shadow-sm space-y-1">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
-            Total Overdue
-          </span>
-          <div className="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400 font-mono">
-            {formatINR(summary.totalOverdue)}
-          </div>
-          <span className="text-[10px] font-semibold text-rose-600/70 dark:text-rose-400/70 block">
-            {summary.counts?.overdue || 0} overdue accounts
-          </span>
-        </div>
-
-        {/* Collection % Progress Meter */}
-        <div className="col-span-2 lg:col-span-1 bg-gradient-to-br from-slate-900 to-slate-950 text-white p-4 rounded-3xl shadow-md space-y-2 border border-slate-800 flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              Collection %
+          <div>
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
+              Collected
             </span>
-            <span className="text-sm font-black font-mono text-emerald-400">
-              {summary.collectionRate}%
+            <div className="text-3xl sm:text-4xl font-black text-emerald-600 dark:text-emerald-400 font-mono tracking-tight mt-0.5">
+              {formatINR(summary.totalCollected)}
+            </div>
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1 block">
+              Verified collections for active residency billing cycle
             </span>
           </div>
-          
-          <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
-            <motion.div 
-              initial={{ width: 0 }}
-              animate={{ width: `${summary.collectionRate}%` }}
-              transition={{ duration: 0.8, ease: 'easeOut' }}
-              className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full"
-            />
-          </div>
-
-          <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-            <span>₹{summary.totalCollected.toLocaleString()}</span>
-            <span>₹{summary.totalExpected.toLocaleString()}</span>
-          </div>
         </div>
 
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-bold px-4 py-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+            ● Real-Time Payment Ledger
+          </span>
+        </div>
       </div>
 
       {/* ========================================================
@@ -789,18 +731,6 @@ export default function OwnerPaymentsPage() {
               }`}
             >
               Audit Trail
-            </button>
-
-            <button
-              onClick={() => setActiveTab('qr')}
-              className={`px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-1 whitespace-nowrap cursor-pointer ${
-                activeTab === 'qr'
-                  ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <QrCode className="w-3.5 h-3.5" />
-              <span>QR Setup</span>
             </button>
           </div>
 
@@ -862,7 +792,6 @@ export default function OwnerPaymentsPage() {
               {activeTab === 'verification' && `Reviewing ${verificationQueue.length} tenant submitted proofs`}
               {activeTab === 'ledger' && `Displaying all ${transactionsLedger.length} financial transactions`}
               {activeTab === 'audit' && `Timeline of system financial events`}
-              {activeTab === 'qr' && `Hostel payment QR code and UPI configuration`}
             </div>
           )}
 
@@ -945,8 +874,22 @@ export default function OwnerPaymentsPage() {
                         className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group"
                       >
                         {/* Tenant Name */}
-                        <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                          <div className="flex items-center gap-2.5">
+                        <td 
+                          className="py-3.5 px-4 font-bold text-slate-900 dark:text-white"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedTenantForPopup({
+                              id: bill.tenantId,
+                              name: bill.tenantName,
+                              roomNumber: bill.roomNumber,
+                              buildingName: bill.buildingName,
+                              rentAmount: bill.amount,
+                              phone: bill.tenantPhone,
+                              email: bill.tenantEmail
+                            });
+                          }}
+                        >
+                          <div className="flex items-center gap-2.5 hover:text-emerald-600 transition-colors">
                             <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center font-black text-slate-700 dark:text-slate-300 shrink-0">
                               {bill.tenantName.charAt(0)}
                             </div>
@@ -1322,69 +1265,6 @@ export default function OwnerPaymentsPage() {
               </div>
             ))}
           </div>
-
-        </div>
-      )}
-
-      {/* ========================================================
-          📱 8. TAB 5: QR SETUP
-         ======================================================== */}
-      {activeTab === 'qr' && (
-        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/80 rounded-3xl shadow-sm p-6 max-w-2xl space-y-6">
-          <div className="pb-3 border-b border-slate-100 dark:border-slate-800">
-            <h3 className="font-black text-base text-slate-900 dark:text-white">Hostel UPI QR & Payment Configuration</h3>
-            <p className="text-xs text-slate-500">Configure the single authoritative QR code and UPI ID shown to residents in Tenant Portal.</p>
-          </div>
-
-          <form onSubmit={handleSaveQRSettings} className="space-y-4">
-            <div>
-              <label className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 block mb-1">
-                Hostel UPI ID
-              </label>
-              <input
-                type="text"
-                value={qrSettings.upiId}
-                onChange={(e) => setQrSettings({ ...qrSettings, upiId: e.target.value })}
-                placeholder="e.g. srisaisiri@okicici"
-                className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 block mb-1">
-                QR Code Image URL / Asset Path
-              </label>
-              <input
-                type="text"
-                value={qrSettings.qrCodeUrl}
-                onChange={(e) => setQrSettings({ ...qrSettings, qrCodeUrl: e.target.value })}
-                placeholder="/uploads/sample_qr.png"
-                className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 block mb-1">
-                Payment Instructions to Residents
-              </label>
-              <textarea
-                rows={3}
-                value={qrSettings.instructions}
-                onChange={(e) => setQrSettings({ ...qrSettings, instructions: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={savingQR}
-              className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs cursor-pointer shadow-md disabled:opacity-50"
-            >
-              {savingQR ? 'Saving Setup...' : 'Save Payment Configuration'}
-            </button>
-          </form>
-
         </div>
       )}
 
@@ -2073,6 +1953,24 @@ export default function OwnerPaymentsPage() {
           isOpen={showReceiptModal}
           onClose={() => setShowReceiptModal(false)}
           receiptData={receiptData}
+        />
+      )}
+
+      {/* ========================================================
+          👤 16. RESIDENT DETAILS & PAYMENT POPUP MODAL
+         ======================================================== */}
+      {selectedTenantForPopup && (
+        <TenantDetailsModal
+          isOpen={true}
+          onClose={() => setSelectedTenantForPopup(null)}
+          tenant={selectedTenantForPopup}
+          allBills={allBills}
+          allTransactions={transactionsLedger}
+          onRecordPayment={(t) => {
+            setSelectedTenantForPopup(null);
+            const targetBill = bills.find(b => b.tenantId === t.id) || allBills.find(b => b.tenantId === t.id);
+            if (targetBill) handleOpenRecordForBill(targetBill);
+          }}
         />
       )}
 
