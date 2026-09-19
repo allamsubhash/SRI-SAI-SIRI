@@ -329,11 +329,31 @@ export default function OfficialPaymentReceiptModal({
       pdf.text(`Generated: ${generatedTime}`, 140, currentY + 10.5);
       currentY += 18;
 
-      // Signatures & Footer Note
+      // Signatures & Footer Note with Round Hostel Stamp
       pdf.setTextColor(100, 116, 139);
       pdf.setFontSize(8);
       pdf.text(isShortStay ? 'Thank you for staying with us.' : 'This receipt confirms payment received for the billing period mentioned above.', 14, currentY);
-      pdf.text('Authorized Signature : ___________________', 140, currentY);
+
+      // Draw Round Stamp in Vector Fallback
+      pdf.setDrawColor(112, 36, 52); // #702434
+      pdf.setLineWidth(0.5);
+      pdf.circle(165, currentY - 3, 11, 'S'); // Outer circle
+      pdf.setLineWidth(0.2);
+      pdf.circle(165, currentY - 3, 9.8, 'S'); // Inner circle
+
+      pdf.setTextColor(112, 36, 52);
+      pdf.setFontSize(6);
+      pdf.setFont('Helvetica', 'bold');
+      pdf.text('SRI SAI SIRI', 165, currentY - 6, { align: 'center' });
+      pdf.setFontSize(4.5);
+      pdf.text('★ AUTHORISED STAMP ★', 165, currentY - 3, { align: 'center' });
+      pdf.setFontSize(6);
+      pdf.text('BOYS HOSTEL', 165, currentY, { align: 'center' });
+
+      pdf.setTextColor(100, 116, 139);
+      pdf.setFontSize(8);
+      pdf.setFont('Helvetica', 'bold');
+      pdf.text('Authorized Signature : ___________________', 135, currentY + 7);
 
       pdf.save(`Official_Receipt_${receiptData.receiptNo}.pdf`);
     } catch (e) {
@@ -606,15 +626,31 @@ export default function OfficialPaymentReceiptModal({
                 </div>
               </div>
 
-              {/* AUTHORIZED SIGNATURE AREA */}
-              <div className="pt-2 flex justify-between items-end text-[10px] text-slate-500 border-t border-slate-200">
+              {/* AUTHORIZED SIGNATURE AREA WITH CIRCULAR HOSTEL STAMP */}
+              <div className="pt-2 flex justify-between items-end text-[10px] text-slate-500 border-t border-slate-200 relative">
                 <div>
                   <span className="block font-medium">Received By: {receiptData.receivedBy || 'Manager'}</span>
                   <span className="italic text-[9px] text-slate-400">
                     {isShortStay ? 'Thank you for staying with us.' : 'This receipt confirms payment received for the billing period mentioned above.'}
                   </span>
                 </div>
-                <div className="text-right">
+                
+                <div className="text-right relative">
+                  {/* 🔴 ROUND OFFICIAL HOSTEL STAMP */}
+                  <div className="absolute -top-10 right-2 w-20 h-20 rounded-full border-2 border-dashed border-[#702434]/75 p-1 flex flex-col items-center justify-center text-center transform -rotate-12 pointer-events-none opacity-85 select-none bg-red-50/20 backdrop-blur-3xs">
+                    <div className="w-full h-full rounded-full border border-solid border-[#702434]/80 flex flex-col items-center justify-center p-1">
+                      <span className="text-[6.5px] font-black tracking-tighter text-[#702434] uppercase leading-none">
+                        SRI SAI SIRI
+                      </span>
+                      <span className="text-[5.5px] font-bold text-[#702434]/90 uppercase leading-tight my-0.5 border-y border-[#702434]/40 px-1 py-0.2">
+                        ★ AUTHORISED STAMP ★
+                      </span>
+                      <span className="text-[6px] font-black text-[#702434] uppercase tracking-tighter leading-none">
+                        BOYS HOSTEL
+                      </span>
+                    </div>
+                  </div>
+
                   <div className="h-6 border-b border-slate-400 w-28 mb-1"></div>
                   <span className="font-bold text-slate-700 uppercase tracking-wider text-[9px]">Authorized Signature</span>
                 </div>
