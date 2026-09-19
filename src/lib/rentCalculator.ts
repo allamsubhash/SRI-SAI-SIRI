@@ -114,11 +114,16 @@ export function calculateMonthlyDues(
   
   const totalCharged = monthsElapsed * monthlyRent;
   
-  // Sum approved/paid payments
+  // Sum approved/paid payments and invoice paid amounts
   const approvedPayments = (payments || []).filter(
-    (p: any) => p.status === 'PAID' || p.status === 'APPROVED'
+    (p: any) => p.status === 'PAID' || p.status === 'APPROVED' || p.paidAmount !== undefined
   );
-  const totalApprovedPaid = approvedPayments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+  const totalApprovedPaid = approvedPayments.reduce((sum: number, p: any) => {
+    if (p.paidAmount !== undefined) {
+      return sum + (Number(p.paidAmount) || 0);
+    }
+    return sum + (Number(p.amount) || 0);
+  }, 0);
   
   // Sum pending payments
   const pendingPayments = (payments || []).filter(
@@ -132,13 +137,28 @@ export function calculateMonthlyDues(
   let totalDues = 0;
   if (invoiceRecords.length > 0) {
     const unpaidInvoices = invoiceRecords.filter((inv: any) => inv.status !== 'PAID' && inv.status !== 'APPROVED');
-    totalDues = unpaidInvoices.reduce((sum: number, inv: any) => sum + (Number(inv.amount) || 0), 0);
+    totalDues = unpaidInvoices.reduce((sum: number, inv: any) => {
+      const invTotal = Number(inv.amount) || 0;
+      const invPaid = Number(inv.paidAmount) || 0;
+      const rem = Math.max(0, invTotal - invPaid);
+      return sum + rem;
+    }, 0);
   } else {
     // Current cycle rent tariff minus approved payments
     totalDues = Math.max(0, monthlyRent - totalApprovedPaid);
   }
 
-  const dueDateStr = new Date(asOfDate.getFullYear(), asOfDate.getMonth(), 5).toISOString().split('T')[0];
+  // Currency rounding
+  totalDues = Number(totalDues.toFixed(2));
+  if (totalDues <= 0.01) {
+    totalDues = 0;
+  }
+
+  const activeInvoiceWithDueDate = invoiceRecords.find((inv: any) => inv.dueDate);
+  const dueDateStr = activeInvoiceWithDueDate
+    ? (typeof activeInvoiceWithDueDate.dueDate === 'string' ? activeInvoiceWithDueDate.dueDate.split('T')[0] : new Date(activeInvoiceWithDueDate.dueDate).toISOString().split('T')[0])
+    : new Date(asOfDate.getFullYear(), asOfDate.getMonth(), 5).toISOString().split('T')[0];
+
   const derivedStatus = calculateBillStatus(monthlyRent, totalApprovedPaid, dueDateStr, totalPendingApproval > 0, asOfDate);
 
   let status: 'PAID' | 'PARTIAL' | 'PENDING_APPROVAL' | 'OVERDUE' | 'UNPAID' = 'UNPAID';

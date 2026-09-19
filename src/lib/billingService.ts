@@ -120,10 +120,14 @@ export function calculateBillStatus(
   hasPendingVerification: boolean = false,
   asOfDate: Date = new Date()
 ): PaymentStatus {
-  const outstanding = Math.max(0, amount - paidAmount);
+  // Floating Point Currency Normalization (2 decimal places)
+  const cleanAmount = Number((Number(amount) || 0).toFixed(2));
+  const cleanPaid = Number((Number(paidAmount) || 0).toFixed(2));
+  const rawOutstanding = cleanAmount - cleanPaid;
+  const outstanding = Math.max(0, Number(rawOutstanding.toFixed(2)));
 
-  // RULE 1: If Outstanding <= 0 -> ALWAYS PAID
-  if (outstanding <= 0) {
+  // RULE 1 (HIGHEST PRIORITY): If Outstanding <= 0.01 -> ALWAYS PAID
+  if (outstanding <= 0.01) {
     return 'PAID';
   }
 
@@ -140,13 +144,13 @@ export function calculateBillStatus(
     isPastDueDate = asOfDate > endOfDueDate;
   }
 
-  // RULE 3: If Outstanding > 0 and Due Date passed -> OVERDUE (whether partial or 0 paid)
+  // RULE 3: If Outstanding > 0 and Due Date passed -> OVERDUE
   if (isPastDueDate) {
     return 'OVERDUE';
   }
 
   // RULE 4: If Outstanding > 0, Due Date NOT passed, and Paid > 0 -> PARTIAL
-  if (paidAmount > 0) {
+  if (cleanPaid > 0) {
     return 'PARTIAL';
   }
 
@@ -276,9 +280,9 @@ export function computeTenantBillingState(
     const pendingTxns = billTransactions.filter((p) => p.status === 'PENDING');
     const hasPendingVerification = pendingTxns.length > 0;
 
-    const totalBillAmount = Number(inv.amount) || monthlyRent;
-    const effectivePaidAmount = Math.min(totalBillAmount, Math.max(Number(inv.paidAmount) || 0, validPaidSum));
-    const outstanding = Math.max(0, totalBillAmount - effectivePaidAmount);
+    const totalBillAmount = Number((Number(inv.amount) || monthlyRent).toFixed(2));
+    const effectivePaidAmount = Math.min(totalBillAmount, Number((Math.max(Number(inv.paidAmount) || 0, validPaidSum)).toFixed(2)));
+    const outstanding = Math.max(0, Number((totalBillAmount - effectivePaidAmount).toFixed(2)));
 
     const dueDateStr = inv.dueDate 
       ? (typeof inv.dueDate === 'string' ? inv.dueDate.split('T')[0] : new Date(inv.dueDate).toISOString().split('T')[0])

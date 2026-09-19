@@ -1,0 +1,805 @@
+{
+  "buildings": [
+    {
+      "id": "bld-1789816193479-265",
+      "name": "AUDIT_BUILDING_93479",
+      "address": "Sector 62, Noida",
+      "floors": [
+        {
+          "id": "flr-bld-1789816193479-265-1",
+          "number": 1,
+          "buildingId": "bld-1789816193479-265",
+          "rooms": [
+            {
+              "id": "rm-1789816193511-701",
+              "number": "888",
+              "type": "AC Double",
+              "rent": 9000,
+              "status": "AVAILABLE",
+              "capacity": 2,
+              "amenities": [
+                "AC",
+                "Wifi"
+              ],
+              "images": [],
+              "beds": [
+                {
+                  "id": "bed-rm-1789816193511-701-1",
+                  "number": "888-A",
+                  "roomId": "rm-1789816193511-701",
+                  "tenantId": null,
+                  "isAvailable": true
+                },
+                {
+                  "id": "bed-rm-1789816193511-701-2",
+                  "number": "888-B",
+                  "roomId": "rm-1789816193511-701",
+                  "tenantId": null,
+                  "isAvailable": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "flr-bld-1789816193479-265-2",
+          "number": 2,
+          "buildingId": "bld-1789816193479-265",
+          "rooms": []
+        },
+        {
+          "id": "flr-bld-1789816193479-265-3",
+          "number": 3,
+          "buildingId": "bld-1789816193479-265",
+          "rooms": []
+        }
+      ],
+      "createdAt": "2026-09-19T11:09:53.510Z",
+      "updatedAt": "2026-09-19T11:09:53.510Z"
+    },
+    {
+      "id": "bld-1789813969375-786",
+      "name": "DEBUG_BUILDING_69375",
+      "address": "Sector 62, Noida",
+      "floors": [
+        {
+          "id": "flr-bld-1789813969375-786-1",
+          "number": 1,
+          "buildingId": "bld-1789813969375-786",
+          "rooms": [
+            {
+              "id": "rm-1789813969402-705",
+              "number": "999",
+              "type": "AC Double",
+              "rent": 9500,
+              "status": "AVAILABLE",
+              "capacity": 2,
+              "amenities": [
+                "AC",
+                "Wifi"
+              ],
+              "images": [],
+              "beds": [
+                {
+                  "id": "bed-rm-1789813969402-705-1",
+                  "number": "999-A",
+                  "roomId": "rm-1789813969402-705",
+                  "tenantId": null,
+                  "isAvailable": true
+                },
+                {
+                  "id": "bed-rm-1789813969402-705-2",
+                  "number": "999-B",
+                  "roomId": "rm-1789813969402-705",
+                  "tenantId": null,
+                  "isAvailable": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "flr-bld-1789813969375-786-2",
+          "number": 2,
+          "buildingId": "bld-1789813969375-786",
+          "rooms": []
+        },
+        {
+          "id": "flr-bld-1789813969375-786-3",
+          "number": 3,
+          "buildingId": "bld-1789813969375-786",
+          "rooms": []
+        }
+      ],
+      "createdAt": "2026-09-19T10:32:49.400Z",
+      "updatedAt": "2026-09-19T10:32:49.400Z"
+    },
+    {
+      "id": "bld-1789813933434-33",
+      "name": "DEBUG_BUILDING_33434",
+      "address": "Sector 62, Noida",
+      "floors": [
+        {
+          "id": "flr-bld-1789813933434-33-1",
+          "number": 1,
+          "buildingId": "bld-1789813933434-33",
+          "rooms": [
+            {
+              "id": "rm-1789813933446-305",
+              "number": "999",
+              "type": "AC Double",
+              "rent": 9500,
+              "status": "AVAILABLE",
+              "capacity": 2,
+              "amenities": [
+                "AC",
+                "Wifi"
+              ],
+              "images": [],
+              "beds": [
+                {
+                  "id": "bed-rm-1789813933446-305-1",
+                  "number": "999-A",
+                  "roomId": "rm-1789813933446-305",
+                  "tenantId": null,
+                  "isAvailable": true
+                },
+                {
+                  "id": "bed-rm-1789813933446-305-2",
+                  "number": "999-B",
+                  "roomId": "rm-1789813933446-305",
+                  "tenantId": null,
+                  "isAvailable": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "flr-bld-1789813933434-33-2",
+          "number": 2,
+          "buildingId": "bld-1789813933434-33",
+          "rooms": []
+        },
+        {
+          "id": "flr-bld-1789813933434-33-3",
+          "number": 3,
+          "buildingId": "bld-1789813933434-33",
+          "rooms": []
+        }
+      ],
+      "createdAt": "2026-09-19T10:32:13.444Z",
+      "updatedAt": "2026-09-19T10:32:13.444Z"
+    },
+    {
+      "id": "bld-1789813908025-768",
+      "name": "DEBUG_BUILDING_08025",
+      "address": "Sector 62, Noida",
+      "floors": [
+        {
+          "id": "flr-bld-1789813908025-768-1",
+          "number": 1,
+          "buildingId": "bld-1789813908025-768",
+          "rooms": []
+        },
+        {
+          "id": "flr-bld-1789813908025-768-2",
+          "number": 2,
+          "buildingId": "bld-1789813908025-768",
+          "rooms": []
+        },
+        {
+          "id": "flr-bld-1789813908025-768-3",
+          "number": 3,
+          "buildingId": "bld-1789813908025-768",
+          "rooms": []
+        }
+      ],
+      "createdAt": "2026-09-19T10:31:48.035Z",
+      "updatedAt": "2026-09-19T10:31:48.035Z"
+    },
+    {
+      "id": "bld-1789813886828-332",
+      "name": "DEBUG_BUILDING_86828",
+      "address": "Sector 62, Noida",
+      "floors": [
+        {
+          "id": "flr-bld-1789813886828-332-1",
+          "number": 1,
+          "buildingId": "bld-1789813886828-332",
+          "rooms": [
+            {
+              "id": "rm-1789813886840-176",
+              "type": "AC Double",
+              "rent": 8500,
+              "status": "AVAILABLE",
+              "capacity": 2,
+              "amenities": [
+                "AC",
+                "Wifi"
+              ],
+              "images": [],
+              "beds": [
+                {
+                  "id": "bed-rm-1789813886840-176-1",
+                  "number": "undefined-A",
+                  "roomId": "rm-1789813886840-176",
+                  "tenantId": null,
+                  "isAvailable": true
+                },
+                {
+                  "id": "bed-rm-1789813886840-176-2",
+                  "number": "undefined-B",
+                  "roomId": "rm-1789813886840-176",
+                  "tenantId": null,
+                  "isAvailable": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "flr-bld-1789813886828-332-2",
+          "number": 2,
+          "buildingId": "bld-1789813886828-332",
+          "rooms": []
+        },
+        {
+          "id": "flr-bld-1789813886828-332-3",
+          "number": 3,
+          "buildingId": "bld-1789813886828-332",
+          "rooms": []
+        }
+      ],
+      "createdAt": "2026-09-19T10:31:26.838Z",
+      "updatedAt": "2026-09-19T10:31:26.838Z"
+    },
+    {
+      "id": "bld-1789813861889-175",
+      "name": "DEBUG_BUILDING_61889",
+      "address": "Sector 62, Noida",
+      "floors": [
+        {
+          "id": "flr-bld-1789813861889-175-1",
+          "number": 1,
+          "buildingId": "bld-1789813861889-175",
+          "rooms": [
+            {
+              "id": "rm-1789813886840-176",
+              "type": "AC Double",
+              "rent": 8500,
+              "status": "AVAILABLE",
+              "capacity": 2,
+              "amenities": [
+                "AC",
+                "Wifi"
+              ],
+              "images": [],
+              "beds": [
+                {
+                  "id": "bed-rm-1789813886840-176-1",
+                  "number": "undefined-A",
+                  "roomId": "rm-1789813886840-176",
+                  "tenantId": null,
+                  "isAvailable": true
+                },
+                {
+                  "id": "bed-rm-1789813886840-176-2",
+                  "number": "undefined-B",
+                  "roomId": "rm-1789813886840-176",
+                  "tenantId": null,
+                  "isAvailable": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "flr-bld-1789813861889-175-2",
+          "number": 2,
+          "buildingId": "bld-1789813861889-175",
+          "rooms": []
+        },
+        {
+          "id": "flr-bld-1789813861889-175-3",
+          "number": 3,
+          "buildingId": "bld-1789813861889-175",
+          "rooms": []
+        }
+      ],
+      "createdAt": "2026-09-19T10:31:01.899Z",
+      "updatedAt": "2026-09-19T10:31:01.899Z"
+    },
+    {
+      "id": "b-1",
+      "name": "Block A - Premium Executive",
+      "address": "Sector 62, Noida, UP - 201301",
+      "floors": [
+        {
+          "id": "f-1-1",
+          "number": 1,
+          "rooms": [
+            {
+              "id": "r-101",
+              "number": "A-101",
+              "type": "AC Double Sharing",
+              "rent": 8500,
+              "capacity": 2,
+              "status": "OCCUPIED",
+              "amenities": [
+                "AC",
+                "Wifi",
+                "Attached Bathroom",
+                "Study Table"
+              ],
+              "beds": [
+                {
+                  "id": "bed-101-1",
+                  "number": "A-101-A",
+                  "tenantId": "u-tenant-1",
+                  "tenantName": "Rohan Verma",
+                  "isAvailable": false
+                },
+                {
+                  "id": "bed-101-2",
+                  "number": "A-101-B",
+                  "tenantId": "u-tenant-2",
+                  "tenantName": "Priya Sharma",
+                  "isAvailable": false
+                }
+              ]
+            },
+            {
+              "id": "r-102",
+              "number": "A-102",
+              "type": "AC Single Deluxe",
+              "rent": 14000,
+              "capacity": 1,
+              "status": "OCCUPIED",
+              "amenities": [
+                "AC",
+                "Wifi",
+                "Attached Bathroom",
+                "Balcony",
+                "TV"
+              ],
+              "beds": [
+                {
+                  "id": "bed-102-1",
+                  "number": "A-102-A",
+                  "tenantId": "u-tenant-3",
+                  "tenantName": "Amit Patel",
+                  "isAvailable": false
+                }
+              ]
+            },
+            {
+              "id": "r-103",
+              "number": "A-103",
+              "type": "AC Double Sharing",
+              "rent": 8500,
+              "capacity": 2,
+              "status": "AVAILABLE",
+              "amenities": [
+                "AC",
+                "Wifi",
+                "Attached Bathroom"
+              ],
+              "beds": [
+                {
+                  "id": "bed-103-1",
+                  "number": "A-103-A",
+                  "tenantId": null,
+                  "isAvailable": true
+                },
+                {
+                  "id": "bed-103-2",
+                  "number": "A-103-B",
+                  "tenantId": null,
+                  "isAvailable": true
+                }
+              ]
+            },
+            {
+              "id": "rm-1789813886840-176",
+              "type": "AC Double",
+              "rent": 8500,
+              "status": "AVAILABLE",
+              "capacity": 2,
+              "amenities": [
+                "AC",
+                "Wifi"
+              ],
+              "images": [],
+              "beds": [
+                {
+                  "id": "bed-rm-1789813886840-176-1",
+                  "number": "undefined-A",
+                  "roomId": "rm-1789813886840-176",
+                  "tenantId": null,
+                  "isAvailable": true
+                },
+                {
+                  "id": "bed-rm-1789813886840-176-2",
+                  "number": "undefined-B",
+                  "roomId": "rm-1789813886840-176",
+                  "tenantId": null,
+                  "isAvailable": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "f-1-2",
+          "number": 2,
+          "rooms": [
+            {
+              "id": "r-201",
+              "number": "A-201",
+              "type": "AC Triple Sharing",
+              "rent": 6500,
+              "capacity": 3,
+              "status": "OCCUPIED",
+              "amenities": [
+                "AC",
+                "Wifi",
+                "Attached Bathroom"
+              ],
+              "beds": [
+                {
+                  "id": "bed-201-1",
+                  "number": "A-201-A",
+                  "tenantId": "u-tenant-4",
+                  "tenantName": "Sneha Reddy",
+                  "isAvailable": false
+                },
+                {
+                  "id": "bed-201-2",
+                  "number": "A-201-B",
+                  "tenantId": null,
+                  "isAvailable": true
+                },
+                {
+                  "id": "bed-201-3",
+                  "number": "A-201-C",
+                  "tenantId": null,
+                  "isAvailable": true
+                }
+              ]
+            },
+            {
+              "id": "r-202",
+              "number": "A-202",
+              "type": "AC Single Deluxe",
+              "rent": 14000,
+              "capacity": 1,
+              "status": "MAINTENANCE",
+              "amenities": [
+                "AC",
+                "Wifi",
+                "Attached Bathroom",
+                "Balcony"
+              ],
+              "beds": [
+                {
+                  "id": "bed-202-1",
+                  "number": "A-202-A",
+                  "tenantId": null,
+                  "isAvailable": false
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b-2",
+      "name": "Block B - Classic Standard",
+      "address": "Sector 62, Noida, UP - 201301",
+      "floors": [
+        {
+          "id": "f-2-1",
+          "number": 1,
+          "rooms": [
+            {
+              "id": "r-301",
+              "number": "B-101",
+              "type": "Non-AC Double Sharing",
+              "rent": 5500,
+              "capacity": 2,
+              "status": "AVAILABLE",
+              "amenities": [
+                "Wifi",
+                "Ceiling Fan",
+                "Attached Bathroom"
+              ],
+              "beds": [
+                {
+                  "id": "bed-301-1",
+                  "number": "B-101-A",
+                  "tenantId": null,
+                  "isAvailable": true
+                },
+                {
+                  "id": "bed-301-2",
+                  "number": "B-101-B",
+                  "tenantId": null,
+                  "isAvailable": true
+                }
+              ]
+            },
+            {
+              "id": "r-302",
+              "number": "B-102",
+              "type": "Non-AC Triple Sharing",
+              "rent": 4500,
+              "capacity": 3,
+              "status": "AVAILABLE",
+              "amenities": [
+                "Wifi",
+                "Ceiling Fan",
+                "Common Bathroom"
+              ],
+              "beds": [
+                {
+                  "id": "bed-302-1",
+                  "number": "B-102-A",
+                  "tenantId": null,
+                  "isAvailable": true
+                },
+                {
+                  "id": "bed-302-2",
+                  "number": "B-102-B",
+                  "tenantId": null,
+                  "isAvailable": true
+                },
+                {
+                  "id": "bed-302-3",
+                  "number": "B-102-C",
+                  "tenantId": null,
+                  "isAvailable": true
+                }
+              ]
+            },
+            {
+              "id": "rm-1789813886840-176",
+              "type": "AC Double",
+              "rent": 8500,
+              "status": "AVAILABLE",
+              "capacity": 2,
+              "amenities": [
+                "AC",
+                "Wifi"
+              ],
+              "images": [],
+              "beds": [
+                {
+                  "id": "bed-rm-1789813886840-176-1",
+                  "number": "undefined-A",
+                  "roomId": "rm-1789813886840-176",
+                  "tenantId": null,
+                  "isAvailable": true
+                },
+                {
+                  "id": "bed-rm-1789813886840-176-2",
+                  "number": "undefined-B",
+                  "roomId": "rm-1789813886840-176",
+                  "tenantId": null,
+                  "isAvailable": true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "shortStayGuests": [
+    {
+      "id": "ssg-1789816193591-300",
+      "name": "Master Audit Guest",
+      "phone": "+91 9111193591",
+      "buildingId": "bld-1789816193479-265",
+      "buildingName": "AUDIT_BUILDING_93479",
+      "roomNumber": "888",
+      "bedNumber": "Bed B",
+      "checkInDate": "2026-09-19T00:00:00.000Z",
+      "checkInTime": "12:00 PM",
+      "expectedCheckOutDate": "2026-09-21T00:00:00.000Z",
+      "expectedCheckOutTime": "11:00 AM",
+      "numberOfDays": 2,
+      "dailyRent": 1200,
+      "totalAmount": 2400,
+      "amountPaid": 2400,
+      "balance": 0,
+      "paymentStatus": "PAID",
+      "status": "ACTIVE",
+      "notes": "Full audit test",
+      "createdAt": "2026-09-19T11:09:53.592Z",
+      "updatedAt": "2026-09-19T11:09:53.592Z",
+      "payments": [
+        {
+          "id": "ssp-1789816193592",
+          "guestId": "ssg-1789816193591-300",
+          "amount": 2400,
+          "paymentMethod": "UPI",
+          "paymentDate": "2026-09-19T11:09:53.592Z",
+          "receiptNumber": "SS-2026-93591",
+          "receivedBy": "Hostel Owner",
+          "status": "PAID",
+          "notes": "Initial payment upon registration"
+        }
+      ],
+      "receipts": [
+        {
+          "id": "ssr-1789816193592",
+          "receiptNumber": "SS-2026-93591",
+          "guestId": "ssg-1789816193591-300",
+          "paymentId": "ssp-1789816193592",
+          "amountPaid": 2400,
+          "totalAmount": 2400,
+          "remainingBalance": 0,
+          "paymentMethod": "UPI",
+          "paymentDate": "2026-09-19T11:09:53.592Z",
+          "statusStamp": "PAID",
+          "receivedBy": "Hostel Owner"
+        }
+      ]
+    },
+    {
+      "id": "ssg-1789813969480-371",
+      "name": "Debug ShortStay Guest",
+      "phone": "+91 9876969480",
+      "buildingId": "bld-1789813969375-786",
+      "buildingName": "DEBUG_BUILDING_69375",
+      "roomNumber": "999",
+      "bedNumber": "Bed B",
+      "checkInDate": "2026-09-19T00:00:00.000Z",
+      "checkInTime": "12:00 PM",
+      "expectedCheckOutDate": "2026-09-22T00:00:00.000Z",
+      "expectedCheckOutTime": "11:00 AM",
+      "numberOfDays": 3,
+      "dailyRent": 1000,
+      "totalAmount": 3000,
+      "amountPaid": 1000,
+      "balance": 2000,
+      "paymentStatus": "PARTIALLY_PAID",
+      "status": "ACTIVE",
+      "notes": "Persistence verification test",
+      "createdAt": "2026-09-19T10:32:49.482Z",
+      "updatedAt": "2026-09-19T10:32:49.482Z",
+      "payments": [
+        {
+          "id": "ssp-1789813969482",
+          "guestId": "ssg-1789813969480-371",
+          "amount": 1000,
+          "paymentMethod": "UPI",
+          "paymentDate": "2026-09-19T10:32:49.482Z",
+          "receiptNumber": "SS-2026-69480",
+          "receivedBy": "Owner",
+          "status": "PAID",
+          "notes": "Initial payment upon registration"
+        }
+      ],
+      "receipts": [
+        {
+          "id": "ssr-1789813969482",
+          "receiptNumber": "SS-2026-69480",
+          "guestId": "ssg-1789813969480-371",
+          "paymentId": "ssp-1789813969482",
+          "amountPaid": 1000,
+          "totalAmount": 3000,
+          "remainingBalance": 2000,
+          "paymentMethod": "UPI",
+          "paymentDate": "2026-09-19T10:32:49.482Z",
+          "statusStamp": "PARTIALLY_PAID",
+          "receivedBy": "Owner"
+        }
+      ]
+    },
+    {
+      "id": "ssg-1789813933533-358",
+      "name": "Debug ShortStay Guest",
+      "phone": "+91 9876933533",
+      "buildingId": "bld-1789813933434-33",
+      "buildingName": "DEBUG_BUILDING_33434",
+      "roomNumber": "999",
+      "bedNumber": "Bed B",
+      "checkInDate": "2026-09-19T00:00:00.000Z",
+      "checkInTime": "12:00 PM",
+      "expectedCheckOutDate": "2026-09-22T00:00:00.000Z",
+      "expectedCheckOutTime": "11:00 AM",
+      "numberOfDays": 3,
+      "dailyRent": 1000,
+      "totalAmount": 3000,
+      "amountPaid": 1000,
+      "balance": 2000,
+      "paymentStatus": "PARTIALLY_PAID",
+      "status": "ACTIVE",
+      "notes": "Persistence verification test",
+      "createdAt": "2026-09-19T10:32:13.535Z",
+      "updatedAt": "2026-09-19T10:32:13.535Z",
+      "payments": [
+        {
+          "id": "ssp-1789813933535",
+          "guestId": "ssg-1789813933533-358",
+          "amount": 1000,
+          "paymentMethod": "UPI",
+          "paymentDate": "2026-09-19T10:32:13.535Z",
+          "receiptNumber": "SS-2026-33533",
+          "receivedBy": "Owner",
+          "status": "PAID",
+          "notes": "Initial payment upon registration"
+        }
+      ],
+      "receipts": [
+        {
+          "id": "ssr-1789813933535",
+          "receiptNumber": "SS-2026-33533",
+          "guestId": "ssg-1789813933533-358",
+          "paymentId": "ssp-1789813933535",
+          "amountPaid": 1000,
+          "totalAmount": 3000,
+          "remainingBalance": 2000,
+          "paymentMethod": "UPI",
+          "paymentDate": "2026-09-19T10:32:13.535Z",
+          "statusStamp": "PARTIALLY_PAID",
+          "receivedBy": "Owner"
+        }
+      ]
+    },
+    {
+      "id": "ssg-1789813886919-87",
+      "name": "Debug ShortStay Guest",
+      "phone": "+91 9876886919",
+      "buildingId": "bld-1789813886828-332",
+      "buildingName": "DEBUG_BUILDING_86828",
+      "roomNumber": "999",
+      "bedNumber": "Bed B",
+      "checkInDate": "2026-09-19T00:00:00.000Z",
+      "checkInTime": "12:00 PM",
+      "expectedCheckOutDate": "2026-09-22T00:00:00.000Z",
+      "expectedCheckOutTime": "11:00 AM",
+      "numberOfDays": 3,
+      "dailyRent": 1000,
+      "totalAmount": 3000,
+      "amountPaid": 1000,
+      "balance": 2000,
+      "paymentStatus": "PARTIALLY_PAID",
+      "status": "ACTIVE",
+      "notes": "Persistence verification test",
+      "createdAt": "2026-09-19T10:31:26.920Z",
+      "updatedAt": "2026-09-19T10:31:26.920Z",
+      "payments": [
+        {
+          "id": "ssp-1789813886920",
+          "guestId": "ssg-1789813886919-87",
+          "amount": 1000,
+          "paymentMethod": "UPI",
+          "paymentDate": "2026-09-19T10:31:26.920Z",
+          "receiptNumber": "SS-2026-86919",
+          "receivedBy": "Owner",
+          "status": "PAID",
+          "notes": "Initial payment upon registration"
+        }
+      ],
+      "receipts": [
+        {
+          "id": "ssr-1789813886920",
+          "receiptNumber": "SS-2026-86919",
+          "guestId": "ssg-1789813886919-87",
+          "paymentId": "ssp-1789813886920",
+          "amountPaid": 1000,
+          "totalAmount": 3000,
+          "remainingBalance": 2000,
+          "paymentMethod": "UPI",
+          "paymentDate": "2026-09-19T10:31:26.920Z",
+          "statusStamp": "PARTIALLY_PAID",
+          "receivedBy": "Owner"
+        }
+      ]
+    }
+  ]
+}

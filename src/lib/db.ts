@@ -1110,23 +1110,24 @@ export const dbService = {
           orderBy: { createdAt: 'desc' }
         });
 
-        const totalPaid = allPaidPayments.reduce((sum, p) => sum + p.amount, 0);
-        const outstandingAmount = Math.max(0, totalInvoiced - totalPaid);
+        const cleanInvoiced = Number(totalInvoiced.toFixed(2));
+        const cleanPaid = Number(totalPaid.toFixed(2));
+        const rawOutstanding = cleanInvoiced - cleanPaid;
+        const outstandingAmount = Math.max(0, Number(rawOutstanding.toFixed(2)));
 
         const mostRecentPayment = allPaidPayments[0] || null;
         const lastPaymentAmount = mostRecentPayment ? mostRecentPayment.amount : 0;
         const lastPaymentDate = mostRecentPayment ? mostRecentPayment.createdAt.toISOString().split('T')[0] : null;
 
-        let paymentStatus: 'PAID' | 'PARTIAL' | 'PENDING' = 'PAID';
-        if (outstandingAmount > 0) {
-          paymentStatus = totalPaid > 0 ? 'PARTIAL' : 'PENDING';
-        }
+        const dueDateStr = new Date(new Date().getFullYear(), new Date().getMonth(), 5).toISOString().split('T')[0];
+        const computedStatus = calculateBillStatus(cleanInvoiced, cleanPaid, dueDateStr, false, new Date());
+        const paymentStatus = computedStatus === 'PARTIAL' ? 'PARTIAL' : computedStatus === 'OVERDUE' ? 'OVERDUE' : computedStatus === 'PAID' ? 'PAID' : 'PENDING';
 
         return {
           tenantId: dbTenant.id,
           monthlyRent,
-          totalInvoiced,
-          totalPaid,
+          totalInvoiced: cleanInvoiced,
+          totalPaid: cleanPaid,
           outstandingAmount,
           lastPaymentAmount,
           lastPaymentDate,
@@ -1141,17 +1142,21 @@ export const dbService = {
     const tenantInvoices = mockInvoices.filter(i => i.tenantId === mockT.id || i.tenantName === mockT.name);
     const totalInvoiced = tenantInvoices.reduce((s, i) => s + i.amount, 0);
     const totalPaid = tenantInvoices.reduce((s, i) => s + (i.paidAmount || (i.status === 'PAID' ? i.amount : 0)), 0);
-    const outstandingAmount = Math.max(0, totalInvoiced - totalPaid);
+    const cleanInvoiced = Number(totalInvoiced.toFixed(2));
+    const cleanPaid = Number(totalPaid.toFixed(2));
+    const outstandingAmount = Math.max(0, Number((cleanInvoiced - cleanPaid).toFixed(2)));
+    const dueDateStr = new Date(new Date().getFullYear(), new Date().getMonth(), 5).toISOString().split('T')[0];
+    const computedStatus = calculateBillStatus(cleanInvoiced, cleanPaid, dueDateStr, false, new Date());
 
     return {
       tenantId: mockT.id,
       monthlyRent: mockT.rentAmount || 6500,
-      totalInvoiced,
-      totalPaid,
+      totalInvoiced: cleanInvoiced,
+      totalPaid: cleanPaid,
       outstandingAmount,
       lastPaymentAmount: mockT.rentAmount || 6500,
       lastPaymentDate: '2026-08-01',
-      paymentStatus: (outstandingAmount > 0 ? 'PARTIAL' : 'PAID') as any
+      paymentStatus: (computedStatus === 'PARTIAL' ? 'PARTIAL' : computedStatus === 'OVERDUE' ? 'OVERDUE' : computedStatus === 'PAID' ? 'PAID' : 'PENDING') as any
     };
   },
 
@@ -3075,12 +3080,12 @@ export const dbService = {
     receivedBy?: string;
     notes?: string;
   }) {
-    const totalAmount = data.numberOfDays * data.dailyRent;
-    const amountPaid = Math.max(0, Math.min(totalAmount, data.amountPaid || 0));
-    const balance = Math.max(0, totalAmount - amountPaid);
+    const totalAmount = Number((data.numberOfDays * data.dailyRent).toFixed(2));
+    const amountPaid = Math.max(0, Math.min(totalAmount, Number((data.amountPaid || 0).toFixed(2))));
+    const balance = Math.max(0, Number((totalAmount - amountPaid).toFixed(2)));
     
     let paymentStatus = 'PENDING';
-    if (balance === 0 && totalAmount > 0) {
+    if (balance <= 0.01) {
       paymentStatus = 'PAID';
     } else if (amountPaid > 0 && balance > 0) {
       paymentStatus = 'PARTIALLY_PAID';
@@ -3225,11 +3230,12 @@ export const dbService = {
     const guest = await this.getShortStayGuestById(guestId);
     if (!guest) throw new Error("Short-stay guest not found.");
 
-    const newAmountPaid = guest.amountPaid + data.amount;
-    const newBalance = Math.max(0, guest.totalAmount - newAmountPaid);
+    const cleanTotal = Number((Number(guest.totalAmount) || 0).toFixed(2));
+    const newAmountPaid = Number(((Number(guest.amountPaid) || 0) + (Number(data.amount) || 0)).toFixed(2));
+    const newBalance = Math.max(0, Number((cleanTotal - newAmountPaid).toFixed(2)));
     
     let paymentStatus = 'PENDING';
-    if (newBalance === 0) {
+    if (newBalance <= 0.01) {
       paymentStatus = 'PAID';
     } else if (newAmountPaid > 0 && newBalance > 0) {
       paymentStatus = 'PARTIALLY_PAID';

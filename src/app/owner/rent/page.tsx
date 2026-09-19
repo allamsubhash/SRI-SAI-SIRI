@@ -225,14 +225,18 @@ export default function OwnerPaymentsPage() {
   const liveCalculation = useMemo(() => {
     const totalBill = targetRecordBill ? targetRecordBill.amount : 8500;
     const alreadyPaid = targetRecordBill ? targetRecordBill.paidAmount : 0;
-    const payment = typeof recordAmount === 'number' ? recordAmount : 0;
-    const remaining = Math.max(0, totalBill - (alreadyPaid + payment));
+    const payment = Number(recordAmount) || 0;
+    const cleanTotal = Number(Number(totalBill).toFixed(2));
+    const cleanPaid = Number((alreadyPaid + payment).toFixed(2));
+    const remaining = Math.max(0, Number((cleanTotal - cleanPaid).toFixed(2)));
+    const dueDateStr = targetRecordBill?.dueDate || new Date().toISOString().split('T')[0];
+    const computedStatus = calculateBillStatus(cleanTotal, cleanPaid, dueDateStr, false, new Date());
     return {
       totalBill,
       alreadyPaid,
       newPayment: payment,
       remaining,
-      resultingStatus: remaining <= 0 ? 'PAID' : (alreadyPaid + payment > 0 ? 'PARTIAL' : 'DUE')
+      resultingStatus: computedStatus === 'PARTIAL' ? 'PARTIAL' : computedStatus === 'OVERDUE' ? 'OVERDUE' : computedStatus === 'PAID' ? 'PAID' : 'DUE'
     };
   }, [targetRecordBill, recordAmount]);
 

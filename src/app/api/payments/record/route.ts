@@ -44,10 +44,14 @@ export async function POST(request: Request) {
       recordedBy: payload.name || 'Owner'
     });
 
+    // Refetch authoritative financial summary directly from database after recording
+    const financialSummary = await dbService.getTenantFinancialSummary(tenantId);
+
     return NextResponse.json({
       success: true,
       message: 'Payment recorded successfully and receipt generated',
-      payment
+      payment,
+      financialSummary
     });
   } catch (error: any) {
     console.error('API Payments Record error:', error);
