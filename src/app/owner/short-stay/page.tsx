@@ -105,7 +105,7 @@ export default function ShortStayManagementPage() {
     expectedCheckOutTime: '11:00 AM',
     numberOfDays: 1,
     dailyRent: 600,
-    amountPaid: 600,
+    amountPaid: 0,
     paymentMethod: 'CASH',
     receivedBy: 'Hostel Manager',
     notes: ''
@@ -163,13 +163,11 @@ export default function ShortStayManagementPage() {
     
     setRegForm(prev => {
       const newDays = diffDays;
-      const newTotal = newDays * prev.dailyRent;
       return {
         ...prev,
         checkInDate: checkIn,
         expectedCheckOutDate: checkOut,
-        numberOfDays: newDays,
-        amountPaid: newTotal
+        numberOfDays: newDays
       };
     });
   };
@@ -709,11 +707,9 @@ export default function ShortStayManagementPage() {
                     value={regForm.numberOfDays}
                     onChange={(e) => {
                       const days = Math.max(1, Number(e.target.value));
-                      const newTotal = days * regForm.dailyRent;
                       setRegForm({
                         ...regForm,
-                        numberOfDays: days,
-                        amountPaid: newTotal
+                        numberOfDays: days
                       });
                     }}
                     className="w-20 p-1.5 mx-auto text-center rounded-xl bg-white dark:bg-[#141D19] border border-blue-500/40 text-sm font-black"
@@ -728,11 +724,9 @@ export default function ShortStayManagementPage() {
                     value={regForm.dailyRent}
                     onChange={(e) => {
                       const rent = Math.max(0, Number(e.target.value));
-                      const newTotal = regForm.numberOfDays * rent;
                       setRegForm({
                         ...regForm,
-                        dailyRent: rent,
-                        amountPaid: newTotal
+                        dailyRent: rent
                       });
                     }}
                     className="w-24 p-1.5 mx-auto text-center rounded-xl bg-white dark:bg-[#141D19] border border-blue-500/40 text-sm font-black"
