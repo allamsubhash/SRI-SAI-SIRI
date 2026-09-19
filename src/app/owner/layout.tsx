@@ -166,7 +166,6 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
   const menuItems = [
     { label: 'Buildings & Rooms', icon: <Building className="w-4 h-4" />, href: '/owner/buildings' },
     { label: 'Tenant Registry', icon: <Users className="w-4 h-4" />, href: '/owner/tenants' },
-    { label: 'Short-Stay Guests', icon: <UserCheck className="w-4 h-4" />, href: '/owner/short-stay' },
     { label: 'Visitors Gate Pass', icon: <UserCheck className="w-4 h-4" />, href: '/owner/visitors' },
     { label: 'Rent & Billing', icon: <Receipt className="w-4 h-4" />, href: '/owner/rent' },
     { label: 'Complaints', icon: <Wrench className="w-4 h-4" />, href: '/owner/complaints', badge: pendingCount },
@@ -181,7 +180,6 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
   const dockItems = [
     { label: 'Buildings', icon: <Building className="w-5 h-5" />, href: '/owner/buildings' },
     { label: 'Tenants', icon: <Users className="w-5 h-5" />, href: '/owner/tenants' },
-    { label: 'Short-Stay', icon: <UserCheck className="w-5 h-5" />, href: '/owner/short-stay' },
     { label: 'Rent', icon: <Receipt className="w-5 h-5" />, href: '/owner/rent' },
     { label: 'Complaints', icon: <Wrench className="w-5 h-5" />, href: '/owner/complaints', badge: pendingCount },
   ];

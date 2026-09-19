@@ -34,9 +34,11 @@ import NeonModal from '@/components/NeonModal';
 import TenantDetailsModal from '@/components/TenantDetailsModal';
 import { useToast } from '@/components/ToastProvider';
 import { formatINR, formatDate } from '@/utils/formatters';
+import ShortStayManagementPage from '../short-stay/page';
 
 export default function TenantsManagement() {
   const { showToast } = useToast();
+  const [registryTab, setRegistryTab] = useState<'MONTHLY' | 'SHORT_STAY'>('MONTHLY');
   const [tenants, setTenants] = useState<any[]>([]);
   const [buildings, setBuildings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,6 +46,15 @@ export default function TenantsManagement() {
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'ARCHIVED' | 'BLACKLISTED'>('ALL');
   const [roomFilter, setRoomFilter] = useState('ALL');
   const [viewMode, setViewMode] = useState<'PEOPLE' | 'TABLE'>('TABLE');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('tab') === 'short-stay') {
+        setRegistryTab('SHORT_STAY');
+      }
+    }
+  }, []);
   
   // Dedicated Resident Profile Page Navigation State
   const [activeResident, setActiveResident] = useState<any>(null);
@@ -347,7 +358,38 @@ export default function TenantsManagement() {
   return (
     <div className="space-y-7 page-entrance text-left font-sans transition-colors duration-200 select-none pb-16 relative">
       
-      {/* 👑 1. HEADER HERO CARD */}
+      {/* 🏷️ REGISTRY SECTION TOGGLE: MONTHLY TENANTS VS SHORT-STAY GUESTS */}
+      <div className="flex items-center gap-3 border-b border-[#DDD8CE] dark:border-[#293832] pb-3">
+        <button
+          onClick={() => setRegistryTab('MONTHLY')}
+          className={`py-2.5 px-5 rounded-2xl font-black text-xs flex items-center gap-2 cursor-pointer transition-all ${
+            registryTab === 'MONTHLY'
+              ? 'tenant-bg-accent text-white shadow-md scale-[1.02]'
+              : 'bg-[#FFFDF9] dark:bg-[#141D19] text-[#68736E] dark:text-[#9BAAA4] border border-[#DDD8CE] dark:border-[#293832] hover:text-[#1C2522] dark:hover:text-white'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>Monthly Tenants Registry</span>
+        </button>
+
+        <button
+          onClick={() => setRegistryTab('SHORT_STAY')}
+          className={`py-2.5 px-5 rounded-2xl font-black text-xs flex items-center gap-2 cursor-pointer transition-all ${
+            registryTab === 'SHORT_STAY'
+              ? 'bg-blue-600 text-white shadow-md scale-[1.02]'
+              : 'bg-[#FFFDF9] dark:bg-[#141D19] text-[#68736E] dark:text-[#9BAAA4] border border-[#DDD8CE] dark:border-[#293832] hover:text-[#1C2522] dark:hover:text-white'
+          }`}
+        >
+          <UserCheck className="w-4 h-4" />
+          <span>Short-Stay Guests</span>
+        </button>
+      </div>
+
+      {registryTab === 'SHORT_STAY' ? (
+        <ShortStayManagementPage />
+      ) : (
+        <>
+          {/* 👑 1. HEADER HERO CARD */}
       <div className="relative p-6 sm:p-8 rounded-[32px] bg-[#FFFDF9] dark:bg-[#141D19] text-[#1C2522] dark:text-[#F2F5F2] border border-[#DDD8CE] dark:border-[#293832] shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 group">
         <div className="space-y-2 z-10">
           <div className="flex items-center gap-2">
@@ -1185,6 +1227,8 @@ export default function TenantsManagement() {
             </button>
           </div>
         </NeonModal>
+      )}
+        </>
       )}
 
     </div>
