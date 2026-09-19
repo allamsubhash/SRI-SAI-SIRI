@@ -1110,6 +1110,7 @@ export const dbService = {
           orderBy: { createdAt: 'desc' }
         });
 
+        const totalPaid = allPaidPayments.reduce((sum, p) => sum + p.amount, 0);
         const cleanInvoiced = Number(totalInvoiced.toFixed(2));
         const cleanPaid = Number(totalPaid.toFixed(2));
         const rawOutstanding = cleanInvoiced - cleanPaid;
