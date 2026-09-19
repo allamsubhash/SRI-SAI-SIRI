@@ -222,19 +222,21 @@ export const dbService = {
 
   // --- BUILDINGS ---
   async getBuildings() {
-    const dbBuildings = await prisma.building.findMany({
-      include: {
-        floors: {
-          orderBy: { number: 'asc' },
-          include: {
-            rooms: {
-              orderBy: { number: 'asc' },
-              include: {
-                beds: {
-                  include: {
-                    tenant: {
-                      include: {
-                        profile: true
+    try {
+      const dbBuildings = await prisma.building.findMany({
+        include: {
+          floors: {
+            orderBy: { number: 'asc' },
+            include: {
+              rooms: {
+                orderBy: { number: 'asc' },
+                include: {
+                  beds: {
+                    include: {
+                      tenant: {
+                        include: {
+                          profile: true
+                        }
                       }
                     }
                   }
@@ -242,60 +244,70 @@ export const dbService = {
               }
             }
           }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+        },
+        orderBy: { createdAt: 'desc' }
+      });
 
-    return dbBuildings.map(b => ({
-      id: b.id,
-      name: b.name,
-      address: b.address,
-      floors: b.floors.map(f => ({
-        id: f.id,
-        number: f.number,
-        rooms: f.rooms.map(r => {
-          let amenitiesList: string[] = [];
-          try {
-            amenitiesList = r.amenities ? r.amenities.split(',').map((a: string) => a.trim()) : [];
-          } catch (e) {
-            amenitiesList = [];
-          }
-
-          let imagesList: string[] = [];
-          try {
-            imagesList = r.images ? JSON.parse(r.images) : [];
-          } catch (e) {
-            imagesList = [];
-          }
-
-          return {
-            id: r.id,
-            number: r.number,
-            type: r.type,
-            rent: r.rent,
-            status: r.status as any,
-            capacity: r.capacity,
-            amenities: amenitiesList,
-            images: imagesList,
-            beds: r.beds.map(bed => {
-              let tenantName: string | undefined = undefined;
-              if (bed.tenant && bed.tenant.profile) {
-                tenantName = `${bed.tenant.profile.firstName} ${bed.tenant.profile.lastName}`.trim();
+      if (dbBuildings && dbBuildings.length > 0) {
+        return dbBuildings.map(b => ({
+          id: b.id,
+          name: b.name,
+          address: b.address,
+          floors: b.floors.map(f => ({
+            id: f.id,
+            number: f.number,
+            rooms: f.rooms.map(r => {
+              let amenitiesList: string[] = [];
+              try {
+                amenitiesList = r.amenities ? r.amenities.split(',').map((a: string) => a.trim()) : [];
+              } catch (e) {
+                amenitiesList = [];
               }
+
+              let imagesList: string[] = [];
+              try {
+                imagesList = r.images ? JSON.parse(r.images) : [];
+              } catch (e) {
+                imagesList = [];
+              }
+
               return {
-                id: bed.id,
-                number: bed.number,
-                roomId: bed.roomId,
-                tenantId: bed.tenantId,
-                isAvailable: bed.isAvailable,
-                tenantName
+                id: r.id,
+                number: r.number,
+                type: r.type,
+                rent: r.rent,
+                status: r.status as any,
+                capacity: r.capacity,
+                amenities: amenitiesList,
+                images: imagesList,
+                beds: r.beds.map(bed => {
+                  let tenantName: string | undefined = undefined;
+                  if (bed.tenant && bed.tenant.profile) {
+                    tenantName = `${bed.tenant.profile.firstName} ${bed.tenant.profile.lastName}`.trim();
+                  }
+                  return {
+                    id: bed.id,
+                    number: bed.number,
+                    roomId: bed.roomId,
+                    tenantId: bed.tenantId,
+                    isAvailable: bed.isAvailable,
+                    tenantName
+                  };
+                })
               };
             })
-          };
-        })
-      }))
-    }));
+          }))
+        }));
+      }
+    } catch (e) {
+      logDebug("getBuildings DB fallback to disk store:", e);
+    }
+
+    const diskBuildings = loadDevStore().buildings;
+    if (diskBuildings && diskBuildings.length > 0) {
+      return diskBuildings;
+    }
+    return mockBuildings;
   },
 
   async createBuilding(name: string, address: string, floorsCount: number) {
@@ -403,44 +415,135 @@ export const dbService = {
   },
 
   // --- ROOMS ---
-  async createRoom(floorId: string, number: string, type: string, rent: number, capacity: number, amenities: string) {
-    return await prisma.room.create({
-      data: {
-        number,
-        type,
-        rent,
-        capacity,
-        amenities,
-        floorId,
-        status: 'AVAILABLE',
-        beds: {
-          create: Array.from({ length: capacity }).map((_, i) => ({
-            number: `${number}-${String.fromCharCode(65 + i)}`,
-            isAvailable: true
-          }))
+  async createRoom(floorIdOrData: any, numberArg?: string, typeArg?: string, rentArg?: number, capacityArg?: number, amenitiesArg?: string) {
+    const floorId = typeof floorIdOrData === 'string' ? floorIdOrData : (floorIdOrData?.floorId || '');
+    const number = typeof floorIdOrData === 'string' ? (numberArg || '101') : (floorIdOrData?.number || '101');
+    const type = typeof floorIdOrData === 'string' ? (typeArg || 'AC Double') : (floorIdOrData?.type || 'AC Double');
+    const rent = typeof floorIdOrData === 'string' ? (rentArg || 8500) : (floorIdOrData?.rent || 8500);
+    const capacity = typeof floorIdOrData === 'string' ? (capacityArg || 2) : (floorIdOrData?.capacity || 2);
+    const amenities = typeof floorIdOrData === 'string' ? amenitiesArg : floorIdOrData?.amenities;
+
+    const roomId = `rm-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const newBeds = Array.from({ length: capacity }).map((_, i) => ({
+      id: `bed-${roomId}-${i + 1}`,
+      number: `${number}-${String.fromCharCode(65 + i)}`,
+      roomId: roomId,
+      tenantId: null,
+      isAvailable: true
+    }));
+
+    const newRoomObj = {
+      id: roomId,
+      number,
+      type,
+      rent,
+      status: 'AVAILABLE' as const,
+      capacity,
+      amenities: amenities ? (typeof amenities === 'string' ? amenities.split(',').map(a => a.trim()) : amenities) : ['AC', 'Wifi'],
+      images: [],
+      beds: newBeds
+    };
+
+    try {
+      if (floorId) {
+        await prisma.room.create({
+          data: {
+            id: roomId,
+            number,
+            type,
+            rent,
+            capacity,
+            amenities: typeof amenities === 'string' ? amenities : (amenities || ['AC', 'Wifi']).join(','),
+            floorId,
+            status: 'AVAILABLE',
+            beds: {
+              create: Array.from({ length: capacity }).map((_, i) => ({
+                number: `${number}-${String.fromCharCode(65 + i)}`,
+                isAvailable: true
+              }))
+            }
+          },
+          include: { beds: true }
+        });
+      }
+    } catch (e) {
+      logDebug("createRoom DB fallback to disk store:", e);
+    }
+
+    for (const b of mockBuildings) {
+      if (b.floors) {
+        for (const fl of b.floors) {
+          if (fl.id === floorId || (b.id && floorId && floorId.includes(b.id))) {
+            if (!fl.rooms) fl.rooms = [];
+            if (!fl.rooms.some((r: any) => r.id === roomId || r.number === number)) {
+              fl.rooms.push(newRoomObj);
+            }
+            break;
+          }
         }
-      },
-      include: { beds: true }
-    });
+      }
+    }
+    saveDevStore({ buildings: mockBuildings });
+    return newRoomObj;
   },
 
   async updateRoom(roomId: string, data: { number?: string; type?: string; rent?: number; capacity?: number; status?: string }) {
-    return await prisma.room.update({
-      where: { id: roomId },
-      data: {
-        number: data.number,
-        type: data.type,
-        rent: data.rent,
-        capacity: data.capacity,
-        status: data.status
+    try {
+      await prisma.room.update({
+        where: { id: roomId },
+        data: {
+          number: data.number,
+          type: data.type,
+          rent: data.rent,
+          capacity: data.capacity,
+          status: data.status
+        }
+      });
+    } catch (e) {
+      logDebug("updateRoom DB fallback:", e);
+    }
+
+    for (const b of mockBuildings) {
+      if (b.floors) {
+        for (const fl of b.floors) {
+          if (fl.rooms) {
+            const rm = fl.rooms.find((r: any) => r.id === roomId);
+            if (rm) {
+              if (data.number) rm.number = data.number;
+              if (data.type) rm.type = data.type;
+              if (data.rent) rm.rent = data.rent;
+              if (data.capacity) rm.capacity = data.capacity;
+              if (data.status) rm.status = data.status as any;
+            }
+          }
+        }
       }
-    });
+    }
+    saveDevStore({ buildings: mockBuildings });
+    return true;
   },
 
   async deleteRoom(roomId: string) {
-    return await prisma.room.delete({
-      where: { id: roomId }
-    });
+    try {
+      await prisma.room.delete({
+        where: { id: roomId }
+      });
+    } catch (e) {
+      logDebug("deleteRoom DB fallback:", e);
+    }
+
+    for (const b of mockBuildings) {
+      if (b.floors) {
+        for (const fl of b.floors) {
+          if (fl.rooms) {
+            const idx = fl.rooms.findIndex((r: any) => r.id === roomId);
+            if (idx !== -1) fl.rooms.splice(idx, 1);
+          }
+        }
+      }
+    }
+    saveDevStore({ buildings: mockBuildings });
+    return true;
   },
 
   // --- TENANTS ---
@@ -518,7 +621,7 @@ export const dbService = {
         orderBy: { createdAt: 'desc' }
       });
 
-      if (dbTenants) {
+      if (dbTenants && dbTenants.length > 0) {
         return dbTenants.map(t => {
           const assignedBed = t.beds && t.beds.length > 0 ? t.beds[0] : null;
           const formattedDate = t.moveInDate
@@ -553,9 +656,13 @@ export const dbService = {
         });
       }
     } catch (e) {
-      logDebug('getTenants fallback to mockTenants:', e);
+      logDebug('getTenants fallback to disk/mock store:', e);
     }
-    return [];
+    const diskTenants = loadDevStore().tenants;
+    if (diskTenants && diskTenants.length > 0) {
+      return diskTenants;
+    }
+    return mockTenants;
   },
 
   async getTenantRoommates(tenantId: string) {
@@ -964,9 +1071,13 @@ export const dbService = {
         });
       }
     } catch (e) {
-      logDebug('getInvoices fallback to mockInvoices:', e);
+      logDebug('getInvoices fallback to disk/mock store:', e);
     }
-    return [];
+    const diskInvoices = loadDevStore().invoices;
+    if (diskInvoices && diskInvoices.length > 0) {
+      return diskInvoices;
+    }
+    return mockInvoices;
   },
 
   async getTenantFinancialSummary(tenantIdentifier: string) {
@@ -2231,7 +2342,11 @@ export const dbService = {
         }));
       }
     } catch (e) {
-      logDebug('getAllPayments fallback to mockPayments:', e);
+      logDebug('getAllPayments fallback to disk/mock store:', e);
+    }
+    const diskPayments = loadDevStore().payments;
+    if (diskPayments && diskPayments.length > 0) {
+      return [...diskPayments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
     return [...mockPayments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   },
@@ -2911,11 +3026,15 @@ export const dbService = {
         },
         orderBy: { createdAt: 'desc' }
       });
-      return guests;
+      if (guests && guests.length > 0) return guests;
     } catch (e) {
       logDebug("getShortStayGuests fallback:", e);
-      return globalForPrisma.shortStayGuests || [];
     }
+    const diskGuests = loadDevStore().shortStayGuests;
+    if (diskGuests && diskGuests.length > 0) {
+      return diskGuests;
+    }
+    return globalForPrisma.shortStayGuests || [];
   },
 
   async getShortStayGuestById(id: string) {
@@ -3090,6 +3209,7 @@ export const dbService = {
         globalForPrisma.shortStayGuests = [];
       }
       globalForPrisma.shortStayGuests.unshift(newGuest);
+      saveDevStore({ shortStayGuests: globalForPrisma.shortStayGuests });
       return newGuest;
     }
   },
@@ -3189,6 +3309,7 @@ export const dbService = {
       if (!guest.receipts) guest.receipts = [];
       guest.payments.unshift(newPayment);
       guest.receipts.unshift(newReceipt);
+      saveDevStore({ shortStayGuests: globalForPrisma.shortStayGuests });
 
       return guest;
     }
