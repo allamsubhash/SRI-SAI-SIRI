@@ -2613,7 +2613,6 @@ export const dbService = {
                   paymentMethod: 'STATUS_OVERRIDE',
                   type: 'Monthly Rent',
                   status: 'PAID',
-                  recordedBy: updatedBy,
                   notes: `Status updated to PAID by ${updatedBy}`
                 }
               });
