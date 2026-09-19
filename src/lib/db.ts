@@ -17,6 +17,7 @@ import {
 import { 
   computeTenantBillingState, 
   computeFinancialDashboardSummary, 
+  calculateBillStatus,
   UnifiedBill, 
   PaymentTransaction, 
   ReminderRecord 
@@ -2472,7 +2473,8 @@ export const dbService = {
         if (openInvoices.length > 0) {
           for (const inv of openInvoices) {
             const newPaid = Math.min(inv.amount, (inv.paidAmount || 0) + existing.amount);
-            const newStatus = newPaid >= inv.amount ? 'PAID' : 'PARTIAL';
+            const dueDateStr = inv.dueDate ? inv.dueDate.toISOString() : new Date().toISOString();
+            const newStatus = calculateBillStatus(inv.amount, newPaid, dueDateStr, false, new Date());
             await tx.invoice.update({
               where: { id: inv.id },
               data: {
@@ -2500,8 +2502,8 @@ export const dbService = {
       // Update target invoice if present
       const inv = mockInvoices.find(i => i.id === target.invoiceId || i.tenantId === target.tenantId);
       if (inv) {
-        inv.paidAmount = Math.min(inv.amount, (inv.paidAmount || 0) + target.amount);
-        inv.status = inv.paidAmount >= inv.amount ? 'PAID' : 'PARTIAL';
+        const calcSt = calculateBillStatus(inv.amount, inv.paidAmount, inv.dueDate || new Date().toISOString(), false, new Date());
+        inv.status = (calcSt === 'DUE' ? 'PENDING' : calcSt) as any;
       }
 
       // Audit log

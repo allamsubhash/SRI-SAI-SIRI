@@ -122,26 +122,35 @@ export function calculateBillStatus(
 ): PaymentStatus {
   const outstanding = Math.max(0, amount - paidAmount);
 
+  // RULE 1: If Outstanding <= 0 -> ALWAYS PAID
   if (outstanding <= 0) {
     return 'PAID';
   }
 
+  // RULE 2: If Has Pending Verification Submission -> VERIFICATION_PENDING
   if (hasPendingVerification) {
     return 'VERIFICATION_PENDING';
   }
 
-  if (paidAmount > 0 && outstanding > 0) {
+  // Check Due Date
+  const dueDate = new Date(dueDateStr);
+  let isPastDueDate = false;
+  if (!isNaN(dueDate.getTime())) {
+    const endOfDueDate = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate(), 23, 59, 59);
+    isPastDueDate = asOfDate > endOfDueDate;
+  }
+
+  // RULE 3: If Outstanding > 0 and Due Date passed -> OVERDUE (whether partial or 0 paid)
+  if (isPastDueDate) {
+    return 'OVERDUE';
+  }
+
+  // RULE 4: If Outstanding > 0, Due Date NOT passed, and Paid > 0 -> PARTIAL
+  if (paidAmount > 0) {
     return 'PARTIAL';
   }
 
-  const dueDate = new Date(dueDateStr);
-  if (!isNaN(dueDate.getTime())) {
-    const startOfDueDate = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate(), 23, 59, 59);
-    if (asOfDate > startOfDueDate) {
-      return 'OVERDUE';
-    }
-  }
-
+  // RULE 5: If Outstanding > 0, Due Date NOT passed, and Paid = 0 -> DUE
   return 'DUE';
 }
 

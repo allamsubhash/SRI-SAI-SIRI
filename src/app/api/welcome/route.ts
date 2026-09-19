@@ -90,10 +90,13 @@ export async function GET(request: Request) {
         const assignedBed = dbTenant.beds && dbTenant.beds.length > 0 ? dbTenant.beds[0] : null;
         const assignedRoom = assignedBed?.room;
 
-        const unpaidInvoices = dbTenant.invoices.filter(i => i.status === 'PENDING' || i.status === 'OVERDUE' || i.status === 'PARTIAL');
-        const hasOverdue = unpaidInvoices.some(i => i.status === 'OVERDUE' || (new Date(i.dueDate) < new Date() && i.status === 'PENDING'));
-        const hasPending = unpaidInvoices.length > 0;
-
+        const outstandingVal = (financialSummary as any)?.remainingOutstanding ?? (financialSummary as any)?.outstandingAmount ?? 0;
+        const isFullyPaid = outstandingVal <= 0;
+        const unpaidInvoices = dbTenant.invoices.filter(i => Math.max(0, (i.amount || 0) - (i.paidAmount || 0)) > 0);
+        const primaryStatus = (financialSummary as any)?.primaryStatus || (financialSummary as any)?.paymentStatus;
+        const hasOverdue = !isFullyPaid && (primaryStatus === 'OVERDUE' || unpaidInvoices.some(i => new Date(i.dueDate) < new Date()));
+        const hasPending = unpaidInvoices.length > 0 && !isFullyPaid;
+        
         let statusText = 'ALL CLEAR';
         if (hasOverdue) statusText = 'OVERDUE';
         else if (hasPending) statusText = 'PAYMENT DUE';

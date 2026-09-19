@@ -1,3 +1,5 @@
+import { calculateBillStatus } from './billingService';
+
 /**
  * SRI SAI SIRI BOYS HOSTEL - SINGLE AUTHORITATIVE RENT CALCULATOR
  * 
@@ -136,16 +138,20 @@ export function calculateMonthlyDues(
     totalDues = Math.max(0, monthlyRent - totalApprovedPaid);
   }
 
+  const dueDateStr = new Date(asOfDate.getFullYear(), asOfDate.getMonth(), 5).toISOString().split('T')[0];
+  const derivedStatus = calculateBillStatus(monthlyRent, totalApprovedPaid, dueDateStr, totalPendingApproval > 0, asOfDate);
+
   let status: 'PAID' | 'PARTIAL' | 'PENDING_APPROVAL' | 'OVERDUE' | 'UNPAID' = 'UNPAID';
-  if (totalDues === 0) {
+  if (totalDues === 0 || derivedStatus === 'PAID') {
     status = 'PAID';
-  } else if (totalPendingApproval >= totalDues) {
+  } else if (totalPendingApproval >= totalDues && totalPendingApproval > 0) {
     status = 'PENDING_APPROVAL';
-  } else if (totalApprovedPaid > 0) {
+  } else if (derivedStatus === 'PARTIAL') {
     status = 'PARTIAL';
+  } else if (derivedStatus === 'OVERDUE') {
+    status = 'OVERDUE';
   } else {
-    const currentDay = asOfDate.getDate();
-    status = currentDay > 5 ? 'OVERDUE' : 'UNPAID';
+    status = 'UNPAID';
   }
 
   // Next due date: 5th of current/next month
