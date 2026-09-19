@@ -20,9 +20,15 @@ import {
   ReminderRecord 
 } from './billingService';
 
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+const globalForPrisma = globalThis as unknown as { 
+  prisma: PrismaClient;
+  shortStayGuests?: any[];
+};
 export const prisma = globalForPrisma.prisma || new PrismaClient();
 globalForPrisma.prisma = prisma;
+if (!globalForPrisma.shortStayGuests) {
+  globalForPrisma.shortStayGuests = [];
+}
 
 function logDebug(message: string, error?: any) {
   console.log(`[Sri Sai Siri DB Service] ${message}`, error ? error.message || error : '');
@@ -2786,6 +2792,367 @@ export const dbService = {
       mockQRSettings.qrCodeUrl = '';
       return mockQRSettings;
     }
+  },
+
+  // --- SHORT-STAY GUEST MANAGEMENT ---
+  async getShortStayGuests() {
+    try {
+      const guests = await prisma.shortStayGuest.findMany({
+        include: {
+          payments: { orderBy: { paymentDate: 'desc' } },
+          receipts: { orderBy: { createdAt: 'desc' } }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+      return guests;
+    } catch (e) {
+      logDebug("getShortStayGuests fallback:", e);
+      return globalForPrisma.shortStayGuests || [];
+    }
+  },
+
+  async getShortStayGuestById(id: string) {
+    try {
+      const guest = await prisma.shortStayGuest.findUnique({
+        where: { id },
+        include: {
+          payments: { orderBy: { paymentDate: 'desc' } },
+          receipts: { orderBy: { createdAt: 'desc' } }
+        }
+      });
+      if (guest) return guest;
+    } catch (e) {
+      logDebug("getShortStayGuestById fallback:", e);
+    }
+    return (globalForPrisma.shortStayGuests || []).find((g: any) => g.id === id) || null;
+  },
+
+  async createShortStayGuest(data: {
+    name: string;
+    phone: string;
+    buildingId?: string;
+    buildingName?: string;
+    roomId?: string;
+    roomNumber?: string;
+    bedId?: string;
+    bedNumber?: string;
+    checkInDate: Date | string;
+    checkInTime?: string;
+    expectedCheckOutDate: Date | string;
+    expectedCheckOutTime?: string;
+    numberOfDays: number;
+    dailyRent: number;
+    amountPaid: number;
+    paymentMethod: string;
+    receivedBy?: string;
+    notes?: string;
+  }) {
+    const totalAmount = data.numberOfDays * data.dailyRent;
+    const amountPaid = Math.max(0, Math.min(totalAmount, data.amountPaid || 0));
+    const balance = Math.max(0, totalAmount - amountPaid);
+    
+    let paymentStatus = 'PENDING';
+    if (balance === 0 && totalAmount > 0) {
+      paymentStatus = 'PAID';
+    } else if (amountPaid > 0 && balance > 0) {
+      paymentStatus = 'PARTIALLY_PAID';
+    }
+
+    const guestId = `ssg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const receiptNo = `SS-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}`;
+
+    try {
+      const createdGuest = await prisma.shortStayGuest.create({
+        data: {
+          id: guestId,
+          name: data.name,
+          phone: data.phone,
+          buildingId: data.buildingId,
+          buildingName: data.buildingName,
+          roomId: data.roomId,
+          roomNumber: data.roomNumber,
+          bedId: data.bedId,
+          bedNumber: data.bedNumber,
+          checkInDate: new Date(data.checkInDate),
+          checkInTime: data.checkInTime || '12:00 PM',
+          expectedCheckOutDate: new Date(data.expectedCheckOutDate),
+          expectedCheckOutTime: data.expectedCheckOutTime || '11:00 AM',
+          numberOfDays: data.numberOfDays,
+          dailyRent: data.dailyRent,
+          totalAmount: totalAmount,
+          amountPaid: amountPaid,
+          balance: balance,
+          paymentStatus: paymentStatus,
+          status: 'ACTIVE',
+          notes: data.notes
+        }
+      });
+
+      if (data.bedId) {
+        await prisma.bed.update({
+          where: { id: data.bedId },
+          data: {
+            shortStayGuestId: createdGuest.id,
+            isAvailable: false
+          }
+        });
+      }
+
+      if (amountPaid > 0) {
+        const payment = await prisma.shortStayPayment.create({
+          data: {
+            guestId: createdGuest.id,
+            amount: amountPaid,
+            paymentMethod: data.paymentMethod || 'CASH',
+            receiptNumber: receiptNo,
+            receivedBy: data.receivedBy || 'Hostel Owner',
+            status: 'PAID',
+            notes: 'Initial payment upon registration'
+          }
+        });
+
+        await prisma.shortStayReceipt.create({
+          data: {
+            receiptNumber: receiptNo,
+            guestId: createdGuest.id,
+            paymentId: payment.id,
+            amountPaid: amountPaid,
+            totalAmount: totalAmount,
+            remainingBalance: balance,
+            paymentMethod: data.paymentMethod || 'CASH',
+            statusStamp: paymentStatus,
+            receivedBy: data.receivedBy || 'Hostel Owner'
+          }
+        });
+      }
+
+      return await this.getShortStayGuestById(createdGuest.id);
+    } catch (e) {
+      logDebug("createShortStayGuest DB fallback:", e);
+      const newGuest = {
+        id: guestId,
+        name: data.name,
+        phone: data.phone,
+        buildingId: data.buildingId,
+        buildingName: data.buildingName,
+        roomId: data.roomId,
+        roomNumber: data.roomNumber,
+        bedId: data.bedId,
+        bedNumber: data.bedNumber,
+        checkInDate: new Date(data.checkInDate),
+        checkInTime: data.checkInTime || '12:00 PM',
+        expectedCheckOutDate: new Date(data.expectedCheckOutDate),
+        expectedCheckOutTime: data.expectedCheckOutTime || '11:00 AM',
+        numberOfDays: data.numberOfDays,
+        dailyRent: data.dailyRent,
+        totalAmount: totalAmount,
+        amountPaid: amountPaid,
+        balance: balance,
+        paymentStatus: paymentStatus,
+        status: 'ACTIVE',
+        notes: data.notes,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        payments: amountPaid > 0 ? [{
+          id: `ssp-${Date.now()}`,
+          guestId: guestId,
+          amount: amountPaid,
+          paymentMethod: data.paymentMethod || 'CASH',
+          paymentDate: new Date(),
+          receiptNumber: receiptNo,
+          receivedBy: data.receivedBy || 'Hostel Owner',
+          status: 'PAID',
+          notes: 'Initial payment upon registration'
+        }] : [],
+        receipts: amountPaid > 0 ? [{
+          id: `ssr-${Date.now()}`,
+          receiptNumber: receiptNo,
+          guestId: guestId,
+          paymentId: `ssp-${Date.now()}`,
+          amountPaid: amountPaid,
+          totalAmount: totalAmount,
+          remainingBalance: balance,
+          paymentMethod: data.paymentMethod || 'CASH',
+          paymentDate: new Date(),
+          statusStamp: paymentStatus,
+          receivedBy: data.receivedBy || 'Hostel Owner'
+        }] : []
+      };
+
+      if (!globalForPrisma.shortStayGuests) {
+        globalForPrisma.shortStayGuests = [];
+      }
+      globalForPrisma.shortStayGuests.unshift(newGuest);
+      return newGuest;
+    }
+  },
+
+  async addShortStayPayment(guestId: string, data: {
+    amount: number;
+    paymentMethod: string;
+    receivedBy?: string;
+    notes?: string;
+  }) {
+    const guest = await this.getShortStayGuestById(guestId);
+    if (!guest) throw new Error("Short-stay guest not found.");
+
+    const newAmountPaid = guest.amountPaid + data.amount;
+    const newBalance = Math.max(0, guest.totalAmount - newAmountPaid);
+    
+    let paymentStatus = 'PENDING';
+    if (newBalance === 0) {
+      paymentStatus = 'PAID';
+    } else if (newAmountPaid > 0 && newBalance > 0) {
+      paymentStatus = 'PARTIALLY_PAID';
+    }
+
+    const receiptNo = `SS-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}`;
+
+    try {
+      await prisma.shortStayGuest.update({
+        where: { id: guestId },
+        data: {
+          amountPaid: newAmountPaid,
+          balance: newBalance,
+          paymentStatus: paymentStatus
+        }
+      });
+
+      const payment = await prisma.shortStayPayment.create({
+        data: {
+          guestId: guestId,
+          amount: data.amount,
+          paymentMethod: data.paymentMethod || 'CASH',
+          receiptNumber: receiptNo,
+          receivedBy: data.receivedBy || 'Hostel Owner',
+          status: 'PAID',
+          notes: data.notes || 'Installment payment'
+        }
+      });
+
+      await prisma.shortStayReceipt.create({
+        data: {
+          receiptNumber: receiptNo,
+          guestId: guestId,
+          paymentId: payment.id,
+          amountPaid: data.amount,
+          totalAmount: guest.totalAmount,
+          remainingBalance: newBalance,
+          paymentMethod: data.paymentMethod || 'CASH',
+          statusStamp: paymentStatus,
+          receivedBy: data.receivedBy || 'Hostel Owner'
+        }
+      });
+
+      return await this.getShortStayGuestById(guestId);
+    } catch (e) {
+      logDebug("addShortStayPayment DB fallback:", e);
+      guest.amountPaid = newAmountPaid;
+      guest.balance = newBalance;
+      guest.paymentStatus = paymentStatus;
+
+      const pId = `ssp-${Date.now()}`;
+      const newPayment = {
+        id: pId,
+        guestId,
+        amount: data.amount,
+        paymentMethod: data.paymentMethod || 'CASH',
+        paymentDate: new Date(),
+        receiptNumber: receiptNo,
+        receivedBy: data.receivedBy || 'Hostel Owner',
+        status: 'PAID',
+        notes: data.notes || 'Installment payment'
+      };
+
+      const newReceipt = {
+        id: `ssr-${Date.now()}`,
+        receiptNumber: receiptNo,
+        guestId,
+        paymentId: pId,
+        amountPaid: data.amount,
+        totalAmount: guest.totalAmount,
+        remainingBalance: newBalance,
+        paymentMethod: data.paymentMethod || 'CASH',
+        paymentDate: new Date(),
+        statusStamp: paymentStatus,
+        receivedBy: data.receivedBy || 'Hostel Owner'
+      };
+
+      if (!guest.payments) guest.payments = [];
+      if (!guest.receipts) guest.receipts = [];
+      guest.payments.unshift(newPayment);
+      guest.receipts.unshift(newReceipt);
+
+      return guest;
+    }
+  },
+
+  async checkoutShortStayGuest(guestId: string) {
+    const guest = await this.getShortStayGuestById(guestId);
+    if (!guest) throw new Error("Short-stay guest not found.");
+
+    const now = new Date();
+    try {
+      await prisma.shortStayGuest.update({
+        where: { id: guestId },
+        data: {
+          status: 'CHECKED_OUT',
+          actualCheckOutDate: now
+        }
+      });
+
+      if (guest.bedId) {
+        await prisma.bed.update({
+          where: { id: guest.bedId },
+          data: {
+            shortStayGuestId: null,
+            isAvailable: true
+          }
+        });
+      }
+
+      return await this.getShortStayGuestById(guestId);
+    } catch (e) {
+      logDebug("checkoutShortStayGuest DB fallback:", e);
+      guest.status = 'CHECKED_OUT';
+      guest.actualCheckOutDate = now;
+      return guest;
+    }
+  },
+
+  async getShortStayStats() {
+    const guests = await this.getShortStayGuests();
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const currentlyStaying = guests.filter(g => g.status === 'ACTIVE').length;
+    const checkingOutToday = guests.filter(g => {
+      if (g.status !== 'ACTIVE') return false;
+      const expectedDateStr = new Date(g.expectedCheckOutDate).toISOString().split('T')[0];
+      return expectedDateStr === todayStr;
+    }).length;
+
+    const upcomingGuests = guests.filter(g => {
+      const checkInDateStr = new Date(g.checkInDate).toISOString().split('T')[0];
+      return checkInDateStr > todayStr && g.status === 'ACTIVE';
+    }).length;
+
+    const partiallyPaid = guests.filter(g => g.status === 'ACTIVE' && g.paymentStatus === 'PARTIALLY_PAID').length;
+    const pendingPayments = guests.filter(g => g.status === 'ACTIVE' && g.paymentStatus === 'PENDING').length;
+    
+    const totalRevenue = guests.reduce((sum, g) => sum + (g.amountPaid || 0), 0);
+    const outstandingBalance = guests
+      .filter(g => g.status === 'ACTIVE')
+      .reduce((sum, g) => sum + (g.balance || 0), 0);
+
+    return {
+      currentlyStaying,
+      checkingOutToday,
+      upcomingGuests,
+      partiallyPaid,
+      pendingPayments,
+      totalRevenue,
+      outstandingBalance
+    };
   }
 };
 

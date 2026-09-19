@@ -72,7 +72,74 @@ async function fixAivenSchema() {
       PRIMARY KEY (\`id\`),
       UNIQUE KEY \`NotificationRead_userId_notificationId_key\` (\`userId\`, \`notificationId\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-    `ALTER TABLE \`Guideline\` MODIFY COLUMN \`content\` TEXT NULL`
+    `ALTER TABLE \`Guideline\` MODIFY COLUMN \`content\` TEXT NULL`,
+
+    // 9. Short-Stay DDLs
+    `ALTER TABLE \`Bed\` ADD COLUMN \`shortStayGuestId\` VARCHAR(191) NULL`,
+    `CREATE TABLE IF NOT EXISTS \`ShortStayGuest\` (
+      \`id\` VARCHAR(191) NOT NULL,
+      \`name\` VARCHAR(191) NOT NULL,
+      \`phone\` VARCHAR(191) NOT NULL,
+      \`buildingId\` VARCHAR(191) NULL,
+      \`buildingName\` VARCHAR(191) NULL,
+      \`roomId\` VARCHAR(191) NULL,
+      \`roomNumber\` VARCHAR(191) NULL,
+      \`bedId\` VARCHAR(191) NULL,
+      \`bedNumber\` VARCHAR(191) NULL,
+      \`checkInDate\` DATETIME(3) NOT NULL,
+      \`checkInTime\` VARCHAR(191) NULL,
+      \`expectedCheckOutDate\` DATETIME(3) NOT NULL,
+      \`expectedCheckOutTime\` VARCHAR(191) NULL,
+      \`actualCheckOutDate\` DATETIME(3) NULL,
+      \`numberOfDays\` INT NOT NULL DEFAULT 1,
+      \`dailyRent\` DOUBLE NOT NULL DEFAULT 0.0,
+      \`totalAmount\` DOUBLE NOT NULL DEFAULT 0.0,
+      \`amountPaid\` DOUBLE NOT NULL DEFAULT 0.0,
+      \`balance\` DOUBLE NOT NULL DEFAULT 0.0,
+      \`paymentStatus\` VARCHAR(191) NOT NULL DEFAULT 'PENDING',
+      \`status\` VARCHAR(191) NOT NULL DEFAULT 'ACTIVE',
+      \`notes\` TEXT NULL,
+      \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      \`updatedAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+      PRIMARY KEY (\`id\`),
+      KEY \`ShortStayGuest_status_idx\` (\`status\`),
+      KEY \`ShortStayGuest_paymentStatus_idx\` (\`paymentStatus\`),
+      KEY \`ShortStayGuest_phone_idx\` (\`phone\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+    `CREATE TABLE IF NOT EXISTS \`ShortStayPayment\` (
+      \`id\` VARCHAR(191) NOT NULL,
+      \`guestId\` VARCHAR(191) NOT NULL,
+      \`amount\` DOUBLE NOT NULL,
+      \`paymentMethod\` VARCHAR(191) NOT NULL,
+      \`paymentDate\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      \`receiptNumber\` VARCHAR(191) NOT NULL,
+      \`receivedBy\` VARCHAR(191) NULL,
+      \`status\` VARCHAR(191) NOT NULL DEFAULT 'PAID',
+      \`notes\` TEXT NULL,
+      \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      \`updatedAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+      PRIMARY KEY (\`id\`),
+      UNIQUE KEY \`ShortStayPayment_receiptNumber_key\` (\`receiptNumber\`),
+      KEY \`ShortStayPayment_guestId_idx\` (\`guestId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+    `CREATE TABLE IF NOT EXISTS \`ShortStayReceipt\` (
+      \`id\` VARCHAR(191) NOT NULL,
+      \`receiptNumber\` VARCHAR(191) NOT NULL,
+      \`guestId\` VARCHAR(191) NOT NULL,
+      \`paymentId\` VARCHAR(191) NOT NULL,
+      \`amountPaid\` DOUBLE NOT NULL,
+      \`totalAmount\` DOUBLE NOT NULL,
+      \`remainingBalance\` DOUBLE NOT NULL,
+      \`paymentMethod\` VARCHAR(191) NOT NULL,
+      \`paymentDate\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      \`statusStamp\` VARCHAR(191) NOT NULL,
+      \`receivedBy\` VARCHAR(191) NULL,
+      \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      PRIMARY KEY (\`id\`),
+      UNIQUE KEY \`ShortStayReceipt_receiptNumber_key\` (\`receiptNumber\`),
+      UNIQUE KEY \`ShortStayReceipt_paymentId_key\` (\`paymentId\`),
+      KEY \`ShortStayReceipt_guestId_idx\` (\`guestId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
   ];
 
   for (const sql of ddlStatements) {

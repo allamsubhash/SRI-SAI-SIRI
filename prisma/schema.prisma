@@ -115,18 +115,21 @@ model Room {
 }
 
 model Bed {
-  id          String   @id @default(uuid())
-  number      String
-  roomId      String
-  room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  tenantId    String?
-  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull)
-  isAvailable Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String          @id @default(uuid())
+  number           String
+  roomId           String
+  room             Room            @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  tenantId         String?
+  tenant           Tenant?         @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  shortStayGuestId String?
+  shortStayGuest   ShortStayGuest? @relation(fields: [shortStayGuestId], references: [id], onDelete: SetNull)
+  isAvailable      Boolean         @default(true)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   @@index([roomId])
   @@index([tenantId])
+  @@index([shortStayGuestId])
 }
 
 model Payment {
@@ -340,4 +343,76 @@ model Guideline {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ShortStayGuest {
+  id                   String             @id @default(uuid())
+  name                 String
+  phone                String
+  buildingId           String?
+  buildingName         String?
+  roomId               String?
+  roomNumber           String?
+  bedId                String?
+  bedNumber            String?
+  checkInDate          DateTime
+  checkInTime          String?
+  expectedCheckOutDate DateTime
+  expectedCheckOutTime String?
+  actualCheckOutDate   DateTime?
+  numberOfDays         Int                @default(1)
+  dailyRent            Float              @default(0.0)
+  totalAmount          Float              @default(0.0)
+  amountPaid           Float              @default(0.0)
+  balance              Float              @default(0.0)
+  paymentStatus        String             @default("PENDING") // PAID, PARTIALLY_PAID, PENDING, OVERDUE
+  status               String             @default("ACTIVE")  // ACTIVE, CHECKED_OUT
+  notes                String?            @db.Text
+  beds                 Bed[]
+  payments             ShortStayPayment[]
+  receipts             ShortStayReceipt[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([phone])
+}
+
+model ShortStayPayment {
+  id            String            @id @default(uuid())
+  guestId       String
+  guest         ShortStayGuest    @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  amount        Float
+  paymentMethod String            // CASH, ONLINE, CARD, UPI
+  paymentDate   DateTime          @default(now())
+  receiptNumber String            @unique // e.g. SS-2026-00001
+  receivedBy    String?
+  status        String            @default("PAID") // PAID, PENDING, FAILED
+  notes         String?           @db.Text
+  receipt       ShortStayReceipt?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([guestId])
+}
+
+model ShortStayReceipt {
+  id               String           @id @default(uuid())
+  receiptNumber    String           @unique // SS-2026-00001
+  guestId          String
+  guest            ShortStayGuest   @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  paymentId        String           @unique
+  payment          ShortStayPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  amountPaid       Float
+  totalAmount      Float
+  remainingBalance Float
+  paymentMethod    String
+  paymentDate      DateTime         @default(now())
+  statusStamp      String           // PAID, PARTIALLY_PAID, PENDING
+  receivedBy       String?
+  createdAt        DateTime         @default(now())
+
+  @@index([guestId])
+  @@index([receiptNumber])
 }
