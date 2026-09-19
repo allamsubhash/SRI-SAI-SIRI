@@ -77,14 +77,24 @@ export default function OfficialPaymentReceiptModal({
   const amountInWords = numberToWords(totalAmount);
   const generatedTime = receiptData.generatedOn || formatDateTime(new Date());
 
-  // Strict Status Stamp Calculation
-  const remainingDue = receiptData.remainingDue !== undefined ? receiptData.remainingDue : 0;
-  const currentPaid = receiptData.currentPayment !== undefined ? receiptData.currentPayment : (receiptData.totalPaid || 0);
+  // Enforce Strict Mathematical Invariant: Balance = Math.max(0, Bill Amount - Total Paid)
+  const billAmount = Number((receiptData.billAmount || receiptData.totalStayAmount || receiptData.totalAmount || 0).toFixed(2));
+  const currentPaid = receiptData.currentPayment !== undefined 
+    ? Number((receiptData.currentPayment || 0).toFixed(2))
+    : Number((receiptData.totalPaid || receiptData.totalAmount || 0).toFixed(2));
+  const totalPaid = receiptData.totalPaid !== undefined 
+    ? Number((receiptData.totalPaid || 0).toFixed(2))
+    : Number(((receiptData.previousPaid || 0) + currentPaid).toFixed(2));
+
+  const computedRemaining = Math.max(0, Number((billAmount - totalPaid).toFixed(2)));
+  const remainingDue = receiptData.remainingDue !== undefined 
+    ? Math.min(receiptData.remainingDue, computedRemaining)
+    : computedRemaining;
 
   let statusStamp: 'PAID' | 'PARTIALLY_PAID' | 'PENDING' = 'PAID';
-  if (remainingDue <= 0) {
+  if (remainingDue <= 0.01 || (billAmount > 0 && totalPaid >= billAmount)) {
     statusStamp = 'PAID';
-  } else if (currentPaid > 0 && remainingDue > 0) {
+  } else if (totalPaid > 0 && remainingDue > 0) {
     statusStamp = 'PARTIALLY_PAID';
   } else {
     statusStamp = 'PENDING';

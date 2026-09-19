@@ -19,7 +19,7 @@ interface TenantDetailsModalProps {
   tenant: any;
   allBills?: UnifiedBill[];
   allTransactions?: PaymentTransaction[];
-  onRecordPayment?: (tenant: any) => void;
+  onSendReminder?: (tenant: any) => void;
   onEditProfile?: (tenant: any) => void;
   onVacate?: (tenant: any) => void;
   onBlacklist?: (tenant: any) => void;
@@ -32,7 +32,7 @@ export default function TenantDetailsModal({
   tenant,
   allBills = [],
   allTransactions = [],
-  onRecordPayment,
+  onSendReminder,
   onEditProfile,
   onVacate,
   onBlacklist,
@@ -320,19 +320,37 @@ export default function TenantDetailsModal({
           )}
 
           <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#DDD8CE] dark:border-[#293832]">
-            {onRecordPayment && remainingDue > 0 ? (
+            {remainingDue > 0 ? (
               <button
                 type="button"
                 onClick={() => {
                   onClose();
-                  onRecordPayment(tenant);
+                  if (onSendReminder) onSendReminder(tenant);
+                  else {
+                    fetch('/api/payments/remind', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        tenantId: tenant.id || tenant.userId,
+                        invoiceId: billingState?.currentBill?.id || `inv-${tenant.id}`,
+                        reminderType: 'Due Today',
+                        channel: 'WhatsApp'
+                      })
+                    }).then(() => alert(`Payment reminder dispatched to ${tenant.name || 'Resident'} for ${formatINR(remainingDue)}.`))
+                    .catch(err => alert('Failed to send reminder: ' + err.message));
+                  }
                 }}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#702434] to-[#8a2e42] hover:from-[#5a1c29] hover:to-[#702434] text-white font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Record Payment ({formatINR(remainingDue)})</span>
+                <Send className="w-3.5 h-3.5" />
+                <span>Send Due Reminder ({formatINR(remainingDue)})</span>
               </button>
-            ) : <div />}
+            ) : (
+              <div className="flex-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Account All Clear (No Pending Dues)</span>
+              </div>
+            )}
 
             <button
               type="button"
