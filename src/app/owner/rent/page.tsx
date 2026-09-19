@@ -49,7 +49,7 @@ import { useToast } from '@/components/ToastProvider';
 import { formatINR, formatDate, formatDateTime } from '@/utils/formatters';
 import OfficialPaymentReceiptModal, { OfficialReceiptData } from '@/components/OfficialPaymentReceiptModal';
 import TenantDetailsModal from '@/components/TenantDetailsModal';
-import { UnifiedBill, PaymentTransaction, ReminderRecord, FinancialAuditLog } from '@/lib/billingService';
+import { UnifiedBill, PaymentTransaction, ReminderRecord, FinancialAuditLog, calculateBillStatus } from '@/lib/billingService';
 
 export default function OwnerPaymentsPage() {
   const { showToast } = useToast();
