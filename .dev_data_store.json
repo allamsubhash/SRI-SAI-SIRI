@@ -801,5 +801,161 @@
         }
       ]
     }
+  ],
+  "invoices": [
+    {
+      "id": "inv-1",
+      "number": "INV-2026-07-001",
+      "tenantId": "t-1",
+      "tenantName": "Rohan Verma",
+      "roomNumber": "A-101",
+      "amount": 9000,
+      "paidAmount": 9000,
+      "dueDate": "2026-07-05",
+      "status": "PAID",
+      "items": [
+        {
+          "description": "Monthly Room Rent (July 2026)",
+          "amount": 8500
+        },
+        {
+          "description": "High-Speed Wi-Fi Service",
+          "amount": 500
+        }
+      ],
+      "dateCreated": "2026-07-01"
+    },
+    {
+      "id": "inv-2",
+      "number": "INV-2026-07-002",
+      "tenantId": "t-2",
+      "tenantName": "Priya Sharma",
+      "roomNumber": "A-101",
+      "amount": 9000,
+      "paidAmount": 9000,
+      "dueDate": "2026-07-05",
+      "status": "PAID",
+      "items": [
+        {
+          "description": "Monthly Room Rent (July 2026)",
+          "amount": 8500
+        },
+        {
+          "description": "High-Speed Wi-Fi Service",
+          "amount": 500
+        }
+      ],
+      "dateCreated": "2026-07-01"
+    },
+    {
+      "id": "inv-3",
+      "number": "INV-2026-07-003",
+      "tenantId": "t-3",
+      "tenantName": "Amit Patel",
+      "roomNumber": "A-102",
+      "amount": 14500,
+      "paidAmount": 14500,
+      "dueDate": "2026-07-05",
+      "status": "PAID",
+      "items": [
+        {
+          "description": "Monthly Room Rent (July 2026)",
+          "amount": 14000
+        },
+        {
+          "description": "High-Speed Wi-Fi Service",
+          "amount": 500
+        }
+      ],
+      "dateCreated": "2026-07-01"
+    },
+    {
+      "id": "inv-4",
+      "number": "INV-2026-07-004",
+      "tenantId": "t-4",
+      "tenantName": "Sneha Reddy",
+      "roomNumber": "A-201",
+      "amount": 7000,
+      "paidAmount": 3000,
+      "dueDate": "2026-07-05",
+      "status": "PARTIAL",
+      "items": [
+        {
+          "description": "Monthly Room Rent (July 2026)",
+          "amount": 6500
+        },
+        {
+          "description": "High-Speed Wi-Fi Service",
+          "amount": 500
+        }
+      ],
+      "dateCreated": "2026-07-01"
+    },
+    {
+      "id": "inv-5",
+      "number": "INV-2026-06-005",
+      "tenantId": "t-4",
+      "tenantName": "Sneha Reddy",
+      "roomNumber": "A-201",
+      "amount": 7000,
+      "paidAmount": 7000,
+      "dueDate": "2026-06-05",
+      "status": "PAID",
+      "items": [
+        {
+          "description": "Monthly Room Rent (June 2026)",
+          "amount": 6500
+        },
+        {
+          "description": "High-Speed Wi-Fi Service",
+          "amount": 500
+        }
+      ],
+      "dateCreated": "2026-06-01"
+    }
+  ],
+  "auditLogs": [
+    {
+      "id": "audit-1789827530974",
+      "action": "INVOICE_STATUS_CHANGED",
+      "userName": "Owner",
+      "entityId": "inv-test-3",
+      "details": "Payment status changed to DUE by Owner",
+      "createdAt": "2026-09-19T14:18:50.974Z"
+    },
+    {
+      "id": "audit-1789827530973",
+      "action": "INVOICE_STATUS_CHANGED",
+      "userName": "Owner",
+      "entityId": "inv-test-2",
+      "details": "Payment status changed to OVERDUE by Owner",
+      "createdAt": "2026-09-19T14:18:50.973Z"
+    },
+    {
+      "id": "audit-1789827530968",
+      "action": "INVOICE_STATUS_CHANGED",
+      "userName": "Owner",
+      "entityId": "inv-test-1",
+      "details": "Payment status changed to PAID by Owner",
+      "createdAt": "2026-09-19T14:18:50.968Z"
+    },
+    {
+      "id": "audit-001",
+      "action": "PAYMENT_RECORDED",
+      "userId": "u-owner-1",
+      "userName": "Alok Sharma (Owner)",
+      "entityId": "pay-sample-001",
+      "details": "Recorded ₹8,500 payment for Rohan Verma (August 2026 Rent) via ONLINE",
+      "createdAt": "2026-08-01T11:00:00.000Z"
+    },
+    {
+      "id": "audit-002",
+      "action": "REMINDER_SENT",
+      "userId": "u-owner-1",
+      "userName": "Alok Sharma (Owner)",
+      "entityId": "inv-4",
+      "details": "Sent Upcoming Due reminder via WhatsApp to Sneha Reddy",
+      "createdAt": "2026-07-04T10:30:00.000Z"
+    }
   ]
 }

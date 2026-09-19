@@ -2570,6 +2570,84 @@ export const dbService = {
     return target || { id: paymentId, status: 'REJECTED', rejectionReason };
   },
 
+  async updateInvoiceStatus(
+    invoiceId: string,
+    targetStatus: 'PAID' | 'OVERDUE' | 'DUE' | 'PENDING' | 'PARTIAL',
+    updatedBy: string = 'Owner',
+    tenantId?: string
+  ) {
+    const normStatus = (targetStatus === 'PENDING' ? 'DUE' : targetStatus) as any;
+    
+    try {
+      await prisma.$transaction(async (tx) => {
+        const inv = await tx.invoice.findFirst({
+          where: {
+            OR: [
+              { id: invoiceId },
+              ...(tenantId ? [{ tenantId }] : [])
+            ]
+          }
+        });
+        if (inv) {
+          let newPaid = inv.paidAmount;
+          if (normStatus === 'PAID') {
+            newPaid = inv.amount;
+          } else if (normStatus === 'DUE') {
+            newPaid = 0;
+          }
+          await tx.invoice.update({
+            where: { id: inv.id },
+            data: {
+              status: normStatus,
+              paidAmount: newPaid
+            }
+          });
+          if (normStatus === 'PAID') {
+            const outstanding = Math.max(0, inv.amount - (inv.paidAmount || 0));
+            if (outstanding > 0) {
+              await tx.payment.create({
+                data: {
+                  tenantId: inv.tenantId,
+                  invoiceId: inv.id,
+                  amount: outstanding,
+                  paymentMethod: 'STATUS_OVERRIDE',
+                  type: 'Monthly Rent',
+                  status: 'PAID',
+                  recordedBy: updatedBy,
+                  notes: `Status updated to PAID by ${updatedBy}`
+                }
+              });
+            }
+          }
+        }
+      });
+    } catch (e) {
+      logDebug('updateInvoiceStatus DB fallback:', e);
+    }
+
+    const invMock = mockInvoices.find(i => i.id === invoiceId || (tenantId && i.tenantId === tenantId));
+    if (invMock) {
+      invMock.status = normStatus;
+      if (normStatus === 'PAID') {
+        invMock.paidAmount = invMock.amount;
+      } else if (normStatus === 'DUE') {
+        invMock.paidAmount = 0;
+      }
+    }
+
+    mockAuditLogs.unshift({
+      id: `audit-${Date.now()}`,
+      action: 'INVOICE_STATUS_CHANGED',
+      userName: updatedBy,
+      entityId: invoiceId,
+      details: `Payment status changed to ${normStatus} by ${updatedBy}`,
+      createdAt: new Date().toISOString()
+    });
+
+    saveDevStore({ invoices: mockInvoices, auditLogs: mockAuditLogs });
+    return { success: true, status: normStatus };
+  },
+
   async reverseTransaction(data: { paymentId: string; reason: string; reversedBy?: string; reversalAmount?: number }) {
     const { paymentId, reason, reversedBy = 'Manager', reversalAmount } = data;
     

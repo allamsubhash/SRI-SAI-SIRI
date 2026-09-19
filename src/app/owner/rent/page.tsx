@@ -579,6 +579,30 @@ export default function OwnerPaymentsPage() {
     showToast('Transaction statement CSV exported successfully!', 'success');
   };
 
+  // Status Change Handler
+  const handleStatusChange = async (billId: string, tenantId: string, tenantName: string, newStatus: string) => {
+    try {
+      const res = await fetch('/api/payments/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceId: billId,
+          tenantId,
+          status: newStatus
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        showToast(data.error || 'Failed to update payment status.', 'error');
+      } else {
+        showToast(`Payment status updated to ${newStatus} for ${tenantName}!`, 'success');
+        fetchWorkspaceData(false);
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Error updating payment status.', 'error');
+    }
+  };
+
   // Status Badge Helper
   const renderStatusBadge = (status: string) => {
     switch (status) {
@@ -598,19 +622,18 @@ export default function OwnerPaymentsPage() {
         );
       case 'OVERDUE':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 animate-pulse">
-            <AlertCircle className="w-3.5 h-3.5" />
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+            <AlertTriangle className="w-3.5 h-3.5" />
             OVERDUE
           </span>
         );
       case 'VERIFICATION_PENDING':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            PROOF PENDING
+            <Clock className="w-3.5 h-3.5 animate-spin" />
+            VERIFICATION
           </span>
         );
-      case 'DUE':
       default:
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
@@ -937,9 +960,22 @@ export default function OwnerPaymentsPage() {
                           {formatDate(bill.dueDate)}
                         </td>
 
-                        {/* Status Badge */}
-                        <td className="py-3.5 px-3">
-                          {renderStatusBadge(bill.status)}
+                        {/* Status Badge & Quick Selector */}
+                        <td className="py-3.5 px-3" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1.5">
+                            {renderStatusBadge(bill.status)}
+                            <select
+                              value={bill.status === 'VERIFICATION_PENDING' ? 'DUE' : bill.status}
+                              onChange={(e) => handleStatusChange(bill.id, bill.tenantId, bill.tenantName, e.target.value)}
+                              className="text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 rounded-lg px-1.5 py-0.5 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700"
+                              title="Change Payment Status"
+                            >
+                              <option value="PAID">Set PAID</option>
+                              <option value="PARTIAL">Set PARTIAL</option>
+                              <option value="DUE">Set PENDING</option>
+                              <option value="OVERDUE">Set OVERDUE</option>
+                            </select>
+                          </div>
                         </td>
 
                         {/* Actions */}
