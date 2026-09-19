@@ -2643,7 +2643,7 @@ export const dbService = {
       createdAt: new Date().toISOString()
     });
 
-    saveDevStore({ invoices: mockInvoices, auditLogs: mockAuditLogs });
+    saveDevStore({ invoices: mockInvoices });
     return { success: true, status: normStatus };
   },
 
