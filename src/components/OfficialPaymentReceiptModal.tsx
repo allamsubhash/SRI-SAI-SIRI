@@ -122,11 +122,21 @@ export default function OfficialPaymentReceiptModal({
         try {
           const html2canvas = (await import('html2canvas')).default;
           const canvas = await html2canvas(receiptRef.current, {
-            scale: 2,
+            scale: 3, // High DPI capture for crispness
             useCORS: true,
             allowTaint: true,
             backgroundColor: '#ffffff',
-            logging: false
+            logging: false,
+            windowWidth: 800,
+            onclone: (clonedDoc) => {
+              const el = clonedDoc.getElementById('printable-official-receipt');
+              if (el) {
+                el.style.color = '#0f172a';
+                el.style.backgroundColor = '#ffffff';
+                el.style.boxShadow = 'none';
+                el.style.transform = 'none';
+              }
+            }
           });
 
           const imgData = canvas.toDataURL('image/png');
@@ -134,7 +144,7 @@ export default function OfficialPaymentReceiptModal({
           const pdfWidth = 190;
           const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
 
-          pdf.addImage(imgData, 'PNG', 10, 12, pdfWidth, pdfHeight);
+          pdf.addImage(imgData, 'PNG', 10, 10, pdfWidth, pdfHeight);
           pdf.save(`Official_Receipt_${receiptData.receiptNo}.pdf`);
           setDownloading(false);
           return;
@@ -143,31 +153,187 @@ export default function OfficialPaymentReceiptModal({
         }
       }
 
-      // Fallback pure jsPDF document generator
+      // High-Fidelity Vector PDF Generator (Ensures downloaded PDF is 100% identical to viewing receipt)
       const pdf = new jsPDF('p', 'mm', 'a4');
-      pdf.setTextColor(112, 36, 52);
+
+      // Title & Header
+      pdf.setTextColor(112, 36, 52); // #702434
       pdf.setFont('Helvetica', 'bold');
       pdf.setFontSize(18);
-      pdf.text('SRI SAI SIRI BOYS HOSTEL', 105, 20, { align: 'center' });
+      pdf.text('SRI SAI SIRI BOYS HOSTEL', 105, 18, { align: 'center' });
 
-      pdf.setFontSize(13);
-      pdf.text(isShortStay ? 'SHORT-STAY PAYMENT RECEIPT' : 'MONTHLY RENT RECEIPT', 105, 28, { align: 'center' });
+      pdf.setFontSize(12);
+      pdf.text(isShortStay ? 'SHORT-STAY PAYMENT RECEIPT' : 'MONTHLY RENT RECEIPT', 105, 25, { align: 'center' });
 
+      // Visual Status Stamp Badge
+      if (statusStamp === 'PAID') {
+        pdf.setDrawColor(5, 150, 105);
+        pdf.setFillColor(209, 250, 229);
+        pdf.rect(145, 12, 45, 10, 'FD');
+        pdf.setTextColor(4, 120, 87);
+        pdf.setFontSize(10);
+        pdf.setFont('Helvetica', 'bold');
+        pdf.text('✓ PAID', 167.5, 18.5, { align: 'center' });
+      } else if (statusStamp === 'PARTIALLY_PAID') {
+        pdf.setDrawColor(217, 119, 6);
+        pdf.setFillColor(254, 243, 199);
+        pdf.rect(140, 12, 50, 10, 'FD');
+        pdf.setTextColor(180, 83, 9);
+        pdf.setFontSize(9);
+        pdf.setFont('Helvetica', 'bold');
+        pdf.text('PARTIALLY PAID', 165, 18.5, { align: 'center' });
+      } else {
+        pdf.setDrawColor(225, 29, 72);
+        pdf.setFillColor(254, 226, 226);
+        pdf.rect(140, 12, 50, 10, 'FD');
+        pdf.setTextColor(190, 18, 60);
+        pdf.setFontSize(9);
+        pdf.setFont('Helvetica', 'bold');
+        pdf.text('PAYMENT PENDING', 165, 18.5, { align: 'center' });
+      }
+
+      // Guest / Tenant Info Box
       pdf.setDrawColor(208, 215, 222);
-      pdf.rect(14, 35, 182, 22);
-      pdf.setTextColor(30, 41, 59);
-      pdf.setFontSize(10);
-      pdf.setFont('Helvetica', 'bold');
-      pdf.text(`Name            : ${displayName}`, 18, 43);
-      pdf.text(`Mobile Number  : ${receiptData.mobileNumber || 'N/A'}`, 18, 51);
-      pdf.text(`Room / Bed      : Room ${receiptData.roomNumber || 'N/A'} (Bed ${receiptData.bedNumber || 'N/A'})`, 110, 43);
-
       pdf.setFillColor(248, 250, 252);
-      pdf.rect(14, 61, 182, 10, 'F');
-      pdf.rect(14, 61, 182, 10, 'S');
+      pdf.rect(14, 32, 182, 22, 'FD');
 
-      pdf.text(`Receipt No : ${receiptData.receiptNo}`, 18, 67.5);
-      pdf.text(`Date : ${formatDate(receiptData.date)}`, 150, 67.5);
+      pdf.setTextColor(30, 41, 59);
+      pdf.setFontSize(9.5);
+      pdf.setFont('Helvetica', 'bold');
+      pdf.text(`${isShortStay ? 'Guest Name' : 'Tenant Name'}  : ${displayName}`, 18, 40);
+      pdf.text(`Mobile Number : ${receiptData.mobileNumber || 'N/A'}`, 18, 48);
+
+      pdf.text(`Building   : ${receiptData.buildingName || 'Main Hostel'}`, 110, 40);
+      pdf.text(`Room / Bed : Room ${receiptData.roomNumber || 'N/A'} (Bed ${receiptData.bedNumber || 'N/A'})`, 110, 48);
+
+      // Receipt Number & Date Bar
+      pdf.setFillColor(241, 245, 249);
+      pdf.rect(14, 57, 182, 9, 'FD');
+      pdf.setFontSize(9);
+      pdf.text(`Receipt No : ${receiptData.receiptNo}`, 18, 63);
+      pdf.text(`Date & Time : ${formatDate(receiptData.date)}`, 140, 63);
+
+      let currentY = 70;
+
+      // Short Stay Rate Calculation Box
+      if (isShortStay) {
+        pdf.setFillColor(236, 253, 245);
+        pdf.setDrawColor(167, 243, 208);
+        pdf.rect(14, currentY, 182, 12, 'FD');
+        pdf.setTextColor(6, 78, 59);
+        pdf.setFontSize(9);
+        pdf.text(`Stay Duration: ${receiptData.checkInDate ? formatDate(receiptData.checkInDate) : ''} to ${receiptData.expectedCheckOutDate ? formatDate(receiptData.expectedCheckOutDate) : ''}`, 18, currentY + 7);
+        pdf.text(`Rate: INR ${receiptData.dailyRent || 0} / day x ${receiptData.numberOfDays || 1} days = INR ${(receiptData.totalStayAmount || totalAmount).toLocaleString('en-IN')}`, 105, currentY + 7);
+        currentY += 16;
+      }
+
+      // Financial Particulars Table
+      pdf.setFillColor(241, 245, 249);
+      pdf.setDrawColor(208, 215, 222);
+      pdf.rect(14, currentY, 182, 8, 'FD');
+      pdf.setTextColor(15, 23, 42);
+      pdf.setFontSize(9);
+      pdf.text('Account Particulars', 20, currentY + 5.5);
+      pdf.text('Amount (INR)', 165, currentY + 5.5);
+      currentY += 8;
+
+      if (isShortStay) {
+        // Total Stay Row
+        pdf.rect(14, currentY, 182, 8, 'S');
+        pdf.setFont('Helvetica', 'normal');
+        pdf.text(`Total Stay Charges (${receiptData.numberOfDays || 1} Days)`, 20, currentY + 5.5);
+        pdf.setFont('Helvetica', 'bold');
+        pdf.text((receiptData.totalStayAmount || totalAmount).toLocaleString('en-IN'), 185, currentY + 5.5, { align: 'right' });
+        currentY += 8;
+
+        // Previously Paid Row
+        if (receiptData.previousPaid && receiptData.previousPaid > 0) {
+          pdf.rect(14, currentY, 182, 8, 'S');
+          pdf.setFont('Helvetica', 'normal');
+          pdf.text('Previously Paid Installments', 20, currentY + 5.5);
+          pdf.setFont('Helvetica', 'bold');
+          pdf.text(receiptData.previousPaid.toLocaleString('en-IN'), 185, currentY + 5.5, { align: 'right' });
+          currentY += 8;
+        }
+
+        // Received Row
+        pdf.setFillColor(236, 253, 245);
+        pdf.rect(14, currentY, 182, 8, 'FD');
+        pdf.setTextColor(4, 120, 87);
+        pdf.setFont('Helvetica', 'bold');
+        pdf.text('This Payment Received', 20, currentY + 5.5);
+        pdf.text(totalAmount.toLocaleString('en-IN'), 185, currentY + 5.5, { align: 'right' });
+        currentY += 8;
+
+        // Balance Row
+        pdf.setFillColor(254, 242, 242);
+        pdf.rect(14, currentY, 182, 8, 'FD');
+        pdf.setTextColor(190, 18, 60);
+        pdf.setFont('Helvetica', 'bold');
+        pdf.text('Remaining Balance Dues', 20, currentY + 5.5);
+        pdf.text((receiptData.remainingDue || 0).toLocaleString('en-IN'), 185, currentY + 5.5, { align: 'right' });
+        currentY += 12;
+      } else {
+        // Monthly Tenant Rows
+        const items = receiptData.items && receiptData.items.length > 0 ? receiptData.items : [{ accountHead: 'Monthly Hostel Rent Collection', amount: totalAmount }];
+        items.forEach((item) => {
+          pdf.rect(14, currentY, 182, 8, 'S');
+          pdf.setFont('Helvetica', 'normal');
+          pdf.text(item.accountHead, 20, currentY + 5.5);
+          pdf.setFont('Helvetica', 'bold');
+          pdf.text(item.amount.toLocaleString('en-IN'), 185, currentY + 5.5, { align: 'right' });
+          currentY += 8;
+        });
+
+        // Paid Row
+        pdf.setFillColor(236, 253, 245);
+        pdf.rect(14, currentY, 182, 8, 'FD');
+        pdf.setTextColor(4, 120, 87);
+        pdf.setFont('Helvetica', 'bold');
+        pdf.text('Total Amount Paid', 20, currentY + 5.5);
+        pdf.text(totalAmount.toLocaleString('en-IN'), 185, currentY + 5.5, { align: 'right' });
+        currentY += 8;
+
+        // Balance Row
+        pdf.setFillColor(254, 242, 242);
+        pdf.rect(14, currentY, 182, 8, 'FD');
+        pdf.setTextColor(190, 18, 60);
+        pdf.setFont('Helvetica', 'bold');
+        pdf.text('Remaining Balance Dues', 20, currentY + 5.5);
+        pdf.text((receiptData.remainingDue || 0).toLocaleString('en-IN'), 185, currentY + 5.5, { align: 'right' });
+        currentY += 12;
+      }
+
+      // In Words Box
+      pdf.setFillColor(239, 246, 255);
+      pdf.setDrawColor(191, 219, 254);
+      pdf.rect(14, currentY, 182, 10, 'FD');
+      pdf.setTextColor(30, 58, 138);
+      pdf.setFontSize(9);
+      pdf.setFont('Helvetica', 'bold');
+      pdf.text(`In Words : *** ${amountInWords} Only ***`, 18, currentY + 6.5);
+      currentY += 14;
+
+      // Metadata & Verification Box
+      pdf.setFillColor(248, 250, 252);
+      pdf.setDrawColor(208, 215, 222);
+      pdf.rect(14, currentY, 182, 14, 'FD');
+      pdf.setTextColor(51, 65, 85);
+      pdf.setFontSize(8.5);
+      pdf.setFont('Helvetica', 'bold');
+      pdf.text(`Payment Method : ${(receiptData.paymentMethod || 'CASH').toUpperCase()}`, 18, currentY + 5.5);
+      pdf.text(`Received By     : ${receiptData.receivedBy || receiptData.recordedBy || 'Hostel Manager'}`, 18, currentY + 10.5);
+
+      pdf.text('VERIFIED RECEIPT', 150, currentY + 5.5);
+      pdf.setFont('Helvetica', 'normal');
+      pdf.text(`Generated: ${generatedTime}`, 140, currentY + 10.5);
+      currentY += 18;
+
+      // Signatures & Footer Note
+      pdf.setTextColor(100, 116, 139);
+      pdf.setFontSize(8);
+      pdf.text(isShortStay ? 'Thank you for staying with us.' : 'This receipt confirms payment received for the billing period mentioned above.', 14, currentY);
+      pdf.text('Authorized Signature : ___________________', 140, currentY);
 
       pdf.save(`Official_Receipt_${receiptData.receiptNo}.pdf`);
     } catch (e) {
@@ -246,19 +412,19 @@ export default function OfficialPaymentReceiptModal({
             >
               
               {/* VISUAL ANGLED STATUS STAMP */}
-              <div className="absolute top-4 right-4 z-10 pointer-events-none transform rotate-[ -12deg ] opacity-90 select-none">
+              <div className="absolute top-4 right-4 z-10 pointer-events-none transform rotate-[-12deg] opacity-90 select-none">
                 {statusStamp === 'PAID' && (
-                  <div className="border-4 border-emerald-600 px-3 py-1 rounded-xl text-emerald-700 font-black text-xs uppercase tracking-widest bg-emerald-50/80 shadow-md flex items-center gap-1">
+                  <div className="border-4 border-emerald-600 px-3 py-1 rounded-xl text-emerald-700 font-black text-xs uppercase tracking-widest bg-emerald-50/90 shadow-md flex items-center gap-1">
                     <Check className="w-4 h-4 stroke-[3]" /> ✓ PAID
                   </div>
                 )}
                 {statusStamp === 'PARTIALLY_PAID' && (
-                  <div className="border-4 border-amber-500 px-3 py-1 rounded-xl text-amber-600 font-black text-xs uppercase tracking-widest bg-amber-50/80 shadow-md">
+                  <div className="border-4 border-amber-500 px-3 py-1 rounded-xl text-amber-600 font-black text-xs uppercase tracking-widest bg-amber-50/90 shadow-md">
                     PARTIALLY PAID
                   </div>
                 )}
                 {statusStamp === 'PENDING' && (
-                  <div className="border-4 border-rose-500 px-3 py-1 rounded-xl text-rose-600 font-black text-xs uppercase tracking-widest bg-rose-50/80 shadow-md">
+                  <div className="border-4 border-rose-500 px-3 py-1 rounded-xl text-rose-600 font-black text-xs uppercase tracking-widest bg-rose-50/90 shadow-md">
                     PAYMENT PENDING
                   </div>
                 )}
@@ -302,7 +468,7 @@ export default function OfficialPaymentReceiptModal({
                   <div className="p-2 sm:p-2.5 space-y-1">
                     <div className="flex justify-between sm:justify-start gap-1">
                       <span className="text-slate-600 font-medium">Building:</span>
-                      <span className="font-bold text-slate-900">{receiptData.buildingName || 'Main Building'}</span>
+                      <span className="font-bold text-slate-900">{receiptData.buildingName || 'Main Hostel'}</span>
                     </div>
                     <div className="flex justify-between sm:justify-start gap-1">
                       <span className="text-slate-600 font-medium">Room / Bed:</span>

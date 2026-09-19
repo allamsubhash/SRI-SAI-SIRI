@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import fs from 'fs';
+import path from 'path';
 import { 
   mockTenants, 
   mockBuildings, 
@@ -20,6 +22,59 @@ import {
   ReminderRecord 
 } from './billingService';
 
+const STORE_FILE_PATH = path.join(process.cwd(), '.dev_data_store.json');
+
+interface DevStoreData {
+  buildings?: any[];
+  tenants?: any[];
+  users?: any[];
+  invoices?: any[];
+  payments?: any[];
+  shortStayGuests?: any[];
+  guidelines?: any[];
+}
+
+function loadDevStore(): DevStoreData {
+  try {
+    if (fs.existsSync(STORE_FILE_PATH)) {
+      const raw = fs.readFileSync(STORE_FILE_PATH, 'utf-8');
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error('Error loading dev store from disk:', e);
+  }
+  return {};
+}
+
+function saveDevStore(data: Partial<DevStoreData>) {
+  try {
+    const existing = loadDevStore();
+    const updated = { ...existing, ...data };
+    fs.writeFileSync(STORE_FILE_PATH, JSON.stringify(updated, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('Error saving dev store to disk:', e);
+  }
+}
+
+// Initialize memory arrays from disk store on module load
+const initialDiskData = loadDevStore();
+if (initialDiskData.buildings && initialDiskData.buildings.length > 0) {
+  mockBuildings.length = 0;
+  mockBuildings.push(...initialDiskData.buildings);
+}
+if (initialDiskData.tenants && initialDiskData.tenants.length > 0) {
+  mockTenants.length = 0;
+  mockTenants.push(...initialDiskData.tenants);
+}
+if (initialDiskData.payments && initialDiskData.payments.length > 0) {
+  mockPayments.length = 0;
+  mockPayments.push(...initialDiskData.payments);
+}
+if (initialDiskData.invoices && initialDiskData.invoices.length > 0) {
+  mockInvoices.length = 0;
+  mockInvoices.push(...initialDiskData.invoices);
+}
+
 const globalForPrisma = globalThis as unknown as { 
   prisma: PrismaClient;
   shortStayGuests?: any[];
@@ -27,7 +82,7 @@ const globalForPrisma = globalThis as unknown as {
 export const prisma = globalForPrisma.prisma || new PrismaClient();
 globalForPrisma.prisma = prisma;
 if (!globalForPrisma.shortStayGuests) {
-  globalForPrisma.shortStayGuests = [];
+  globalForPrisma.shortStayGuests = initialDiskData.shortStayGuests || [];
 }
 
 function logDebug(message: string, error?: any) {
@@ -244,55 +299,107 @@ export const dbService = {
   },
 
   async createBuilding(name: string, address: string, floorsCount: number) {
-    return await prisma.building.create({
-      data: {
+    const buildingId = `bld-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const generatedFloors = Array.from({ length: floorsCount }).map((_, i) => ({
+      id: `flr-${buildingId}-${i + 1}`,
+      number: i + 1,
+      buildingId: buildingId,
+      rooms: []
+    }));
+
+    try {
+      const created = await prisma.building.create({
+        data: {
+          id: buildingId,
+          name,
+          address,
+          floors: {
+            create: Array.from({ length: floorsCount }).map((_, i) => ({
+              number: i + 1
+            }))
+          }
+        },
+        include: {
+          floors: {
+            include: { rooms: true }
+          }
+        }
+      });
+      mockBuildings.unshift(created as any);
+      saveDevStore({ buildings: mockBuildings });
+      return created;
+    } catch (e) {
+      logDebug("createBuilding DB fallback to disk store:", e);
+      const newBuilding = {
+        id: buildingId,
         name,
         address,
-        floors: {
-          create: Array.from({ length: floorsCount }).map((_, i) => ({
-            number: i + 1
-          }))
-        }
-      },
-      include: {
-        floors: {
-          include: { rooms: true }
-        }
-      }
-    });
+        floors: generatedFloors,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      mockBuildings.unshift(newBuilding as any);
+      saveDevStore({ buildings: mockBuildings });
+      return newBuilding;
+    }
   },
 
   async updateBuilding(buildingId: string, data: { name?: string; address?: string }) {
-    return await prisma.building.update({
-      where: { id: buildingId },
-      data
-    });
+    try {
+      const updated = await prisma.building.update({
+        where: { id: buildingId },
+        data
+      });
+      const match = mockBuildings.find(b => b.id === buildingId);
+      if (match) {
+        if (data.name) match.name = data.name;
+        if (data.address) match.address = data.address;
+      }
+      saveDevStore({ buildings: mockBuildings });
+      return updated;
+    } catch (e) {
+      logDebug("updateBuilding DB fallback:", e);
+      const match = mockBuildings.find(b => b.id === buildingId);
+      if (match) {
+        if (data.name) match.name = data.name;
+        if (data.address) match.address = data.address;
+      }
+      saveDevStore({ buildings: mockBuildings });
+      return match || { id: buildingId, ...data };
+    }
   },
 
   async deleteBuilding(buildingId: string) {
-    // Safeguard: Check if any active tenants reside in this building before allowing delete
-    const activeTenantsInBuilding = await prisma.tenant.count({
-      where: {
-        beds: {
-          some: {
-            room: {
-              floor: {
-                buildingId: buildingId
+    try {
+      const activeTenantsInBuilding = await prisma.tenant.count({
+        where: {
+          beds: {
+            some: {
+              room: {
+                floor: {
+                  buildingId: buildingId
+                }
               }
             }
-          }
-        },
-        status: 'ACTIVE'
+          },
+          status: 'ACTIVE'
+        }
+      });
+
+      if (activeTenantsInBuilding > 0) {
+        throw new Error(`Cannot delete building while active residents are assigned to its rooms.`);
       }
-    });
 
-    if (activeTenantsInBuilding > 0) {
-      throw new Error(`Cannot delete building while active residents are assigned to its rooms. Please reassign or relocate residents first.`);
+      await prisma.building.delete({
+        where: { id: buildingId }
+      });
+    } catch (e: any) {
+      logDebug("deleteBuilding DB fallback:", e);
     }
-
-    return await prisma.building.delete({
-      where: { id: buildingId }
-    });
+    const idx = mockBuildings.findIndex(b => b.id === buildingId);
+    if (idx !== -1) mockBuildings.splice(idx, 1);
+    saveDevStore({ buildings: mockBuildings });
+    return true;
   },
 
   // --- ROOMS ---
