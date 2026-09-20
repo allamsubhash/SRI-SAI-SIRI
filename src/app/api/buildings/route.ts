@@ -1,14 +1,17 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { dbService } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET() {
   try {
     const buildings = await dbService.getBuildings();
     return NextResponse.json(buildings, {
       headers: {
-        'Cache-Control': 'no-store, max-age=0, must-revalidate'
+        'Cache-Control': 'no-store, no-cache, max-age=0, must-revalidate',
+        'Pragma': 'no-cache'
       }
     });
   } catch (error: any) {
@@ -27,6 +30,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Name, address, and floors count are required' }, { status: 400 });
     }
     const newBuilding = await dbService.createBuilding(name, address, parseInt(floors));
+    revalidatePath('/api/buildings');
+    revalidatePath('/owner/buildings');
     return NextResponse.json({ success: true, building: newBuilding });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
@@ -40,6 +45,8 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Building ID is required' }, { status: 400 });
     }
     await dbService.updateBuilding(id, { name, address });
+    revalidatePath('/api/buildings');
+    revalidatePath('/owner/buildings');
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
@@ -64,6 +71,8 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Building ID is required' }, { status: 400 });
     }
     await dbService.deleteBuilding(id);
+    revalidatePath('/api/buildings');
+    revalidatePath('/owner/buildings');
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });

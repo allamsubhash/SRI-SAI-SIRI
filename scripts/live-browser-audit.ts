@@ -130,6 +130,9 @@ async function runLiveBrowserAudit() {
         page.click('button:has-text("CREATE BUILDING")')
       ]);
 
+      const createBldData = createBldResponse ? await createBldResponse.json().catch(() => null) : null;
+      console.log('   POST /api/buildings Response Data:', JSON.stringify(createBldData));
+
       await page.waitForTimeout(3000);
       const isVisibleInUI = await page.getByText(testBuildingName).first().isVisible().catch(() => false);
       buildingCreated = isVisibleInUI || (createBldResponse?.status() === 200 || createBldResponse?.status() === 201);
