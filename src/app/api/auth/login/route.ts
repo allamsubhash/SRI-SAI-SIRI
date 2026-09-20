@@ -28,7 +28,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid credentials. User account not found.' }, { status: 401 });
     }
 
-    let isValid = await comparePassword(password, user.password);
+    let isValid = await comparePassword(password, user.password || '');
 
     // Fallback support for standard owner passwords (Owner@12345, password123)
     if (!isValid) {

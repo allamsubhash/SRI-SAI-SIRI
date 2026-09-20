@@ -45,7 +45,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'User account not found' }, { status: 404 });
     }
 
-    let isValid = await comparePassword(currentPassword, user.password);
+    const userPassword = (user as any).password || '';
+    let isValid = await comparePassword(currentPassword, userPassword);
     if (!isValid && overriddenHash) {
       isValid = await comparePassword(currentPassword, decodeURIComponent(overriddenHash));
     }

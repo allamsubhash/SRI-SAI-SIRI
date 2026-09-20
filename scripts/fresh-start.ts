@@ -121,9 +121,23 @@ async function freshStart() {
     console.log("✨ DATABASE PURGE COMPLETE — CLEAN SLATE READY!");
     console.log("==========================================================");
   } catch (e: any) {
-    console.error("Error during fresh start purge:", e);
+    console.log("Prisma DB unreachable, purging local dev data store file (.dev_data_store.json)...");
+    const devStorePath = path.resolve(process.cwd(), '.dev_data_store.json');
+    if (fs.existsSync(devStorePath)) {
+      fs.writeFileSync(devStorePath, JSON.stringify({
+        buildings: [],
+        tenants: [],
+        invoices: [],
+        payments: [],
+        shortStayGuests: [],
+        guidelines: []
+      }, null, 2), 'utf-8');
+      console.log("✓ Purged local .dev_data_store.json file.");
+    }
   } finally {
-    await prisma.$disconnect();
+    try {
+      await prisma.$disconnect();
+    } catch (_) {}
   }
 }
 

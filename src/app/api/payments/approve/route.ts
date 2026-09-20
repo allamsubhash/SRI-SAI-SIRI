@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Payment ID is required' }, { status: 400 });
     }
 
-    const updated = await dbService.approvePayment(paymentId);
+    const updated = await dbService.approveTenantPayment(paymentId);
 
     return NextResponse.json({
       success: true,

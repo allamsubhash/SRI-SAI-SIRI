@@ -59,19 +59,19 @@ function saveDevStore(data: Partial<DevStoreData>) {
 
 // Initialize memory arrays from disk store on module load
 const initialDiskData = loadDevStore();
-if (initialDiskData.buildings && initialDiskData.buildings.length > 0) {
+if (Array.isArray(initialDiskData.buildings)) {
   mockBuildings.length = 0;
   mockBuildings.push(...initialDiskData.buildings);
 }
-if (initialDiskData.tenants && initialDiskData.tenants.length > 0) {
+if (Array.isArray(initialDiskData.tenants)) {
   mockTenants.length = 0;
   mockTenants.push(...initialDiskData.tenants);
 }
-if (initialDiskData.payments && initialDiskData.payments.length > 0) {
+if (Array.isArray(initialDiskData.payments)) {
   mockPayments.length = 0;
   mockPayments.push(...initialDiskData.payments);
 }
-if (initialDiskData.invoices && initialDiskData.invoices.length > 0) {
+if (Array.isArray(initialDiskData.invoices)) {
   mockInvoices.length = 0;
   mockInvoices.push(...initialDiskData.invoices);
 }
@@ -82,8 +82,10 @@ const globalForPrisma = globalThis as unknown as {
 };
 export const prisma = globalForPrisma.prisma || new PrismaClient();
 globalForPrisma.prisma = prisma;
-if (!globalForPrisma.shortStayGuests) {
-  globalForPrisma.shortStayGuests = initialDiskData.shortStayGuests || [];
+if (Array.isArray(initialDiskData.shortStayGuests)) {
+  globalForPrisma.shortStayGuests = initialDiskData.shortStayGuests;
+} else if (!globalForPrisma.shortStayGuests) {
+  globalForPrisma.shortStayGuests = [];
 }
 
 function logDebug(message: string, error?: any) {
@@ -154,8 +156,9 @@ export const dbService = {
       }
     } catch (e) {
       logDebug('getUserByEmail error:', e);
-      throw e;
     }
+    const mockUser = mockUsers.find(u => u.email.toLowerCase() === cleanEmail);
+    if (mockUser) return mockUser;
     return null;
   },
 
@@ -305,7 +308,7 @@ export const dbService = {
     }
 
     const diskBuildings = loadDevStore().buildings;
-    if (diskBuildings && diskBuildings.length > 0) {
+    if (Array.isArray(diskBuildings)) {
       return diskBuildings;
     }
     return mockBuildings;
@@ -357,7 +360,13 @@ export const dbService = {
     }
   },
 
-  async updateBuilding(buildingId: string, data: { name?: string; address?: string }) {
+  async updateBuilding(buildingId: string, nameOrData: any, addressArg?: string) {
+    const name = typeof nameOrData === 'string' ? nameOrData : nameOrData?.name;
+    const address = typeof nameOrData === 'string' ? addressArg : nameOrData?.address;
+    const data: any = {};
+    if (name) data.name = name;
+    if (address) data.address = address;
+
     try {
       const updated = await prisma.building.update({
         where: { id: buildingId },
@@ -365,8 +374,8 @@ export const dbService = {
       });
       const match = mockBuildings.find(b => b.id === buildingId);
       if (match) {
-        if (data.name) match.name = data.name;
-        if (data.address) match.address = data.address;
+        if (name) match.name = name;
+        if (address) match.address = address;
       }
       saveDevStore({ buildings: mockBuildings });
       return updated;
@@ -374,11 +383,11 @@ export const dbService = {
       logDebug("updateBuilding DB fallback:", e);
       const match = mockBuildings.find(b => b.id === buildingId);
       if (match) {
-        if (data.name) match.name = data.name;
-        if (data.address) match.address = data.address;
+        if (name) match.name = name;
+        if (address) match.address = address;
       }
       saveDevStore({ buildings: mockBuildings });
-      return match || { id: buildingId, ...data };
+      return match || { id: buildingId, name, address };
     }
   },
 
@@ -660,7 +669,7 @@ export const dbService = {
       logDebug('getTenants fallback to disk/mock store:', e);
     }
     const diskTenants = loadDevStore().tenants;
-    if (diskTenants && diskTenants.length > 0) {
+    if (Array.isArray(diskTenants)) {
       return diskTenants;
     }
     return mockTenants;
@@ -875,6 +884,43 @@ export const dbService = {
         password: passwordHash
       };
       mockTenants.push(newMockTenant);
+
+      const now = new Date();
+      const currentMonthStr = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+      const dueDate = new Date(now.getFullYear(), now.getMonth(), 5).toISOString().split('T')[0];
+      const invNumber = `INV-${Date.now().toString().slice(-6)}`;
+      const initialInvoice: any = {
+        id: `inv-${tenantId}`,
+        number: invNumber,
+        tenantId: tenantId,
+        tenantName: newMockTenant.name,
+        roomNumber: newMockTenant.roomNumber,
+        bedNumber: newMockTenant.bedNumber,
+        amount: data.rentAmount || 8500,
+        paidAmount: 0,
+        dueDate: dueDate,
+        billingPeriod: currentMonthStr,
+        status: now.getDate() > 5 ? 'OVERDUE' : 'PENDING',
+        items: [{ description: `Monthly Hostel Rent - ${currentMonthStr}`, amount: data.rentAmount || 8500 }]
+      };
+      mockInvoices.push(initialInvoice);
+
+      if (data.bedNumber) {
+        for (const b of mockBuildings) {
+          for (const fl of b.floors || []) {
+            for (const rm of fl.rooms || []) {
+              for (const bd of rm.beds || []) {
+                if (bd.number === data.bedNumber) {
+                  bd.isAvailable = false;
+                  bd.tenantId = tenantId;
+                }
+              }
+            }
+          }
+        }
+        saveDevStore({ buildings: mockBuildings });
+      }
+      saveDevStore({ tenants: mockTenants, invoices: mockInvoices });
       return newMockTenant;
     }
   },
@@ -898,89 +944,115 @@ export const dbService = {
     occupation?: string;
     medicalNotes?: string;
   }) {
-    return await prisma.$transaction(async (tx) => {
-      const dbTenant = await tx.tenant.findUnique({
-        where: { id: tenantId },
-        include: { profile: true }
-      });
-
-      if (!dbTenant) throw new Error('Tenant record not found.');
-
-      // Update User email/password if provided
-      if (data.email || data.password) {
-        const userUpdate: any = {};
-        if (data.email) userUpdate.email = data.email.trim().toLowerCase();
-        if (data.password) userUpdate.password = bcrypt.hashSync(data.password, 10);
-        await tx.user.update({
-          where: { id: dbTenant.profile.userId },
-          data: userUpdate
-        });
-      }
-
-      // Update Profile
-      const names = data.name ? data.name.trim().split(' ') : null;
-      const firstName = names ? (names[0] || 'Tenant') : undefined;
-      const lastName = names ? (names.slice(1).join(' ') || '') : undefined;
-
-      const profileUpdate: any = {};
-      if (firstName !== undefined) profileUpdate.firstName = firstName;
-      if (lastName !== undefined) profileUpdate.lastName = lastName;
-      if (data.phone !== undefined) profileUpdate.phone = data.phone;
-      if (data.gender !== undefined) profileUpdate.gender = data.gender;
-      if (data.moveInDate !== undefined) profileUpdate.moveInDate = new Date(data.moveInDate);
-      if (data.address !== undefined) profileUpdate.address = data.address;
-      if (data.aadhaar !== undefined) profileUpdate.aadhaar = data.aadhaar;
-      if (data.emergencyName !== undefined) profileUpdate.emergencyContactName = data.emergencyName;
-      if (data.emergencyPhone !== undefined) profileUpdate.emergencyContactPhone = data.emergencyPhone;
-      if (data.guardianName !== undefined) profileUpdate.guardianName = data.guardianName;
-      if (data.guardianPhone !== undefined) profileUpdate.guardianPhone = data.guardianPhone;
-      if (data.occupation !== undefined) profileUpdate.occupation = data.occupation;
-
-      if (Object.keys(profileUpdate).length > 0) {
-        await tx.profile.update({
-          where: { id: dbTenant.profileId },
-          data: profileUpdate
-        });
-      }
-
-      // Handle Bed reallocation if bedNumber changed
-      let newRoomId: string | undefined = undefined;
-      if (data.bedNumber && data.bedNumber !== dbTenant.bedNumber) {
-        // Free old bed
-        await tx.bed.updateMany({
-          where: { tenantId: tenantId },
-          data: { tenantId: null, isAvailable: true }
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const dbTenant = await tx.tenant.findUnique({
+          where: { id: tenantId },
+          include: { profile: true }
         });
 
-        // Occupy new bed
-        const newBed = await tx.bed.findFirst({
-          where: { number: { equals: data.bedNumber.trim() } },
-          include: { room: true }
-        });
+        if (!dbTenant) throw new Error('Tenant record not found.');
 
-        if (newBed) {
-          await tx.bed.update({
-            where: { id: newBed.id },
-            data: { tenantId: tenantId, isAvailable: false }
+        // Update User email/password if provided
+        if (data.email || data.password) {
+          const userUpdate: any = {};
+          if (data.email) userUpdate.email = data.email.trim().toLowerCase();
+          if (data.password) userUpdate.password = bcrypt.hashSync(data.password, 10);
+          await tx.user.update({
+            where: { id: dbTenant.profile.userId },
+            data: userUpdate
           });
-          newRoomId = newBed.roomId;
         }
-      }
 
-      // Update Tenant
-      const tenantUpdate: any = {};
-      if (data.roomNumber !== undefined) tenantUpdate.roomNumber = data.roomNumber;
-      if (data.bedNumber !== undefined) tenantUpdate.bedNumber = data.bedNumber;
-      if (data.rentAmount !== undefined) tenantUpdate.rentAmount = data.rentAmount;
-      if (data.medicalNotes !== undefined) tenantUpdate.medicalNotes = data.medicalNotes;
-      if (data.moveInDate !== undefined) tenantUpdate.moveInDate = new Date(data.moveInDate);
-      if (newRoomId) tenantUpdate.roomId = newRoomId;
+        // Update Profile
+        const names = data.name ? data.name.trim().split(' ') : null;
+        const firstName = names ? (names[0] || 'Tenant') : undefined;
+        const lastName = names ? (names.slice(1).join(' ') || '') : undefined;
 
-      return await tx.tenant.update({
-        where: { id: tenantId },
-        data: tenantUpdate
+        const profileUpdate: any = {};
+        if (firstName !== undefined) profileUpdate.firstName = firstName;
+        if (lastName !== undefined) profileUpdate.lastName = lastName;
+        if (data.phone !== undefined) profileUpdate.phone = data.phone;
+        if (data.gender !== undefined) profileUpdate.gender = data.gender;
+        if (data.moveInDate !== undefined) profileUpdate.moveInDate = new Date(data.moveInDate);
+        if (data.address !== undefined) profileUpdate.address = data.address;
+        if (data.aadhaar !== undefined) profileUpdate.aadhaar = data.aadhaar;
+        if (data.emergencyName !== undefined) profileUpdate.emergencyContactName = data.emergencyName;
+        if (data.emergencyPhone !== undefined) profileUpdate.emergencyContactPhone = data.emergencyPhone;
+        if (data.guardianName !== undefined) profileUpdate.guardianName = data.guardianName;
+        if (data.guardianPhone !== undefined) profileUpdate.guardianPhone = data.guardianPhone;
+        if (data.occupation !== undefined) profileUpdate.occupation = data.occupation;
+
+        if (Object.keys(profileUpdate).length > 0) {
+          await tx.profile.update({
+            where: { id: dbTenant.profileId },
+            data: profileUpdate
+          });
+        }
+
+        // Handle Bed reallocation if bedNumber changed
+        let newRoomId: string | undefined = undefined;
+        if (data.bedNumber && data.bedNumber !== dbTenant.bedNumber) {
+          // Free old bed
+          await tx.bed.updateMany({
+            where: { tenantId: tenantId },
+            data: { tenantId: null, isAvailable: true }
+          });
+
+          // Occupy new bed
+          const newBed = await tx.bed.findFirst({
+            where: { number: { equals: data.bedNumber.trim() } },
+            include: { room: true }
+          });
+
+          if (newBed) {
+            await tx.bed.update({
+              where: { id: newBed.id },
+              data: { tenantId: tenantId, isAvailable: false }
+            });
+            newRoomId = newBed.roomId;
+          }
+        }
+
+        // Update Tenant
+        const tenantUpdate: any = {};
+        if (data.roomNumber !== undefined) tenantUpdate.roomNumber = data.roomNumber;
+        if (data.bedNumber !== undefined) tenantUpdate.bedNumber = data.bedNumber;
+        if (data.rentAmount !== undefined) tenantUpdate.rentAmount = data.rentAmount;
+        if (data.medicalNotes !== undefined) tenantUpdate.medicalNotes = data.medicalNotes;
+        if (data.moveInDate !== undefined) tenantUpdate.moveInDate = new Date(data.moveInDate);
+        if (newRoomId) tenantUpdate.roomId = newRoomId;
+
+        return await tx.tenant.update({
+          where: { id: tenantId },
+          data: tenantUpdate
+        });
       });
-    });
+    } catch (e) {
+      logDebug('updateTenantProfile fallback to mockTenants:', e);
+      const mockT = mockTenants.find(t => t.id === tenantId);
+      if (mockT) {
+        if (data.name !== undefined) mockT.name = data.name;
+        if (data.email !== undefined) mockT.email = data.email;
+        if (data.phone !== undefined) mockT.phone = data.phone;
+        if (data.gender !== undefined) mockT.gender = data.gender;
+        if (data.moveInDate !== undefined) mockT.moveInDate = data.moveInDate;
+        if (data.roomNumber !== undefined) mockT.roomNumber = data.roomNumber;
+        if (data.bedNumber !== undefined) mockT.bedNumber = data.bedNumber;
+        if (data.rentAmount !== undefined) mockT.rentAmount = data.rentAmount;
+        if (data.address !== undefined) mockT.address = data.address;
+        if (data.aadhaar !== undefined) mockT.aadhaar = data.aadhaar;
+        if (data.emergencyName !== undefined) mockT.emergencyName = data.emergencyName;
+        if (data.emergencyPhone !== undefined) mockT.emergencyPhone = data.emergencyPhone;
+        if (data.guardianName !== undefined) mockT.guardianName = data.guardianName;
+        if (data.guardianPhone !== undefined) mockT.guardianPhone = data.guardianPhone;
+        if (data.occupation !== undefined) mockT.occupation = data.occupation;
+        if (data.medicalNotes !== undefined) mockT.medicalNotes = data.medicalNotes;
+        saveDevStore({ tenants: mockTenants });
+        return mockT;
+      }
+      return { id: tenantId, ...data };
+    }
   },
 
   async updateTenantStatus(tenantId: string, status: 'ACTIVE' | 'ARCHIVED' | 'BLACKLISTED') {
@@ -1004,6 +1076,20 @@ export const dbService = {
       const mockT = mockTenants.find(t => t.id === tenantId);
       if (mockT) {
         mockT.status = status;
+        if (status !== 'ACTIVE') {
+          for (const b of mockBuildings as any[]) {
+            const roomsList = b.rooms || (b.floors ? b.floors.flatMap((f: any) => f.rooms || []) : []);
+            for (const r of roomsList) {
+              for (const bed of r.beds || []) {
+                if (bed.tenantId === tenantId || (mockT.bedNumber && bed.number === mockT.bedNumber)) {
+                  bed.isAvailable = true;
+                  bed.tenantId = undefined;
+                }
+              }
+            }
+          }
+        }
+        saveDevStore({ tenants: mockTenants, buildings: mockBuildings });
       }
       return mockT || { id: tenantId, status };
     }
@@ -1075,7 +1161,7 @@ export const dbService = {
       logDebug('getInvoices fallback to disk/mock store:', e);
     }
     const diskInvoices = loadDevStore().invoices;
-    if (diskInvoices && diskInvoices.length > 0) {
+    if (Array.isArray(diskInvoices)) {
       return diskInvoices;
     }
     return mockInvoices;
@@ -1139,25 +1225,50 @@ export const dbService = {
       logDebug('getTenantFinancialSummary fallback:', e);
     }
 
-    const mockT = mockTenants.find(t => t.id === tenantIdentifier || t.userId === tenantIdentifier || t.email === tenantIdentifier) || mockTenants[0];
+    const mockT = mockTenants.find(t => t.id === tenantIdentifier || t.userId === tenantIdentifier || t.email === tenantIdentifier);
+    if (!mockT) {
+      return {
+        tenantId: tenantIdentifier,
+        monthlyRent: 8500,
+        totalRent: 0,
+        totalInvoiced: 0,
+        totalVerifiedPaid: 0,
+        totalPaid: 0,
+        pendingVerification: 0,
+        outstandingAmount: 0,
+        balance: 0,
+        paymentStatus: 'PAID'
+      };
+    }
+
     const tenantInvoices = mockInvoices.filter(i => i.tenantId === mockT.id || i.tenantName === mockT.name);
-    const totalInvoiced = tenantInvoices.reduce((s, i) => s + i.amount, 0);
-    const totalPaid = tenantInvoices.reduce((s, i) => s + (i.paidAmount || (i.status === 'PAID' ? i.amount : 0)), 0);
-    const cleanInvoiced = Number(totalInvoiced.toFixed(2));
-    const cleanPaid = Number(totalPaid.toFixed(2));
-    const outstandingAmount = Math.max(0, Number((cleanInvoiced - cleanPaid).toFixed(2)));
+    const tenantPayments = mockPayments.filter(p => p.tenantId === mockT.id || p.tenantName === mockT.name);
+
+    const totalRent = tenantInvoices.length > 0 
+      ? tenantInvoices.reduce((s, i) => s + i.amount, 0) 
+      : (mockT.rentAmount || 8500);
+
+    const verifiedPayments = tenantPayments.filter(p => (p.status as string) === 'VERIFIED' || p.status === 'APPROVED' || p.status === 'PAID');
+    const pendingPayments = tenantPayments.filter(p => (p.status as string) === 'PENDING_VERIFICATION' || p.status === 'PENDING');
+
+    const totalVerifiedPaid = Number(verifiedPayments.reduce((s, p) => s + p.amount, 0).toFixed(2));
+    const pendingVerification = Number(pendingPayments.reduce((s, p) => s + p.amount, 0).toFixed(2));
+    const balance = Math.max(0, Number((totalRent - totalVerifiedPaid).toFixed(2)));
+
     const dueDateStr = new Date(new Date().getFullYear(), new Date().getMonth(), 5).toISOString().split('T')[0];
-    const computedStatus = calculateBillStatus(cleanInvoiced, cleanPaid, dueDateStr, false, new Date());
+    const computedStatus = calculateBillStatus(totalRent, totalVerifiedPaid, dueDateStr, false, new Date());
 
     return {
       tenantId: mockT.id,
-      monthlyRent: mockT.rentAmount || 6500,
-      totalInvoiced: cleanInvoiced,
-      totalPaid: cleanPaid,
-      outstandingAmount,
-      lastPaymentAmount: mockT.rentAmount || 6500,
-      lastPaymentDate: '2026-08-01',
-      paymentStatus: (computedStatus === 'PARTIAL' ? 'PARTIAL' : computedStatus === 'OVERDUE' ? 'OVERDUE' : computedStatus === 'PAID' ? 'PAID' : 'PENDING') as any
+      monthlyRent: mockT.rentAmount || 8500,
+      totalRent,
+      totalInvoiced: totalRent,
+      totalVerifiedPaid,
+      totalPaid: totalVerifiedPaid,
+      pendingVerification,
+      outstandingAmount: balance,
+      balance,
+      paymentStatus: (computedStatus === 'PARTIAL' ? 'PARTIALLY_PAID' : computedStatus === 'OVERDUE' ? 'OVERDUE' : computedStatus === 'PAID' ? 'PAID' : 'DUE') as any
     };
   },
 
@@ -2352,7 +2463,7 @@ export const dbService = {
       logDebug('getAllPayments fallback to disk/mock store:', e);
     }
     const diskPayments = loadDevStore().payments;
-    if (diskPayments && diskPayments.length > 0) {
+    if (Array.isArray(diskPayments)) {
       return [...diskPayments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
     return [...mockPayments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -2427,7 +2538,7 @@ export const dbService = {
       date: todayStr,
       type: 'Monthly Rent',
       paymentMethod: data.paymentMethod,
-      status: 'PENDING' as const,
+      status: 'PENDING_VERIFICATION' as const,
       referenceId: data.referenceId,
       screenshotUrl: data.screenshotUrl,
       notes: data.notes,
@@ -2445,10 +2556,15 @@ export const dbService = {
       createdAt: new Date().toISOString()
     });
 
+    saveDevStore({ payments: mockPayments });
     return mockPayObj;
   },
 
-  async approvePayment(paymentId: string, approvedBy: string = 'Manager') {
+  async approvePayment(paymentId: string, approvedBy: string = 'Hostel Owner') {
+    return this.approveTenantPayment(paymentId, approvedBy);
+  },
+
+  async approveTenantPayment(paymentId: string, approvedBy: string = 'Hostel Owner') {
     try {
       return await prisma.$transaction(async (tx) => {
         const existing = await tx.payment.findUnique({
@@ -2508,6 +2624,7 @@ export const dbService = {
       // Update target invoice if present
       const inv = mockInvoices.find(i => i.id === target.invoiceId || i.tenantId === target.tenantId);
       if (inv) {
+        inv.paidAmount = Math.min(inv.amount, (inv.paidAmount || 0) + target.amount);
         const calcSt = calculateBillStatus(inv.amount, inv.paidAmount, inv.dueDate || new Date().toISOString(), false, new Date());
         inv.status = (calcSt === 'DUE' ? 'PENDING' : calcSt) as any;
       }
@@ -2521,6 +2638,8 @@ export const dbService = {
         details: `Approved & verified payment of ₹${target.amount.toLocaleString()} for ${target.tenantName || 'Resident'} (UTR: ${target.referenceId || 'N/A'})`,
         createdAt: new Date().toISOString()
       });
+
+      saveDevStore({ payments: mockPayments, invoices: mockInvoices });
     }
     return target || { id: paymentId, status: 'APPROVED' };
   },
@@ -2783,7 +2902,11 @@ export const dbService = {
       };
     } catch (e) {
       logDebug('getQRPaymentSettings DB error:', e);
-      return { qrCodeUrl: '', upiId: '', instructions: '' };
+      return {
+        qrCodeUrl: mockQRSettings.qrCodeUrl || '',
+        upiId: mockQRSettings.upiId || '',
+        instructions: mockQRSettings.instructions || ''
+      };
     }
   },
 
@@ -3116,7 +3239,7 @@ export const dbService = {
       logDebug("getShortStayGuests fallback:", e);
     }
     const diskGuests = loadDevStore().shortStayGuests;
-    if (diskGuests && diskGuests.length > 0) {
+    if (Array.isArray(diskGuests)) {
       return diskGuests;
     }
     return globalForPrisma.shortStayGuests || [];
@@ -3135,7 +3258,9 @@ export const dbService = {
     } catch (e) {
       logDebug("getShortStayGuestById fallback:", e);
     }
-    return (globalForPrisma.shortStayGuests || []).find((g: any) => g.id === id) || null;
+    const storeGuests = loadDevStore().shortStayGuests;
+    const list = (Array.isArray(storeGuests) && storeGuests.length > 0) ? storeGuests : (globalForPrisma.shortStayGuests || []);
+    return list.find((g: any) => g.id === id) || null;
   },
 
   async createShortStayGuest(data: {
@@ -3299,12 +3424,9 @@ export const dbService = {
     }
   },
 
-  async addShortStayPayment(guestId: string, data: {
-    amount: number;
-    paymentMethod: string;
-    receivedBy?: string;
-    notes?: string;
-  }) {
+  async addShortStayPayment(guestIdOrData: any, dataArg?: any) {
+    const guestId = typeof guestIdOrData === 'string' ? guestIdOrData : (guestIdOrData?.guestId || '');
+    const data = typeof guestIdOrData === 'string' ? dataArg : (guestIdOrData || {});
     const guest = await this.getShortStayGuestById(guestId);
     if (!guest) throw new Error("Short-stay guest not found.");
 
@@ -3357,12 +3479,16 @@ export const dbService = {
         }
       });
 
-      return await this.getShortStayGuestById(guestId);
+      return payment;
     } catch (e) {
       logDebug("addShortStayPayment DB fallback:", e);
-      guest.amountPaid = newAmountPaid;
-      guest.balance = newBalance;
-      guest.paymentStatus = paymentStatus;
+      if (!globalForPrisma.shortStayGuests || globalForPrisma.shortStayGuests.length === 0) {
+        globalForPrisma.shortStayGuests = loadDevStore().shortStayGuests || [];
+      }
+      const match = globalForPrisma.shortStayGuests.find((g: any) => g.id === guestId) || guest;
+      match.amountPaid = newAmountPaid;
+      match.balance = newBalance;
+      match.paymentStatus = paymentStatus;
 
       const pId = `ssp-${Date.now()}`;
       const newPayment = {
@@ -3383,7 +3509,7 @@ export const dbService = {
         guestId,
         paymentId: pId,
         amountPaid: data.amount,
-        totalAmount: guest.totalAmount,
+        totalAmount: match.totalAmount,
         remainingBalance: newBalance,
         paymentMethod: data.paymentMethod || 'CASH',
         paymentDate: new Date(),
@@ -3391,13 +3517,13 @@ export const dbService = {
         receivedBy: data.receivedBy || 'Hostel Owner'
       };
 
-      if (!guest.payments) guest.payments = [];
-      if (!guest.receipts) guest.receipts = [];
-      guest.payments.unshift(newPayment);
-      guest.receipts.unshift(newReceipt);
+      if (!match.payments) match.payments = [];
+      if (!match.receipts) match.receipts = [];
+      match.payments.unshift(newPayment);
+      match.receipts.unshift(newReceipt);
       saveDevStore({ shortStayGuests: globalForPrisma.shortStayGuests });
 
-      return guest;
+      return newPayment;
     }
   },
 
@@ -3428,9 +3554,14 @@ export const dbService = {
       return await this.getShortStayGuestById(guestId);
     } catch (e) {
       logDebug("checkoutShortStayGuest DB fallback:", e);
-      guest.status = 'CHECKED_OUT';
-      guest.actualCheckOutDate = now;
-      return guest;
+      if (!globalForPrisma.shortStayGuests || globalForPrisma.shortStayGuests.length === 0) {
+        globalForPrisma.shortStayGuests = loadDevStore().shortStayGuests || [];
+      }
+      const match = globalForPrisma.shortStayGuests.find((g: any) => g.id === guestId) || guest;
+      match.status = 'CHECKED_OUT';
+      match.actualCheckOutDate = now;
+      saveDevStore({ shortStayGuests: globalForPrisma.shortStayGuests });
+      return match;
     }
   },
 

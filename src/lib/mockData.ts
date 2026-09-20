@@ -3,6 +3,7 @@ export interface MockUser {
   email: string;
   role: 'OWNER' | 'TENANT';
   name: string;
+  password?: string;
 }
 
 export const mockUsers: MockUser[] = [
@@ -680,7 +681,7 @@ export interface MockPaymentRecord {
   date: string;
   type: string;
   paymentMethod: string;
-  status: 'PAID' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'OVERDUE' | 'REFUNDED' | 'REVERSED';
+  status: 'PAID' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'OVERDUE' | 'REFUNDED' | 'REVERSED' | 'PENDING_VERIFICATION' | 'VERIFIED';
   referenceId?: string;
   notes?: string;
   rejectionReason?: string;
