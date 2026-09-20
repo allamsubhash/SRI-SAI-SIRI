@@ -2065,6 +2065,65 @@ export const dbService = {
   },
 
   // --- RESET UTILITIES ---
+  async purgeAllData() {
+    try {
+      await prisma.payment.deleteMany({});
+      await prisma.invoice.deleteMany({});
+      await prisma.complaint.deleteMany({});
+      await prisma.visitor.deleteMany({});
+      await prisma.leaveRequest.deleteMany({});
+      await prisma.maintenance.deleteMany({});
+      await prisma.expense.deleteMany({});
+      await prisma.notice.deleteMany({});
+      await prisma.notificationRead.deleteMany({});
+      await prisma.salary.deleteMany({});
+      await prisma.employee.deleteMany({});
+      await prisma.shortStayGuest.deleteMany({});
+
+      await prisma.bed.deleteMany({});
+      await prisma.room.deleteMany({});
+      await prisma.floor.deleteMany({});
+      await prisma.building.deleteMany({});
+      await prisma.tenant.deleteMany({});
+
+      const ownerUser = await prisma.user.findFirst({
+        where: { email: 'owner@srisaisiri.com' }
+      });
+
+      if (ownerUser) {
+        await prisma.profile.deleteMany({
+          where: { userId: { not: ownerUser.id } }
+        });
+        await prisma.user.deleteMany({
+          where: { id: { not: ownerUser.id } }
+        });
+      } else {
+        await prisma.profile.deleteMany({});
+        await prisma.user.deleteMany({});
+      }
+
+      await prisma.setting.deleteMany({});
+      await prisma.guideline.deleteMany({});
+    } catch (e) {
+      console.error('[Sri Sai Siri DB Service] purgeAllData error:', e);
+    }
+
+    mockBuildings.length = 0;
+    mockTenants.length = 0;
+    mockInvoices.length = 0;
+    mockPayments.length = 0;
+    saveDevStore({
+      buildings: [],
+      tenants: [],
+      invoices: [],
+      payments: [],
+      shortStayGuests: [],
+      guidelines: []
+    });
+
+    return true;
+  },
+
   async resetAnalytics() {
     await prisma.payment.deleteMany();
     await prisma.invoice.deleteMany();
