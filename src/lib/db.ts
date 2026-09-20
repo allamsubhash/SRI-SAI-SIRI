@@ -417,15 +417,9 @@ export const dbService = {
       }
       saveDevStore({ buildings: mockBuildings });
       return updated;
-    } catch (e) {
-      logDebug("updateBuilding DB fallback:", e);
-      const match = mockBuildings.find(b => b.id === buildingId);
-      if (match) {
-        if (name) match.name = name;
-        if (address) match.address = address;
-      }
-      saveDevStore({ buildings: mockBuildings });
-      return match || { id: buildingId, name, address };
+    } catch (e: any) {
+      console.error('[Sri Sai Siri DB Service] updateBuilding error:', e?.message || e);
+      throw e;
     }
   },
 
@@ -453,13 +447,14 @@ export const dbService = {
       await prisma.building.delete({
         where: { id: buildingId }
       });
+      const idx = mockBuildings.findIndex(b => b.id === buildingId);
+      if (idx !== -1) mockBuildings.splice(idx, 1);
+      saveDevStore({ buildings: mockBuildings });
+      return true;
     } catch (e: any) {
-      logDebug("deleteBuilding DB fallback:", e);
+      console.error('[Sri Sai Siri DB Service] deleteBuilding error:', e?.message || e);
+      throw e;
     }
-    const idx = mockBuildings.findIndex(b => b.id === buildingId);
-    if (idx !== -1) mockBuildings.splice(idx, 1);
-    saveDevStore({ buildings: mockBuildings });
-    return true;
   },
 
   // --- ROOMS ---
@@ -467,104 +462,69 @@ export const dbService = {
     const floorId = typeof floorIdOrData === 'string' ? floorIdOrData : (floorIdOrData?.floorId || '');
     const number = typeof floorIdOrData === 'string' ? (numberArg || '101') : (floorIdOrData?.number || '101');
     const type = typeof floorIdOrData === 'string' ? (typeArg || 'AC Double') : (floorIdOrData?.type || 'AC Double');
-    const rent = typeof floorIdOrData === 'string' ? (rentArg || 8500) : (floorIdOrData?.rent || 8500);
+    const rent = typeof floorIdOrData === 'string' ? (rentArg !== undefined ? rentArg : 8500) : (floorIdOrData?.rent !== undefined ? floorIdOrData.rent : 8500);
     const capacity = typeof floorIdOrData === 'string' ? (capacityArg || 2) : (floorIdOrData?.capacity || 2);
     const amenities = typeof floorIdOrData === 'string' ? amenitiesArg : floorIdOrData?.amenities;
 
-    const roomId = `rm-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const newBeds = Array.from({ length: capacity }).map((_, i) => ({
-      id: `bed-${roomId}-${i + 1}`,
-      number: `${number}-${String.fromCharCode(65 + i)}`,
-      roomId: roomId,
-      tenantId: null,
-      isAvailable: true
-    }));
-
-    const newRoomObj = {
-      id: roomId,
-      number,
-      type,
-      rent,
-      status: 'AVAILABLE' as const,
-      capacity,
-      amenities: amenities ? (typeof amenities === 'string' ? amenities.split(',').map(a => a.trim()) : amenities) : ['AC', 'Wifi'],
-      images: [],
-      beds: newBeds
-    };
+    if (!floorId) {
+      throw new Error('Floor ID is required to create a room.');
+    }
 
     try {
-      if (floorId) {
-        const createdRoom = await prisma.room.create({
-          data: {
-            number,
-            type,
-            rent,
-            capacity,
-            amenities: typeof amenities === 'string' ? amenities : (amenities || ['AC', 'Wifi']).join(','),
-            floorId,
-            status: 'AVAILABLE',
-            beds: {
-              create: Array.from({ length: capacity }).map((_, i) => ({
-                number: `${number}-${String.fromCharCode(65 + i)}`,
-                isAvailable: true
-              }))
-            }
-          },
-          include: { beds: true }
-        });
+      const createdRoom = await prisma.room.create({
+        data: {
+          number,
+          type,
+          rent,
+          capacity,
+          amenities: typeof amenities === 'string' ? amenities : (amenities || ['AC', 'Wifi']).join(','),
+          floorId,
+          status: 'AVAILABLE',
+          beds: {
+            create: Array.from({ length: capacity }).map((_, i) => ({
+              number: `${number}-${String.fromCharCode(65 + i)}`,
+              isAvailable: true
+            }))
+          }
+        },
+        include: { beds: true }
+      });
 
-        const formatted = {
-          id: createdRoom.id,
-          number: createdRoom.number,
-          type: createdRoom.type,
-          rent: createdRoom.rent,
-          status: createdRoom.status as any,
-          capacity: createdRoom.capacity,
-          amenities: typeof amenities === 'string' ? amenities.split(',').map(a => a.trim()) : (amenities || ['AC', 'Wifi']),
-          images: [],
-          beds: (createdRoom.beds || []).map(bed => ({
-            id: bed.id,
-            number: bed.number,
-            roomId: createdRoom.id,
-            tenantId: null,
-            isAvailable: true
-          }))
-        };
+      const formatted = {
+        id: createdRoom.id,
+        number: createdRoom.number,
+        type: createdRoom.type,
+        rent: createdRoom.rent,
+        status: createdRoom.status as any,
+        capacity: createdRoom.capacity,
+        amenities: typeof amenities === 'string' ? amenities.split(',').map(a => a.trim()) : (amenities || ['AC', 'Wifi']),
+        images: [],
+        beds: (createdRoom.beds || []).map(bed => ({
+          id: bed.id,
+          number: bed.number,
+          roomId: createdRoom.id,
+          tenantId: null,
+          isAvailable: true
+        }))
+      };
 
-        for (const b of mockBuildings) {
-          if (b.floors) {
-            for (const fl of b.floors) {
-              if (fl.id === floorId) {
-                if (!fl.rooms) fl.rooms = [];
-                fl.rooms.push(formatted as any);
-                break;
-              }
+      for (const b of mockBuildings) {
+        if (b.floors) {
+          for (const fl of b.floors) {
+            if (fl.id === floorId) {
+              if (!fl.rooms) fl.rooms = [];
+              fl.rooms.push(formatted as any);
+              break;
             }
           }
         }
-        saveDevStore({ buildings: mockBuildings });
-        return formatted;
       }
+      saveDevStore({ buildings: mockBuildings });
+      return formatted;
     } catch (e: any) {
-      console.error('[Sri Sai Siri DB Service] createRoom Prisma error:', e?.message || e);
-      logDebug("createRoom DB fallback to disk store:", e);
+      console.error('[Sri Sai Siri DB Service] createRoom error:', e?.message || e);
+      throw e;
     }
-
-    for (const b of mockBuildings) {
-      if (b.floors) {
-        for (const fl of b.floors) {
-          if (fl.id === floorId || (b.id && floorId && floorId.includes(b.id))) {
-            if (!fl.rooms) fl.rooms = [];
-            if (!fl.rooms.some((r: any) => r.id === roomId || r.number === number)) {
-              fl.rooms.push(newRoomObj);
-            }
-            break;
-          }
-        }
-      }
-    }
-    saveDevStore({ buildings: mockBuildings });
-    return newRoomObj;
   },
 
   async updateRoom(roomId: string, data: { number?: string; type?: string; rent?: number; capacity?: number; status?: string }) {
@@ -579,28 +539,28 @@ export const dbService = {
           status: data.status
         }
       });
-    } catch (e) {
-      logDebug("updateRoom DB fallback:", e);
-    }
-
-    for (const b of mockBuildings) {
-      if (b.floors) {
-        for (const fl of b.floors) {
-          if (fl.rooms) {
-            const rm = fl.rooms.find((r: any) => r.id === roomId);
-            if (rm) {
-              if (data.number) rm.number = data.number;
-              if (data.type) rm.type = data.type;
-              if (data.rent) rm.rent = data.rent;
-              if (data.capacity) rm.capacity = data.capacity;
-              if (data.status) rm.status = data.status as any;
+      for (const b of mockBuildings) {
+        if (b.floors) {
+          for (const fl of b.floors) {
+            if (fl.rooms) {
+              const rm = fl.rooms.find((r: any) => r.id === roomId);
+              if (rm) {
+                if (data.number) rm.number = data.number;
+                if (data.type) rm.type = data.type;
+                if (data.rent) rm.rent = data.rent;
+                if (data.capacity) rm.capacity = data.capacity;
+                if (data.status) rm.status = data.status as any;
+              }
             }
           }
         }
       }
+      saveDevStore({ buildings: mockBuildings });
+      return true;
+    } catch (e: any) {
+      console.error('[Sri Sai Siri DB Service] updateRoom error:', e?.message || e);
+      throw e;
     }
-    saveDevStore({ buildings: mockBuildings });
-    return true;
   },
 
   async deleteRoom(roomId: string) {
@@ -608,22 +568,22 @@ export const dbService = {
       await prisma.room.delete({
         where: { id: roomId }
       });
-    } catch (e) {
-      logDebug("deleteRoom DB fallback:", e);
-    }
-
-    for (const b of mockBuildings) {
-      if (b.floors) {
-        for (const fl of b.floors) {
-          if (fl.rooms) {
-            const idx = fl.rooms.findIndex((r: any) => r.id === roomId);
-            if (idx !== -1) fl.rooms.splice(idx, 1);
+      for (const b of mockBuildings) {
+        if (b.floors) {
+          for (const fl of b.floors) {
+            if (fl.rooms) {
+              const idx = fl.rooms.findIndex((r: any) => r.id === roomId);
+              if (idx !== -1) fl.rooms.splice(idx, 1);
+            }
           }
         }
       }
+      saveDevStore({ buildings: mockBuildings });
+      return true;
+    } catch (e: any) {
+      console.error('[Sri Sai Siri DB Service] deleteRoom error:', e?.message || e);
+      throw e;
     }
-    saveDevStore({ buildings: mockBuildings });
-    return true;
   },
 
   // --- TENANTS ---
