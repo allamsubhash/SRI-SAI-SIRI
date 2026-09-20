@@ -227,19 +227,21 @@ export const dbService = {
   // --- BUILDINGS ---
   async getBuildings() {
     try {
-      const dbBuildings = await prisma.building.findMany({
-        include: {
-          floors: {
-            orderBy: { number: 'asc' },
-            include: {
-              rooms: {
-                orderBy: { number: 'asc' },
-                include: {
-                  beds: {
-                    include: {
-                      tenant: {
-                        include: {
-                          profile: true
+      let dbBuildings: any[];
+      try {
+        dbBuildings = await prisma.building.findMany({
+          include: {
+            floors: {
+              orderBy: { number: 'asc' },
+              include: {
+                rooms: {
+                  include: {
+                    beds: {
+                      include: {
+                        tenant: {
+                          include: {
+                            profile: true
+                          }
                         }
                       }
                     }
@@ -247,22 +249,38 @@ export const dbService = {
                 }
               }
             }
-          }
-        },
-        orderBy: { createdAt: 'desc' }
-      });
+          },
+          orderBy: { createdAt: 'desc' }
+        });
+      } catch (nestedErr: any) {
+        console.warn('[Sri Sai Siri DB Service] Deep getBuildings query failed, attempting basic query:', nestedErr?.message || nestedErr);
+        dbBuildings = await prisma.building.findMany({
+          include: {
+            floors: {
+              include: {
+                rooms: {
+                  include: {
+                    beds: true
+                  }
+                }
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
+        });
+      }
 
       console.log(`[Sri Sai Siri DB Service] getBuildings Prisma returned ${dbBuildings?.length || 0} buildings:`, (dbBuildings || []).map(b => `${b.id}:${b.name}`));
 
       if (dbBuildings) {
-        const mapped = dbBuildings.map(b => ({
+        const mapped = dbBuildings.map((b: any) => ({
           id: b.id,
           name: b.name,
           address: b.address,
-          floors: b.floors.map(f => ({
+          floors: (b.floors || []).map((f: any) => ({
             id: f.id,
             number: f.number,
-            rooms: f.rooms.map(r => {
+            rooms: (f.rooms || []).map((r: any) => {
               let amenitiesList: string[] = [];
               try {
                 amenitiesList = r.amenities ? r.amenities.split(',').map((a: string) => a.trim()) : [];
@@ -286,7 +304,7 @@ export const dbService = {
                 capacity: r.capacity,
                 amenities: amenitiesList,
                 images: imagesList,
-                beds: r.beds.map(bed => {
+                beds: (r.beds || []).map((bed: any) => {
                   let tenantName: string | undefined = undefined;
                   if (bed.tenant && bed.tenant.profile) {
                     tenantName = `${bed.tenant.profile.firstName} ${bed.tenant.profile.lastName}`.trim();

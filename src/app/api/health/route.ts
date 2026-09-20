@@ -41,7 +41,7 @@ export async function GET() {
     parsedHost: host,
     parsedDatabase: dbName,
     sslParams: sslMode,
-    buildVersion: 'PAYMENT-RECOVERY-007',
+    buildVersion: 'PAYMENT-RECOVERY-008',
     rawUrlLength: envUrl.length,
     tests: {}
   };
