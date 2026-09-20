@@ -252,8 +252,8 @@ export const dbService = {
         orderBy: { createdAt: 'desc' }
       });
 
-      if (dbBuildings && dbBuildings.length > 0) {
-        return dbBuildings.map(b => ({
+      if (dbBuildings) {
+        const mapped = dbBuildings.map(b => ({
           id: b.id,
           name: b.name,
           address: b.address,
@@ -302,6 +302,12 @@ export const dbService = {
             })
           }))
         }));
+
+        if (mapped.length > 0) {
+          mockBuildings.length = 0;
+          mockBuildings.push(...(mapped as any));
+        }
+        return mapped;
       }
     } catch (e: any) {
       console.error('[Sri Sai Siri DB Service] CRITICAL getBuildings Prisma error:', e?.message || e);
@@ -309,7 +315,7 @@ export const dbService = {
     }
 
     const diskBuildings = loadDevStore().buildings;
-    if (Array.isArray(diskBuildings)) {
+    if (Array.isArray(diskBuildings) && diskBuildings.length > 0) {
       return diskBuildings;
     }
     return mockBuildings;
@@ -334,70 +340,38 @@ export const dbService = {
       floorsCount = floorsCountArg || 1;
     }
 
-    const buildingId = `bld-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const generatedFloors = Array.from({ length: floorsCount }).map((_, i) => ({
-      id: `flr-${buildingId}-${i + 1}`,
-      number: i + 1,
-      buildingId: buildingId,
-      rooms: []
-    }));
-
-    try {
-      const created = await prisma.building.create({
-        data: {
-          id: buildingId,
-          name,
-          address,
-          floors: {
-            create: Array.from({ length: floorsCount }).map((_, i) => ({
-              id: `flr-${buildingId}-${i + 1}`,
-              number: i + 1
-            }))
-          }
-        },
-        include: {
-          floors: {
-            include: { rooms: true }
-          }
-        }
-      });
-      const formatted = {
-        id: created.id,
-        name: created.name,
-        address: created.address,
-        floors: (created.floors || []).map(f => ({
-          id: f.id,
-          number: f.number,
-          buildingId: created.id,
-          rooms: f.rooms || []
-        }))
-      };
-      mockBuildings.unshift(formatted as any);
-      return formatted;
-    } catch (e: any) {
-      console.error('[Sri Sai Siri DB Service] createBuilding Nested Error:', e?.message || e);
-      try {
-        const simple = await prisma.building.create({
-          data: { id: buildingId, name, address }
-        });
-        const formatted = {
-          id: simple.id,
-          name: simple.name,
-          address: simple.address,
-          floors: Array.from({ length: floorsCount }).map((_, i) => ({
-            id: `flr-${simple.id}-${i + 1}`,
-            number: i + 1,
-            buildingId: simple.id,
-            rooms: []
+    const created = await prisma.building.create({
+      data: {
+        name,
+        address,
+        floors: {
+          create: Array.from({ length: floorsCount }).map((_, i) => ({
+            number: i + 1
           }))
-        };
-        mockBuildings.unshift(formatted as any);
-        return formatted;
-      } catch (retryErr: any) {
-        console.error('[Sri Sai Siri DB Service] createBuilding Simple Retry Error:', retryErr?.message || retryErr);
-        throw new Error(retryErr?.message || e?.message || 'Failed to create building in database');
+        }
+      },
+      include: {
+        floors: {
+          include: { rooms: true }
+        }
       }
-    }
+    });
+
+    const formatted = {
+      id: created.id,
+      name: created.name,
+      address: created.address,
+      floors: (created.floors || []).map(f => ({
+        id: f.id,
+        number: f.number,
+        buildingId: created.id,
+        rooms: f.rooms || []
+      }))
+    };
+
+    mockBuildings.unshift(formatted as any);
+    saveDevStore({ buildings: mockBuildings });
+    return formatted;
   },
 
   async updateBuilding(buildingId: string, nameOrData: any, addressArg?: string) {
