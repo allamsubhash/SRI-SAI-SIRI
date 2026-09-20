@@ -8,6 +8,7 @@ export const revalidate = 0;
 export async function GET() {
   try {
     const buildings = await dbService.getBuildings();
+    console.log(`[API /api/buildings GET] Returning ${buildings.length} buildings from dbService:`, buildings.map((b: any) => `${b.id}:${b.name}`));
     return NextResponse.json(buildings, {
       headers: {
         'Cache-Control': 'no-store, no-cache, max-age=0, must-revalidate',

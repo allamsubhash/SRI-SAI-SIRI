@@ -303,7 +303,8 @@ export const dbService = {
           }))
         }));
       }
-    } catch (e) {
+    } catch (e: any) {
+      console.error('[Sri Sai Siri DB Service] CRITICAL getBuildings Prisma error:', e?.message || e);
       logDebug("getBuildings DB fallback to disk store:", e);
     }
 
