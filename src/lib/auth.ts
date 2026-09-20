@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'srisaisiri-super-secret-key-12345';
+const JWT_SECRET = process.env.JWT_SECRET || process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'srisaisiri-super-secret-key-12345';
 
 export interface TokenPayload {
   userId: string;
@@ -10,11 +10,23 @@ export interface TokenPayload {
   name: string;
 }
 
+export function extractAuthToken(request: Request): string | null {
+  try {
+    const rawCookie = request.headers.get('cookie') || '';
+    const match = rawCookie.match(/(?:^|;\s*)auth_token=([^;]+)/);
+    if (match && match[1]) {
+      return decodeURIComponent(match[1]);
+    }
+  } catch {}
+  return null;
+}
+
 export function signToken(payload: TokenPayload): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
 }
 
 export function verifyToken(token: string): TokenPayload | null {
+  if (!token) return null;
   try {
     return jwt.verify(token, JWT_SECRET) as TokenPayload;
   } catch (error) {

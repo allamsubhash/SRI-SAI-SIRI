@@ -1,17 +1,17 @@
 {
   "buildings": [
     {
-      "id": "bld-1789911880157-508",
+      "id": "bld-1789912320782-74",
       "name": "Block A Updated",
       "address": "456 New St",
       "floors": [
         {
-          "id": "flr-bld-1789911880157-508-1",
+          "id": "flr-bld-1789912320782-74-1",
           "number": 1,
-          "buildingId": "bld-1789911880157-508",
+          "buildingId": "bld-1789912320782-74",
           "rooms": [
             {
-              "id": "rm-1789911880158-175",
+              "id": "rm-1789912320785-934",
               "number": "A-101",
               "type": "2 Sharing AC",
               "rent": 8500,
@@ -24,16 +24,16 @@
               "images": [],
               "beds": [
                 {
-                  "id": "bed-rm-1789911880158-175-1",
+                  "id": "bed-rm-1789912320785-934-1",
                   "number": "A-101-A",
-                  "roomId": "rm-1789911880158-175",
-                  "tenantId": "t-1789911880164",
+                  "roomId": "rm-1789912320785-934",
+                  "tenantId": "t-1789912320789",
                   "isAvailable": false
                 },
                 {
-                  "id": "bed-rm-1789911880158-175-2",
+                  "id": "bed-rm-1789912320785-934-2",
                   "number": "A-101-B",
-                  "roomId": "rm-1789911880158-175",
+                  "roomId": "rm-1789912320785-934",
                   "tenantId": null,
                   "isAvailable": true
                 }
@@ -42,21 +42,21 @@
           ]
         },
         {
-          "id": "flr-bld-1789911880157-508-2",
+          "id": "flr-bld-1789912320782-74-2",
           "number": 2,
-          "buildingId": "bld-1789911880157-508",
+          "buildingId": "bld-1789912320782-74",
           "rooms": []
         }
       ],
-      "createdAt": "2026-09-20T13:44:40.158Z",
-      "updatedAt": "2026-09-20T13:44:40.158Z"
+      "createdAt": "2026-09-20T13:52:00.784Z",
+      "updatedAt": "2026-09-20T13:52:00.784Z"
     }
   ],
   "tenants": [
     {
-      "id": "t-1789911880164",
-      "userId": "u-tenant-1789911880164",
-      "profileId": "p-1789911880164",
+      "id": "t-1789912320789",
+      "userId": "u-tenant-1789912320789",
+      "profileId": "p-1789912320789",
       "name": "Test Monthly Tenant",
       "email": "tenant.monthly@example.com",
       "phone": "+91 98765 99999",
@@ -74,15 +74,15 @@
       "guardianPhone": "",
       "occupation": "Student",
       "gender": "Male",
-      "password": "$2b$10$ur0TJQmRzUOOAYXx9S3pfOfLaggtJd4cmgxdrCRU5UWtO7w3Vo17W",
+      "password": "$2b$10$XS99M5qDp8Zu9Gu4VXBXNuQKf95DWgkQ9JApeeRXneEAPggTxfeAW",
       "medicalNotes": "No allergies"
     },
     {
-      "id": "t-1789911880727",
-      "userId": "u-tenant-1789911880727",
-      "profileId": "p-1789911880727",
+      "id": "t-1789912321315",
+      "userId": "u-tenant-1789912321315",
+      "profileId": "p-1789912321315",
       "name": "Audit Test Resident",
-      "email": "audit_tenant_1789911880650@srisaisiri.com",
+      "email": "audit_tenant_1789912321240@srisaisiri.com",
       "phone": "+91 91234 56789",
       "roomNumber": "A-999",
       "bedNumber": "A-999-A",
@@ -98,14 +98,14 @@
       "guardianPhone": "+91 91234 56781",
       "occupation": "Software Engineer",
       "gender": "Male",
-      "password": "$2b$10$MyyxEOedQbIlMcWqmzQlL.X6idG7QByQrim3ryD35Oeu1X50D9STu"
+      "password": "$2b$10$4loUJ64xTqPklnvROi8LUu9O6uXC3z7H93SNnJN8Vlad/PbQvWIpW"
     },
     {
-      "id": "t-1789911880799",
-      "userId": "u-tenant-1789911880799",
-      "profileId": "p-1789911880799",
+      "id": "t-1789912321387",
+      "userId": "u-tenant-1789912321387",
+      "profileId": "p-1789912321387",
       "name": "Roommate Alpha",
-      "email": "rm_alpha_1789911880799@srisaisiri.com",
+      "email": "rm_alpha_1789912321387@srisaisiri.com",
       "phone": "+91 98888 11111",
       "roomNumber": "A-888",
       "bedNumber": "A-888-A",
@@ -121,14 +121,14 @@
       "guardianPhone": "",
       "occupation": "Student",
       "gender": "Male",
-      "password": "$2b$10$Cm.yIuYh2U50qMg/93kZBuHihapbc5kT1dsHqSNVKDTObJ88J.ozu"
+      "password": "$2b$10$BEtSxGx1atT/ufszmoX2buVpJL6ejbaTvhtTavaF9QxDRMLAmA22m"
     },
     {
-      "id": "t-1789911880870",
-      "userId": "u-tenant-1789911880870",
-      "profileId": "p-1789911880870",
+      "id": "t-1789912321457",
+      "userId": "u-tenant-1789912321457",
+      "profileId": "p-1789912321457",
       "name": "Roommate Beta",
-      "email": "rm_beta_1789911880870@srisaisiri.com",
+      "email": "rm_beta_1789912321457@srisaisiri.com",
       "phone": "+91 98888 22222",
       "roomNumber": "A-888",
       "bedNumber": "A-888-B",
@@ -144,14 +144,14 @@
       "guardianPhone": "",
       "occupation": "Student",
       "gender": "Male",
-      "password": "$2b$10$vMXESiXfN2krKbayzLvA7e4/4inq.o3wgkDSHTtTnBG1ZR6QcY7rK"
+      "password": "$2b$10$5iU4XOls1jLYzmNv3EC88eca/JKLUcaFwHDdZ1PJcxUNAdg4lypEi"
     },
     {
-      "id": "t-1789911880951",
-      "userId": "u-tenant-1789911880951",
-      "profileId": "p-1789911880951",
+      "id": "t-1789912321558",
+      "userId": "u-tenant-1789912321558",
+      "profileId": "p-1789912321558",
       "name": "TEST TENANT",
-      "email": "test_tenant_1789911880951@srisaisiri.com",
+      "email": "test_tenant_1789912321558@srisaisiri.com",
       "phone": "9876543210",
       "roomNumber": "TEST ROOM",
       "bedNumber": "TEST BED",
@@ -167,14 +167,14 @@
       "guardianPhone": "",
       "occupation": "Student",
       "gender": "Male",
-      "password": "$2b$10$Qb7d6hDw8UXnN/qKsR8f1e08czDO8Ns6R76178RQbJwtXTQs1d4F6"
+      "password": "$2b$10$eNiXnxI9nSvAkvo/b6nf9eoK4xJBU6BqJitpyOwwbroGS7gZ8TtRC"
     }
   ],
   "invoices": [
     {
-      "id": "inv-t-1789911880164",
-      "number": "INV-880253",
-      "tenantId": "t-1789911880164",
+      "id": "inv-t-1789912320789",
+      "number": "INV-320899",
+      "tenantId": "t-1789912320789",
       "tenantName": "Test Monthly Tenant",
       "roomNumber": "A-101",
       "bedNumber": "A-101-A",
@@ -191,9 +191,9 @@
       ]
     },
     {
-      "id": "inv-t-1789911880727",
-      "number": "INV-880728",
-      "tenantId": "t-1789911880727",
+      "id": "inv-t-1789912321315",
+      "number": "INV-321316",
+      "tenantId": "t-1789912321315",
       "tenantName": "Audit Test Resident",
       "roomNumber": "A-999",
       "bedNumber": "A-999-A",
@@ -210,9 +210,9 @@
       ]
     },
     {
-      "id": "inv-t-1789911880799",
-      "number": "INV-880870",
-      "tenantId": "t-1789911880799",
+      "id": "inv-t-1789912321387",
+      "number": "INV-321456",
+      "tenantId": "t-1789912321387",
       "tenantName": "Roommate Alpha",
       "roomNumber": "A-888",
       "bedNumber": "A-888-A",
@@ -229,9 +229,9 @@
       ]
     },
     {
-      "id": "inv-t-1789911880870",
-      "number": "INV-880940",
-      "tenantId": "t-1789911880870",
+      "id": "inv-t-1789912321457",
+      "number": "INV-321547",
+      "tenantId": "t-1789912321457",
       "tenantName": "Roommate Beta",
       "roomNumber": "A-888",
       "bedNumber": "A-888-B",
@@ -248,9 +248,9 @@
       ]
     },
     {
-      "id": "inv-t-1789911880951",
-      "number": "INV-881022",
-      "tenantId": "t-1789911880951",
+      "id": "inv-t-1789912321558",
+      "number": "INV-321627",
+      "tenantId": "t-1789912321558",
       "tenantName": "TEST TENANT",
       "roomNumber": "TEST ROOM",
       "bedNumber": "TEST BED",
@@ -269,8 +269,8 @@
   ],
   "payments": [
     {
-      "id": "pay-1789911881031",
-      "tenantId": "t-1789911880951",
+      "id": "pay-1789912321636",
+      "tenantId": "t-1789912321558",
       "tenantName": "TEST TENANT",
       "amount": 6500,
       "date": "2026-09-20",
@@ -279,11 +279,11 @@
       "status": "PENDING_VERIFICATION",
       "referenceId": "UTR-INVALID-000",
       "notes": "Faulty payment attempt",
-      "createdAt": "2026-09-20T13:44:41.032Z"
+      "createdAt": "2026-09-20T13:52:01.636Z"
     },
     {
-      "id": "pay-1789911881026",
-      "tenantId": "t-1789911880951",
+      "id": "pay-1789912321631",
+      "tenantId": "t-1789912321558",
       "tenantName": "TEST TENANT",
       "amount": 6500,
       "date": "2026-09-20",
@@ -292,25 +292,25 @@
       "status": "APPROVED",
       "referenceId": "UTR-999-888-777",
       "notes": "Audit verification test payment",
-      "createdAt": "2026-09-20T13:44:41.027Z"
+      "createdAt": "2026-09-20T13:52:01.632Z"
     },
     {
-      "id": "pay-1789911880945",
-      "tenantId": "t-1789911880799",
+      "id": "pay-1789912321552",
+      "tenantId": "t-1789912321387",
       "tenantName": "Roommate Alpha",
-      "invoiceId": "inv-t-1789911880799",
+      "invoiceId": "inv-t-1789912321387",
       "amount": 6500,
       "date": "2026-09-20",
       "type": "Monthly Rent",
       "paymentMethod": "ONLINE",
       "status": "APPROVED",
       "recordedBy": "Manager",
-      "receiptNumber": "SSR-RCP-880945",
-      "createdAt": "2026-09-20T13:44:40.945Z"
+      "receiptNumber": "SSR-RCP-321552",
+      "createdAt": "2026-09-20T13:52:01.552Z"
     },
     {
-      "id": "pay-1789911880268",
-      "tenantId": "t-1789911880164",
+      "id": "pay-1789912320914",
+      "tenantId": "t-1789912320789",
       "tenantName": "Test Monthly Tenant",
       "amount": 5500,
       "date": "2026-09-20",
@@ -318,11 +318,11 @@
       "paymentMethod": "BANK_TRANSFER",
       "status": "APPROVED",
       "referenceId": "IMPS-987654",
-      "createdAt": "2026-09-20T13:44:40.269Z"
+      "createdAt": "2026-09-20T13:52:00.915Z"
     },
     {
-      "id": "pay-1789911880260",
-      "tenantId": "t-1789911880164",
+      "id": "pay-1789912320906",
+      "tenantId": "t-1789912320789",
       "tenantName": "Test Monthly Tenant",
       "amount": 3000,
       "date": "2026-09-20",
@@ -330,12 +330,12 @@
       "paymentMethod": "UPI",
       "status": "APPROVED",
       "referenceId": "UTR-123456",
-      "createdAt": "2026-09-20T13:44:40.261Z"
+      "createdAt": "2026-09-20T13:52:00.907Z"
     }
   ],
   "shortStayGuests": [
     {
-      "id": "ssg-1789911880257-45",
+      "id": "ssg-1789912320903-310",
       "name": "Test Short Stay",
       "phone": "+91 99999 11111",
       "checkInDate": "2026-09-20T00:00:00.000Z",
@@ -349,27 +349,27 @@
       "balance": 0,
       "paymentStatus": "PAID",
       "status": "CHECKED_OUT",
-      "createdAt": "2026-09-20T13:44:40.258Z",
-      "updatedAt": "2026-09-20T13:44:40.258Z",
+      "createdAt": "2026-09-20T13:52:00.904Z",
+      "updatedAt": "2026-09-20T13:52:00.904Z",
       "payments": [
         {
-          "id": "ssp-1789911880279",
-          "guestId": "ssg-1789911880257-45",
+          "id": "ssp-1789912320923",
+          "guestId": "ssg-1789912320903-310",
           "amount": 1800,
           "paymentMethod": "UPI",
-          "paymentDate": "2026-09-20T13:44:40.279Z",
-          "receiptNumber": "SS-2026-80279",
+          "paymentDate": "2026-09-20T13:52:00.923Z",
+          "receiptNumber": "SS-2026-20922",
           "receivedBy": "Hostel Owner",
           "status": "PAID",
           "notes": "Installment payment"
         },
         {
-          "id": "ssp-1789911880276",
-          "guestId": "ssg-1789911880257-45",
+          "id": "ssp-1789912320920",
+          "guestId": "ssg-1789912320903-310",
           "amount": 600,
           "paymentMethod": "CASH",
-          "paymentDate": "2026-09-20T13:44:40.276Z",
-          "receiptNumber": "SS-2026-80273",
+          "paymentDate": "2026-09-20T13:52:00.920Z",
+          "receiptNumber": "SS-2026-20919",
           "receivedBy": "Hostel Owner",
           "status": "PAID",
           "notes": "Installment payment"
@@ -377,33 +377,33 @@
       ],
       "receipts": [
         {
-          "id": "ssr-1789911880279",
-          "receiptNumber": "SS-2026-80279",
-          "guestId": "ssg-1789911880257-45",
-          "paymentId": "ssp-1789911880279",
+          "id": "ssr-1789912320923",
+          "receiptNumber": "SS-2026-20922",
+          "guestId": "ssg-1789912320903-310",
+          "paymentId": "ssp-1789912320923",
           "amountPaid": 1800,
           "totalAmount": 2400,
           "remainingBalance": 0,
           "paymentMethod": "UPI",
-          "paymentDate": "2026-09-20T13:44:40.279Z",
+          "paymentDate": "2026-09-20T13:52:00.923Z",
           "statusStamp": "PAID",
           "receivedBy": "Hostel Owner"
         },
         {
-          "id": "ssr-1789911880276",
-          "receiptNumber": "SS-2026-80273",
-          "guestId": "ssg-1789911880257-45",
-          "paymentId": "ssp-1789911880276",
+          "id": "ssr-1789912320920",
+          "receiptNumber": "SS-2026-20919",
+          "guestId": "ssg-1789912320903-310",
+          "paymentId": "ssp-1789912320920",
           "amountPaid": 600,
           "totalAmount": 2400,
           "remainingBalance": 1800,
           "paymentMethod": "CASH",
-          "paymentDate": "2026-09-20T13:44:40.276Z",
+          "paymentDate": "2026-09-20T13:52:00.920Z",
           "statusStamp": "PARTIALLY_PAID",
           "receivedBy": "Hostel Owner"
         }
       ],
-      "actualCheckOutDate": "2026-09-20T13:44:40.282Z"
+      "actualCheckOutDate": "2026-09-20T13:52:00.926Z"
     }
   ],
   "guidelines": []

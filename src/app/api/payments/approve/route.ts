@@ -1,16 +1,12 @@
 import { NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
+import { verifyToken, extractAuthToken } from '@/lib/auth';
 import { dbService } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    const cookies = request.headers.get('cookie') || '';
-    const token = cookies
-      .split(';')
-      .find(c => c.trim().startsWith('auth_token='))
-      ?.split('=')[1];
+    const token = extractAuthToken(request);
 
     if (!token) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });

@@ -1,15 +1,11 @@
 import { NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
+import { verifyToken, extractAuthToken } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    const cookies = request.headers.get('cookie') || '';
-    const token = cookies
-      .split(';')
-      .find(c => c.trim().startsWith('auth_token='))
-      ?.split('=')[1];
+    const token = extractAuthToken(request);
 
     if (!token) {
       return NextResponse.json({ authenticated: false, error: 'No authentication token present' }, { status: 401 });
