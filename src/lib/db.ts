@@ -227,12 +227,11 @@ export const dbService = {
   // --- BUILDINGS ---
   async getBuildings() {
     try {
-      let dbBuildings: any[];
+      let dbBuildings: any[] = [];
       try {
         dbBuildings = await prisma.building.findMany({
           include: {
             floors: {
-              orderBy: { number: 'asc' },
               include: {
                 rooms: {
                   include: {
@@ -254,23 +253,30 @@ export const dbService = {
         });
       } catch (nestedErr: any) {
         console.warn('[Sri Sai Siri DB Service] Deep getBuildings query failed, attempting basic query:', nestedErr?.message || nestedErr);
-        dbBuildings = await prisma.building.findMany({
-          include: {
-            floors: {
-              include: {
-                rooms: {
-                  include: {
-                    beds: true
+        try {
+          dbBuildings = await prisma.building.findMany({
+            include: {
+              floors: {
+                include: {
+                  rooms: {
+                    include: {
+                      beds: true
+                    }
                   }
                 }
               }
-            }
-          },
-          orderBy: { createdAt: 'desc' }
-        });
+            },
+            orderBy: { createdAt: 'desc' }
+          });
+        } catch (basicErr: any) {
+          console.warn('[Sri Sai Siri DB Service] Basic getBuildings query failed, fetching raw buildings:', basicErr?.message || basicErr);
+          dbBuildings = await prisma.building.findMany({
+            orderBy: { createdAt: 'desc' }
+          });
+        }
       }
 
-      console.log(`[Sri Sai Siri DB Service] getBuildings Prisma returned ${dbBuildings?.length || 0} buildings:`, (dbBuildings || []).map(b => `${b.id}:${b.name}`));
+      console.log(`[Sri Sai Siri DB Service] getBuildings Prisma returned ${dbBuildings?.length || 0} buildings:`, (dbBuildings || []).map((b: any) => `${b.id}:${b.name}`));
 
       if (dbBuildings) {
         const mapped = dbBuildings.map((b: any) => ({
