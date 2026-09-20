@@ -370,22 +370,31 @@ export const dbService = {
         }))
       };
       mockBuildings.unshift(formatted as any);
-      saveDevStore({ buildings: mockBuildings });
       return formatted;
     } catch (e: any) {
       console.error('[Sri Sai Siri DB Service] createBuilding Prisma error:', e?.message || e);
-      logDebug("createBuilding DB fallback to disk store:", e);
-      const newBuilding = {
-        id: buildingId,
-        name,
-        address,
-        floors: generatedFloors,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      mockBuildings.unshift(newBuilding as any);
-      saveDevStore({ buildings: mockBuildings });
-      return newBuilding;
+      // Try simple create without nested floors if nested relation creation fails
+      try {
+        const simple = await prisma.building.create({
+          data: { name, address }
+        });
+        const formatted = {
+          id: simple.id,
+          name: simple.name,
+          address: simple.address,
+          floors: Array.from({ length: floorsCount }).map((_, i) => ({
+            id: `flr-${simple.id}-${i + 1}`,
+            number: i + 1,
+            buildingId: simple.id,
+            rooms: []
+          }))
+        };
+        mockBuildings.unshift(formatted as any);
+        return formatted;
+      } catch (retryErr: any) {
+        console.error('[Sri Sai Siri DB Service] createBuilding Simple Retry Error:', retryErr?.message || retryErr);
+        throw new Error(retryErr?.message || e?.message || 'Failed to create building in database');
+      }
     }
   },
 
