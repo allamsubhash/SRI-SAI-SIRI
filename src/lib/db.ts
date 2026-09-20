@@ -494,9 +494,8 @@ export const dbService = {
 
     try {
       if (floorId) {
-        await prisma.room.create({
+        const createdRoom = await prisma.room.create({
           data: {
-            id: roomId,
             number,
             type,
             rent,
@@ -513,8 +512,41 @@ export const dbService = {
           },
           include: { beds: true }
         });
+
+        const formatted = {
+          id: createdRoom.id,
+          number: createdRoom.number,
+          type: createdRoom.type,
+          rent: createdRoom.rent,
+          status: createdRoom.status as any,
+          capacity: createdRoom.capacity,
+          amenities: typeof amenities === 'string' ? amenities.split(',').map(a => a.trim()) : (amenities || ['AC', 'Wifi']),
+          images: [],
+          beds: (createdRoom.beds || []).map(bed => ({
+            id: bed.id,
+            number: bed.number,
+            roomId: createdRoom.id,
+            tenantId: null,
+            isAvailable: true
+          }))
+        };
+
+        for (const b of mockBuildings) {
+          if (b.floors) {
+            for (const fl of b.floors) {
+              if (fl.id === floorId) {
+                if (!fl.rooms) fl.rooms = [];
+                fl.rooms.push(formatted as any);
+                break;
+              }
+            }
+          }
+        }
+        saveDevStore({ buildings: mockBuildings });
+        return formatted;
       }
-    } catch (e) {
+    } catch (e: any) {
+      console.error('[Sri Sai Siri DB Service] createRoom Prisma error:', e?.message || e);
       logDebug("createRoom DB fallback to disk store:", e);
     }
 

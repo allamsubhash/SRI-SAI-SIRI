@@ -252,29 +252,37 @@ export default function BuildingsManagement() {
 
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!rFloorId) return;
+    if (!rFloorId) {
+      alert("Please select a floor for the room.");
+      return;
+    }
+    const finalRoomNumber = rNumber.trim() || `R-101`;
     try {
       const res = await fetch('/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           floorId: rFloorId,
-          number: rNumber,
+          number: finalRoomNumber,
           type: rType,
-          rent: parseFloat(rRent),
-          capacity: parseInt(rCapacity)
+          rent: parseFloat(rRent) || 8500,
+          capacity: parseInt(rCapacity) || 2
         })
       });
-      if (res.ok) {
+      const data = await res.json();
+      if (res.ok && data.success) {
         setShowAddRoomModal(false);
         setRNumber('');
         setRCapacity('2');
         setRRent('8500');
-        setSuccessToast({ title: 'Room Generated!', subtitle: `Room ${rNumber} with ${rCapacity} beds created.` });
+        setSuccessToast({ title: 'Room Generated!', subtitle: `Room ${finalRoomNumber} with ${rCapacity} beds created.` });
         fetchInitialData();
+      } else {
+        alert(data.error || 'Failed to create room. Please check input details.');
       }
     } catch (error) {
       console.error(error);
+      alert('Network error while creating room.');
     }
   };
 
@@ -577,43 +585,6 @@ export default function BuildingsManagement() {
           );
         })}
 
-        {/* Second Building Visual Placeholder when only 1 building exists */}
-        {buildings.length === 1 && (
-          <div
-            onClick={() => setShowAddBuildingModal(true)}
-            className="p-5 rounded-[28px] border border-dashed border-slate-300 dark:border-zinc-700 bg-white/50 dark:bg-[#121826]/50 backdrop-blur-xl cursor-pointer hover:border-purple-500/50 hover:bg-purple-500/5 transition-all flex justify-between items-start group shadow-sm"
-          >
-            <div className="flex items-start gap-3.5">
-              <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-slate-400 dark:text-zinc-500 bg-slate-100 dark:bg-zinc-800/80 font-black shadow-sm shrink-0 group-hover:bg-purple-600 group-hover:text-white transition-colors">
-                <BuildingIcon className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-black text-slate-700 dark:text-zinc-300 text-base group-hover:text-purple-600 transition-colors">
-                    Block B - Classic Standard
-                  </h3>
-                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                    Not Configured
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 font-medium flex items-center gap-1 mt-0.5">
-                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span>Sector 62, Noida • Click to set up</span>
-                </p>
-                <div className="flex gap-2 text-[10px] font-bold text-slate-400 dark:text-zinc-500 mt-2">
-                  <span>0 Floors</span> • <span>0 Rooms</span> • <span>0 Beds</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1 shrink-0">
-              <span className="px-3 py-1.5 rounded-xl bg-purple-600/10 text-purple-600 dark:text-purple-400 font-bold text-xs group-hover:bg-purple-600 group-hover:text-white transition-all flex items-center gap-1">
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Building</span>
-              </span>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* 🔮 3. MAIN ARCHITECTURAL CANVAS STAGE */}
@@ -637,7 +608,10 @@ export default function BuildingsManagement() {
                 if (activeBuilding.floors?.length > 0) {
                   setRBuildingId(activeBuilding.id);
                   setRFloorId(activeBuilding.floors[0].id);
+                  setRNumber(`R-${(activeBuilding.floors[0].rooms?.length || 0) + 101}`);
                   setShowAddRoomModal(true);
+                } else {
+                  alert('Please create or select a building first.');
                 }
               }}
               className="py-2.5 px-4 rounded-2xl bg-purple-600/15 text-purple-600 dark:text-purple-300 font-black text-xs hover:bg-purple-600 hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer"
@@ -659,8 +633,25 @@ export default function BuildingsManagement() {
 
             if (allRooms.length === 0) {
               return (
-                <div className="p-12 text-center text-slate-400 dark:text-zinc-500 font-bold text-xs italic">
-                  No rooms found matching your current filter criteria.
+                <div className="p-12 text-center space-y-4 bg-slate-50/50 dark:bg-zinc-900/50 rounded-3xl border border-dashed border-slate-300 dark:border-zinc-800 my-4">
+                  <div>
+                    <p className="text-sm font-black text-slate-800 dark:text-zinc-200">No rooms added to {activeBuilding.name} yet.</p>
+                    <p className="text-xs text-slate-400 font-medium mt-1">Add your first room to generate bed slots and start registering residents.</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (activeBuilding.floors?.length > 0) {
+                        setRBuildingId(activeBuilding.id);
+                        setRFloorId(activeBuilding.floors[0].id);
+                        setRNumber(`R-101`);
+                        setShowAddRoomModal(true);
+                      }
+                    }}
+                    className="py-3 px-6 rounded-2xl bg-purple-600 text-white font-black text-xs hover:bg-purple-700 transition-all inline-flex items-center gap-2 shadow-lg shadow-purple-500/20 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Add First Room</span>
+                  </button>
                 </div>
               );
             }
