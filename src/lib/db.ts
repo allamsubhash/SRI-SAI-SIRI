@@ -344,7 +344,6 @@ export const dbService = {
     try {
       const created = await prisma.building.create({
         data: {
-          id: buildingId,
           name,
           address,
           floors: {
@@ -359,10 +358,22 @@ export const dbService = {
           }
         }
       });
-      mockBuildings.unshift(created as any);
+      const formatted = {
+        id: created.id,
+        name: created.name,
+        address: created.address,
+        floors: (created.floors || []).map(f => ({
+          id: f.id,
+          number: f.number,
+          buildingId: created.id,
+          rooms: f.rooms || []
+        }))
+      };
+      mockBuildings.unshift(formatted as any);
       saveDevStore({ buildings: mockBuildings });
-      return created;
-    } catch (e) {
+      return formatted;
+    } catch (e: any) {
+      console.error('[Sri Sai Siri DB Service] createBuilding Prisma error:', e?.message || e);
       logDebug("createBuilding DB fallback to disk store:", e);
       const newBuilding = {
         id: buildingId,

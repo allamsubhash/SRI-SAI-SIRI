@@ -1,6 +1,33 @@
 {
   "buildings": [
     {
+      "id": "bld-1789913870418-379",
+      "name": "DB_DIRECT_TEST_1789913870352",
+      "address": "123 Test Street",
+      "floors": [
+        {
+          "id": "flr-bld-1789913870418-379-1",
+          "number": 1,
+          "buildingId": "bld-1789913870418-379",
+          "rooms": []
+        },
+        {
+          "id": "flr-bld-1789913870418-379-2",
+          "number": 2,
+          "buildingId": "bld-1789913870418-379",
+          "rooms": []
+        },
+        {
+          "id": "flr-bld-1789913870418-379-3",
+          "number": 3,
+          "buildingId": "bld-1789913870418-379",
+          "rooms": []
+        }
+      ],
+      "createdAt": "2026-09-20T14:17:50.421Z",
+      "updatedAt": "2026-09-20T14:17:50.421Z"
+    },
+    {
       "id": "bld-1789912320782-74",
       "name": "Block A Updated",
       "address": "456 New St",
