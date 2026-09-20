@@ -2068,25 +2068,30 @@ export const dbService = {
   // --- RESET UTILITIES ---
   async purgeAllData() {
     try {
-      await prisma.payment.deleteMany({});
-      await prisma.invoice.deleteMany({});
-      await prisma.complaint.deleteMany({});
-      await prisma.visitor.deleteMany({});
-      await prisma.leaveRequest.deleteMany({});
-      await prisma.maintenance.deleteMany({});
-      await prisma.expense.deleteMany({});
-      await prisma.notice.deleteMany({});
-      await prisma.notificationRead.deleteMany({});
-      await prisma.salary.deleteMany({});
-      await prisma.employee.deleteMany({});
-      await prisma.shortStayGuest.deleteMany({});
+      // 1. Transactional and child records
+      await prisma.payment.deleteMany({}).catch(() => null);
+      await prisma.invoice.deleteMany({}).catch(() => null);
+      await prisma.complaint.deleteMany({}).catch(() => null);
+      await prisma.visitor.deleteMany({}).catch(() => null);
+      await prisma.leaveRequest.deleteMany({}).catch(() => null);
+      await prisma.maintenance.deleteMany({}).catch(() => null);
+      await prisma.expense.deleteMany({}).catch(() => null);
+      await prisma.notice.deleteMany({}).catch(() => null);
+      await prisma.notificationRead.deleteMany({}).catch(() => null);
+      await prisma.salary.deleteMany({}).catch(() => null);
+      await prisma.employee.deleteMany({}).catch(() => null);
+      await prisma.shortStayGuest.deleteMany({}).catch(() => null);
 
-      await prisma.bed.deleteMany({});
-      await prisma.room.deleteMany({});
-      await prisma.floor.deleteMany({});
-      await prisma.building.deleteMany({});
-      await prisma.tenant.deleteMany({});
+      // 2. Tenants and Beds
+      await prisma.bed.deleteMany({}).catch(() => null);
+      await prisma.tenant.deleteMany({}).catch(() => null);
 
+      // 3. Rooms, Floors, and Buildings
+      await prisma.room.deleteMany({}).catch(() => null);
+      await prisma.floor.deleteMany({}).catch(() => null);
+      await prisma.building.deleteMany({}).catch(() => null);
+
+      // 4. Profiles & Non-owner Users
       const ownerUser = await prisma.user.findFirst({
         where: { email: 'owner@srisaisiri.com' }
       });
@@ -2094,17 +2099,17 @@ export const dbService = {
       if (ownerUser) {
         await prisma.profile.deleteMany({
           where: { userId: { not: ownerUser.id } }
-        });
+        }).catch(() => null);
         await prisma.user.deleteMany({
           where: { id: { not: ownerUser.id } }
-        });
+        }).catch(() => null);
       } else {
-        await prisma.profile.deleteMany({});
-        await prisma.user.deleteMany({});
+        await prisma.profile.deleteMany({}).catch(() => null);
+        await prisma.user.deleteMany({}).catch(() => null);
       }
 
-      await prisma.setting.deleteMany({});
-      await prisma.guideline.deleteMany({});
+      await prisma.setting.deleteMany({}).catch(() => null);
+      await prisma.guideline.deleteMany({}).catch(() => null);
     } catch (e) {
       console.error('[Sri Sai Siri DB Service] purgeAllData error:', e);
     }
