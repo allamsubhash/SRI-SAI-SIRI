@@ -314,7 +314,25 @@ export const dbService = {
     return mockBuildings;
   },
 
-  async createBuilding(name: string, address: string, floorsCount: number) {
+  async createBuilding(
+    nameOrData: string | { name: string; address?: string; floorsCount?: number },
+    addressArg?: string,
+    floorsCountArg?: number
+  ) {
+    let name: string;
+    let address: string;
+    let floorsCount: number;
+
+    if (typeof nameOrData === 'object' && nameOrData !== null) {
+      name = nameOrData.name;
+      address = nameOrData.address || '';
+      floorsCount = nameOrData.floorsCount || 1;
+    } else {
+      name = String(nameOrData || '');
+      address = addressArg || '';
+      floorsCount = floorsCountArg || 1;
+    }
+
     const buildingId = `bld-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const generatedFloors = Array.from({ length: floorsCount }).map((_, i) => ({
       id: `flr-${buildingId}-${i + 1}`,

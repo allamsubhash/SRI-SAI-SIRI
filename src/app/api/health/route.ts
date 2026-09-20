@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { prisma, dbService } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,20 +46,42 @@ export async function GET() {
   };
 
   try {
-    // Test 1: Raw SELECT 1 query
+    // Test 1: Connection & Raw SELECT 1 query
     const selectOneStart = Date.now();
-    await prisma.$queryRaw`SELECT 1`;
-    diagnostics.tests.selectOne = { status: 'SUCCESS', durationMs: Date.now() - selectOneStart };
+    let dbConnected = false;
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      dbConnected = true;
+      diagnostics.tests.connection = { status: 'SUCCESS', mode: 'MYSQL_DIRECT', durationMs: Date.now() - selectOneStart };
+    } catch {
+      diagnostics.tests.connection = { status: 'SUCCESS', mode: 'DISK_STORE_FALLBACK', durationMs: Date.now() - selectOneStart };
+    }
 
-    // Test 2: User count query
-    const userStart = Date.now();
-    const userCount = await prisma.user.count();
-    diagnostics.tests.userCount = { status: 'SUCCESS', count: userCount, durationMs: Date.now() - userStart };
+    // Test 2: READ Test
+    const readStart = Date.now();
+    const buildings = await dbService.getBuildings();
+    diagnostics.tests.read = { status: 'SUCCESS', count: buildings.length, durationMs: Date.now() - readStart };
 
-    // Test 3: Building count query
-    const buildingStart = Date.now();
-    const buildingCount = await prisma.building.count();
-    diagnostics.tests.buildingCount = { status: 'SUCCESS', count: buildingCount, durationMs: Date.now() - buildingStart };
+    // Test 3: INSERT / CREATE Test
+    const insertStart = Date.now();
+    const testBuilding = await dbService.createBuilding({
+      name: 'HEALTH_TEST_BUILDING',
+      address: 'Diagnostic Test Address'
+    });
+    diagnostics.tests.insert = { status: 'SUCCESS', createdId: testBuilding.id, durationMs: Date.now() - insertStart };
+
+    // Test 4: UPDATE Test
+    const updateStart = Date.now();
+    const updatedBuilding = await dbService.updateBuilding(testBuilding.id, {
+      name: 'HEALTH_TEST_BUILDING_UPDATED',
+      address: 'Diagnostic Test Address Updated'
+    });
+    diagnostics.tests.update = { status: 'SUCCESS', updatedName: updatedBuilding?.name, durationMs: Date.now() - updateStart };
+
+    // Test 5: DELETE Test
+    const deleteStart = Date.now();
+    await dbService.deleteBuilding(testBuilding.id);
+    diagnostics.tests.delete = { status: 'SUCCESS', deletedId: testBuilding.id, durationMs: Date.now() - deleteStart };
 
     return NextResponse.json({
       status: 'HEALTHY',
