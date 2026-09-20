@@ -159,8 +159,8 @@ export default function BuildingsManagement() {
   const fetchInitialData = () => {
     setLoading(true);
     Promise.all([
-      fetch('/api/buildings').then(res => res.json()),
-      fetch('/api/tenants').then(res => res.json())
+      fetch(`/api/buildings?_t=${Date.now()}`, { cache: 'no-store', headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' } }).then(res => res.json()),
+      fetch(`/api/tenants?_t=${Date.now()}`, { cache: 'no-store', headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' } }).then(res => res.json())
     ])
       .then(([bData, tData]) => {
         const validBuildings = Array.isArray(bData) ? bData : [];

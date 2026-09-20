@@ -252,6 +252,8 @@ export const dbService = {
         orderBy: { createdAt: 'desc' }
       });
 
+      console.log(`[Sri Sai Siri DB Service] getBuildings Prisma returned ${dbBuildings?.length || 0} buildings:`, (dbBuildings || []).map(b => `${b.id}:${b.name}`));
+
       if (dbBuildings) {
         const mapped = dbBuildings.map(b => ({
           id: b.id,
