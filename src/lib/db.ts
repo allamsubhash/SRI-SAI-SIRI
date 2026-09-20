@@ -329,10 +329,8 @@ export const dbService = {
           }))
         }));
 
-        if (mapped.length > 0) {
-          mockBuildings.length = 0;
-          mockBuildings.push(...(mapped as any));
-        }
+        mockBuildings.length = 0;
+        mockBuildings.push(...(mapped as any));
         return mapped;
       }
     } catch (e: any) {
@@ -671,39 +669,42 @@ export const dbService = {
         orderBy: { createdAt: 'desc' }
       });
 
-      if (dbTenants && dbTenants.length > 0) {
-        return dbTenants.map(t => {
+      if (dbTenants) {
+        const mapped = dbTenants.map(t => {
           const assignedBed = t.beds && t.beds.length > 0 ? t.beds[0] : null;
           const formattedDate = t.moveInDate
             ? t.moveInDate.toISOString().split('T')[0]
-            : (t.profile.moveInDate ? t.profile.moveInDate.toISOString().split('T')[0] : '2026-01-15');
+            : (t.profile?.moveInDate ? t.profile.moveInDate.toISOString().split('T')[0] : '2026-01-15');
 
           return {
             id: t.id,
             tenantId: t.id,
-            userId: t.profile.userId,
-            name: `${t.profile.firstName} ${t.profile.lastName}`.trim(),
-            email: t.profile.user.email,
-            phone: t.profile.phone,
+            userId: t.profile?.userId,
+            name: t.profile ? `${t.profile.firstName} ${t.profile.lastName}`.trim() : 'Resident',
+            email: t.profile?.user?.email || 'tenant@srisaisiri.com',
+            phone: t.profile?.phone || '',
             roomNumber: t.roomNumber || 'N/A',
             bedNumber: assignedBed ? assignedBed.number : (t.bedNumber || 'N/A'),
             rentAmount: t.rentAmount || 8500,
             status: t.status as any,
             moveInDate: formattedDate,
             joiningDate: formattedDate,
-            gender: t.profile.gender || 'Male',
-            aadhaar: t.profile.aadhaar || '',
-            address: t.profile.address || '',
-            emergencyName: t.profile.emergencyContactName || '',
-            emergencyPhone: t.profile.emergencyContactPhone || '',
-            guardianName: t.profile.guardianName || '',
-            guardianPhone: t.profile.guardianPhone || '',
-            occupation: t.profile.occupation || 'Student',
+            gender: t.profile?.gender || 'Male',
+            aadhaar: t.profile?.aadhaar || '',
+            address: t.profile?.address || '',
+            emergencyName: t.profile?.emergencyContactName || '',
+            emergencyPhone: t.profile?.emergencyContactPhone || '',
+            guardianName: t.profile?.guardianName || '',
+            guardianPhone: t.profile?.guardianPhone || '',
+            occupation: t.profile?.occupation || 'Student',
             medicalNotes: t.medicalNotes || '',
             agreementUrl: t.agreementUrl || '',
-            photoUrl: t.profile.photoUrl || ''
+            photoUrl: t.profile?.photoUrl || ''
           };
         });
+        mockTenants.length = 0;
+        mockTenants.push(...(mapped as any));
+        return mapped;
       }
     } catch (e) {
       logDebug('getTenants fallback to disk/mock store:', e);
