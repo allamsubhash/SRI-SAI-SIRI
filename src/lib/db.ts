@@ -344,10 +344,12 @@ export const dbService = {
     try {
       const created = await prisma.building.create({
         data: {
+          id: buildingId,
           name,
           address,
           floors: {
             create: Array.from({ length: floorsCount }).map((_, i) => ({
+              id: `flr-${buildingId}-${i + 1}`,
               number: i + 1
             }))
           }
@@ -372,11 +374,10 @@ export const dbService = {
       mockBuildings.unshift(formatted as any);
       return formatted;
     } catch (e: any) {
-      console.error('[Sri Sai Siri DB Service] createBuilding Prisma error:', e?.message || e);
-      // Try simple create without nested floors if nested relation creation fails
+      console.error('[Sri Sai Siri DB Service] createBuilding Nested Error:', e?.message || e);
       try {
         const simple = await prisma.building.create({
-          data: { name, address }
+          data: { id: buildingId, name, address }
         });
         const formatted = {
           id: simple.id,
