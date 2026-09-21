@@ -41,7 +41,7 @@ export async function GET() {
     parsedHost: host,
     parsedDatabase: dbName,
     sslParams: sslMode,
-    buildVersion: 'PAYMENT-RECOVERY-016',
+    buildVersion: 'PAYMENT-RECOVERY-017',
     rawUrlLength: envUrl.length,
     tests: {}
   };
@@ -83,6 +83,26 @@ export async function GET() {
     const deleteStart = Date.now();
     await dbService.deleteBuilding(testBuilding.id);
     diagnostics.tests.delete = { status: 'SUCCESS', deletedId: testBuilding.id, durationMs: Date.now() - deleteStart };
+
+    // Schema Audit: Table list & row counts
+    try {
+      const dbTables: any[] = await prisma.$queryRaw`
+        SELECT TABLE_NAME as tableName, TABLE_ROWS as rowCount
+        FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA = DATABASE();
+      `;
+      diagnostics.tables = dbTables;
+
+      const dbCols: any[] = await prisma.$queryRaw`
+        SELECT TABLE_NAME as tableName, COLUMN_NAME as columnName, DATA_TYPE as dataType, IS_NULLABLE as isNullable
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+        ORDER BY TABLE_NAME, ORDINAL_POSITION;
+      `;
+      diagnostics.columns = dbCols;
+    } catch (e: any) {
+      diagnostics.schemaAuditError = e.message || String(e);
+    }
 
     return NextResponse.json({
       status: 'HEALTHY',
