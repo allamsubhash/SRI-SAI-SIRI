@@ -9,7 +9,37 @@
           "id": "flr-bld-1789913870418-379-1",
           "number": 1,
           "buildingId": "bld-1789913870418-379",
-          "rooms": []
+          "rooms": [
+            {
+              "id": "rm-1789925896829-56",
+              "number": "R-101",
+              "type": "AC Double",
+              "rent": 8500,
+              "status": "AVAILABLE",
+              "capacity": 2,
+              "amenities": [
+                "AC",
+                "Wifi"
+              ],
+              "images": [],
+              "beds": [
+                {
+                  "id": "bed-rm-1789925896829-56-1",
+                  "number": "R-101-A",
+                  "roomId": "rm-1789925896829-56",
+                  "tenantId": null,
+                  "isAvailable": true
+                },
+                {
+                  "id": "bed-rm-1789925896829-56-2",
+                  "number": "R-101-B",
+                  "roomId": "rm-1789925896829-56",
+                  "tenantId": null,
+                  "isAvailable": true
+                }
+              ]
+            }
+          ]
         },
         {
           "id": "flr-bld-1789913870418-379-2",

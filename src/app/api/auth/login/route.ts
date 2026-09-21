@@ -74,16 +74,9 @@ export async function POST(request: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      path: '/'
+      path: '/',
+      maxAge: 30 * 24 * 3600 // 30 days default
     };
-
-    if (rememberDevice) {
-      // End of current day (11:59:59 PM) expiration
-      const now = new Date();
-      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-      const secondsUntilEndOfDay = Math.max(3600, Math.floor((endOfDay.getTime() - now.getTime()) / 1000));
-      cookieOptions.maxAge = secondsUntilEndOfDay;
-    }
     // When rememberDevice is false, maxAge is omitted -> Browser Session Cookie!
 
     response.cookies.set('auth_token', token, cookieOptions);
