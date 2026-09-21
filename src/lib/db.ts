@@ -92,9 +92,109 @@ function logDebug(message: string, error?: any) {
   console.log(`[Sri Sai Siri DB Service] ${message}`, error ? error.message || error : '');
 }
 
+let schemaMigrationDone = false;
+
+async function ensureSchemaUpToDate() {
+  if (schemaMigrationDone) return;
+  try {
+    // 1. Add shortStayGuestId column to Bed table if missing in remote DB
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE Bed ADD COLUMN shortStayGuestId VARCHAR(191) NULL;`);
+    } catch (e) {
+      // Ignored if column already exists
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE Bed ADD INDEX Bed_shortStayGuestId_idx(shortStayGuestId);`);
+    } catch (e) {}
+
+    // 2. Create ShortStayGuest table if missing
+    try {
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS ShortStayGuest (
+          id VARCHAR(191) NOT NULL,
+          name VARCHAR(191) NOT NULL,
+          phone VARCHAR(191) NOT NULL,
+          buildingId VARCHAR(191) NULL,
+          buildingName VARCHAR(191) NULL,
+          roomId VARCHAR(191) NULL,
+          roomNumber VARCHAR(191) NULL,
+          bedId VARCHAR(191) NULL,
+          bedNumber VARCHAR(191) NULL,
+          checkInDate DATETIME(3) NOT NULL,
+          checkInTime VARCHAR(191) NULL,
+          expectedCheckOutDate DATETIME(3) NOT NULL,
+          expectedCheckOutTime VARCHAR(191) NULL,
+          actualCheckOutDate DATETIME(3) NULL,
+          numberOfDays INT NOT NULL DEFAULT 1,
+          dailyRent DOUBLE NOT NULL DEFAULT 0.0,
+          totalAmount DOUBLE NOT NULL DEFAULT 0.0,
+          amountPaid DOUBLE NOT NULL DEFAULT 0.0,
+          balance DOUBLE NOT NULL DEFAULT 0.0,
+          paymentStatus VARCHAR(191) NOT NULL DEFAULT 'PENDING',
+          status VARCHAR(191) NOT NULL DEFAULT 'ACTIVE',
+          notes TEXT NULL,
+          createdAt DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          updatedAt DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          PRIMARY KEY (id)
+        ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      `);
+    } catch (e) {}
+
+    // 3. Create ShortStayPayment table if missing
+    try {
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS ShortStayPayment (
+          id VARCHAR(191) NOT NULL,
+          guestId VARCHAR(191) NOT NULL,
+          amount DOUBLE NOT NULL,
+          paymentMethod VARCHAR(191) NOT NULL,
+          paymentDate DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          receiptNumber VARCHAR(191) NOT NULL,
+          receivedBy VARCHAR(191) NULL,
+          status VARCHAR(191) NOT NULL DEFAULT 'PAID',
+          notes TEXT NULL,
+          createdAt DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          updatedAt DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          UNIQUE INDEX ShortStayPayment_receiptNumber_key(receiptNumber),
+          PRIMARY KEY (id)
+        ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      `);
+    } catch (e) {}
+
+    // 4. Create ShortStayReceipt table if missing
+    try {
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS ShortStayReceipt (
+          id VARCHAR(191) NOT NULL,
+          receiptNumber VARCHAR(191) NOT NULL,
+          guestId VARCHAR(191) NOT NULL,
+          paymentId VARCHAR(191) NOT NULL,
+          amountPaid DOUBLE NOT NULL,
+          totalAmount DOUBLE NOT NULL,
+          remainingBalance DOUBLE NOT NULL,
+          paymentMethod VARCHAR(191) NOT NULL,
+          paymentDate DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          statusStamp VARCHAR(191) NOT NULL,
+          receivedBy VARCHAR(191) NULL,
+          createdAt DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          UNIQUE INDEX ShortStayReceipt_receiptNumber_key(receiptNumber),
+          UNIQUE INDEX ShortStayReceipt_paymentId_key(paymentId),
+          PRIMARY KEY (id)
+        ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      `);
+    } catch (e) {}
+
+    schemaMigrationDone = true;
+  } catch (e) {
+    console.warn('[Sri Sai Siri DB Service] ensureSchemaUpToDate warning:', e);
+  }
+}
+
 // Idempotent initial setup helper (creates default owner if no users exist in MySQL DB)
 async function ensureDbInitialized() {
   try {
+    await ensureSchemaUpToDate();
     const userCount = await prisma.user.count();
     if (userCount === 0) {
       logDebug("Database user count is 0. Performing initial idempotent owner setup...");
@@ -471,6 +571,7 @@ export const dbService = {
     }
 
     try {
+      await ensureDbInitialized();
       const createdRoom = await prisma.room.create({
         data: {
           number,
