@@ -41,7 +41,7 @@ export async function GET() {
     parsedHost: host,
     parsedDatabase: dbName,
     sslParams: sslMode,
-    buildVersion: 'PAYMENT-RECOVERY-017',
+    buildVersion: 'PAYMENT-RECOVERY-018',
     rawUrlLength: envUrl.length,
     tests: {}
   };
@@ -58,31 +58,30 @@ export async function GET() {
       diagnostics.tests.connection = { status: 'SUCCESS', mode: 'DISK_STORE_FALLBACK', durationMs: Date.now() - selectOneStart };
     }
 
-    // Test 2: READ Test
+    // Test 2: READ Test & Schema Inspection
     const readStart = Date.now();
     const buildings = await dbService.getBuildings();
     diagnostics.tests.read = { status: 'SUCCESS', count: buildings.length, durationMs: Date.now() - readStart };
 
-    // Test 3: INSERT / CREATE Test
-    const insertStart = Date.now();
-    const testBuilding = await dbService.createBuilding({
-      name: 'HEALTH_TEST_BUILDING',
-      address: 'Diagnostic Test Address'
-    });
-    diagnostics.tests.insert = { status: 'SUCCESS', createdId: testBuilding.id, durationMs: Date.now() - insertStart };
+    // Schema Audit: Table list & row counts
+    try {
+      const dbTables: any[] = await prisma.$queryRaw`
+        SELECT TABLE_NAME as tableName, TABLE_ROWS as rowCount
+        FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA = DATABASE();
+      `;
+      diagnostics.tables = dbTables;
 
-    // Test 4: UPDATE Test
-    const updateStart = Date.now();
-    const updatedBuilding = await dbService.updateBuilding(testBuilding.id, {
-      name: 'HEALTH_TEST_BUILDING_UPDATED',
-      address: 'Diagnostic Test Address Updated'
-    });
-    diagnostics.tests.update = { status: 'SUCCESS', updatedName: updatedBuilding?.name, durationMs: Date.now() - updateStart };
-
-    // Test 5: DELETE Test
-    const deleteStart = Date.now();
-    await dbService.deleteBuilding(testBuilding.id);
-    diagnostics.tests.delete = { status: 'SUCCESS', deletedId: testBuilding.id, durationMs: Date.now() - deleteStart };
+      const dbCols: any[] = await prisma.$queryRaw`
+        SELECT TABLE_NAME as tableName, COLUMN_NAME as columnName, DATA_TYPE as dataType, IS_NULLABLE as isNullable
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+        ORDER BY TABLE_NAME, ORDINAL_POSITION;
+      `;
+      diagnostics.columns = dbCols;
+    } catch (e: any) {
+      diagnostics.schemaAuditError = e.message || String(e);
+    }
 
     // Schema Audit: Table list & row counts
     try {
