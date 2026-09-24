@@ -281,7 +281,10 @@ export function computeTenantBillingState(
     const hasPendingVerification = pendingTxns.length > 0;
 
     const totalBillAmount = Number((Number(inv.amount) || monthlyRent).toFixed(2));
-    const effectivePaidAmount = Math.min(totalBillAmount, Number((Math.max(Number(inv.paidAmount) || 0, validPaidSum)).toFixed(2)));
+    let effectivePaidAmount = Math.min(totalBillAmount, Number((Math.max(Number(inv.paidAmount) || 0, validPaidSum)).toFixed(2)));
+    if ((inv.status === 'DUE' || inv.status === 'OVERDUE') && (inv.paidAmount === 0 || inv.paidAmount === undefined)) {
+      effectivePaidAmount = 0;
+    }
     const outstanding = Math.max(0, Number((totalBillAmount - effectivePaidAmount).toFixed(2)));
 
     const dueDateStr = inv.dueDate 

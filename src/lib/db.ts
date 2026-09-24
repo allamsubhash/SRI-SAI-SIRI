@@ -2937,17 +2937,37 @@ export const dbService = {
         }
 
         let newPaid = inv.paidAmount;
+        let updatedDueDate = inv.dueDate;
+        const now = new Date();
+
         if (normStatus === 'PAID') {
           newPaid = inv.amount;
         } else if (normStatus === 'DUE' || normStatus === 'OVERDUE') {
           newPaid = 0;
+          await tx.payment.updateMany({
+            where: {
+              OR: [
+                { invoiceId: inv.id },
+                { tenantId: inv.tenantId }
+              ],
+              status: { in: ['PAID', 'APPROVED'] }
+            },
+            data: { status: 'REJECTED', notes: `Payment status reset to ${normStatus} by ${updatedBy}` }
+          });
+
+          if (normStatus === 'DUE') {
+            updatedDueDate = new Date(now.getFullYear(), now.getMonth(), 28);
+          } else if (normStatus === 'OVERDUE') {
+            updatedDueDate = new Date(now.getFullYear(), now.getMonth(), 5);
+          }
         }
 
         const resInv = await tx.invoice.update({
           where: { id: inv.id },
           data: {
             status: normStatus,
-            paidAmount: newPaid
+            paidAmount: newPaid,
+            dueDate: updatedDueDate
           }
         });
 

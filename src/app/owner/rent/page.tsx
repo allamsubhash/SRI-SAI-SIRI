@@ -338,6 +338,10 @@ export default function OwnerPaymentsPage() {
 
   // View Receipt Handler
   const handleOpenReceipt = (bill: UnifiedBill, txn?: PaymentTransaction) => {
+    if (bill.status !== 'PAID' && bill.outstandingAmount > 0.01) {
+      showToast('Receipts are generated only after full payment is completed.', 'info');
+      return;
+    }
     const rawNumber = bill.number.replace(/[^A-Za-z0-9]/g, '');
     const receiptNo = txn?.receiptNumber || `SSR-RCP-2026-${rawNumber.slice(-6).padStart(6, '0')}`;
 

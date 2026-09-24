@@ -214,6 +214,10 @@ export default function TenantBilling() {
   };
 
   const handleOpenOfficialReceipt = (pay: any) => {
+    if (billingState.primaryStatus !== 'PAID' && billingState.remainingOutstanding > 0.01) {
+      alert('Receipt is available only after full payment is completed.');
+      return;
+    }
     const formattedData: OfficialReceiptData = {
       receiptNo: pay.receiptNumber || `SSR-RCP-${(pay.id || '000000').slice(-6).toUpperCase()}`,
       date: formatDate(pay.date || pay.createdAt),

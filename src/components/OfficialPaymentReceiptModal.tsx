@@ -270,15 +270,6 @@ export default function OfficialPaymentReceiptModal({
         pdf.setFont('Helvetica', 'bold');
         pdf.text('This Payment Received', 20, currentY + 5.5);
         pdf.text(totalAmount.toLocaleString('en-IN'), 185, currentY + 5.5, { align: 'right' });
-        currentY += 8;
-
-        // Balance Row
-        pdf.setFillColor(254, 242, 242);
-        pdf.rect(14, currentY, 182, 8, 'FD');
-        pdf.setTextColor(190, 18, 60);
-        pdf.setFont('Helvetica', 'bold');
-        pdf.text('Remaining Balance Dues', 20, currentY + 5.5);
-        pdf.text((receiptData.remainingDue || 0).toLocaleString('en-IN'), 185, currentY + 5.5, { align: 'right' });
         currentY += 12;
       } else {
         // Monthly Tenant Rows
@@ -299,15 +290,6 @@ export default function OfficialPaymentReceiptModal({
         pdf.setFont('Helvetica', 'bold');
         pdf.text('Total Amount Paid', 20, currentY + 5.5);
         pdf.text(totalAmount.toLocaleString('en-IN'), 185, currentY + 5.5, { align: 'right' });
-        currentY += 8;
-
-        // Balance Row
-        pdf.setFillColor(254, 242, 242);
-        pdf.rect(14, currentY, 182, 8, 'FD');
-        pdf.setTextColor(190, 18, 60);
-        pdf.setFont('Helvetica', 'bold');
-        pdf.text('Remaining Balance Dues', 20, currentY + 5.5);
-        pdf.text((receiptData.remainingDue || 0).toLocaleString('en-IN'), 185, currentY + 5.5, { align: 'right' });
         currentY += 12;
       }
 
@@ -570,10 +552,6 @@ export default function OfficialPaymentReceiptModal({
                           <td className="py-1.5 px-3 border-r border-slate-300 text-emerald-900">This Payment Received</td>
                           <td className="py-1.5 px-3 text-right font-mono text-xs font-black text-emerald-700">₹{totalAmount.toLocaleString('en-IN')}</td>
                         </tr>
-                        <tr className="bg-slate-50 font-bold">
-                          <td className="py-1.5 px-3 border-r border-slate-300 text-slate-700">Remaining Balance Dues</td>
-                          <td className="py-1.5 px-3 text-right font-mono text-xs font-black text-rose-600">₹{(receiptData.remainingDue || 0).toLocaleString('en-IN')}</td>
-                        </tr>
                       </>
                     ) : (
                       <>
@@ -593,10 +571,6 @@ export default function OfficialPaymentReceiptModal({
                         <tr className="bg-emerald-50/50 font-bold">
                           <td className="py-1.5 px-3 border-r border-slate-300 text-emerald-900">Total Amount Paid</td>
                           <td className="py-1.5 px-3 text-right font-mono text-xs font-black text-emerald-700">₹{totalAmount.toLocaleString('en-IN')}</td>
-                        </tr>
-                        <tr className="bg-slate-50 font-bold">
-                          <td className="py-1.5 px-3 border-r border-slate-300 text-slate-700">Remaining Balance Dues</td>
-                          <td className="py-1.5 px-3 text-right font-mono text-xs font-black text-rose-600">₹{(receiptData.remainingDue || 0).toLocaleString('en-IN')}</td>
                         </tr>
                       </>
                     )}
