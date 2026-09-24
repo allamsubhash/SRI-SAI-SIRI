@@ -86,10 +86,7 @@ export default function OfficialPaymentReceiptModal({
     ? Number((receiptData.totalPaid || 0).toFixed(2))
     : Number(((receiptData.previousPaid || 0) + currentPaid).toFixed(2));
 
-  const computedRemaining = Math.max(0, Number((billAmount - totalPaid).toFixed(2)));
-  const remainingDue = receiptData.remainingDue !== undefined 
-    ? Math.min(receiptData.remainingDue, computedRemaining)
-    : computedRemaining;
+  const remainingDue = Math.max(0, Number((billAmount - totalPaid).toFixed(2)));
 
   let statusStamp: 'PAID' | 'PARTIALLY_PAID' | 'PENDING' = 'PAID';
   if (remainingDue <= 0.01 || (billAmount > 0 && totalPaid >= billAmount)) {

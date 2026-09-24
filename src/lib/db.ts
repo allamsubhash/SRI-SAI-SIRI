@@ -2894,10 +2894,13 @@ export const dbService = {
     tenantId?: string
   ) {
     const normStatus = (targetStatus === 'PENDING' ? 'DUE' : targetStatus) as any;
-    
+    console.log(`[DB UPDATE START] invoiceId=${invoiceId}, tenantId=${tenantId}, targetStatus=${normStatus}`);
+
+    let updatedDbInvoice: any = null;
+
     try {
-      await prisma.$transaction(async (tx) => {
-        const inv = await tx.invoice.findFirst({
+      updatedDbInvoice = await prisma.$transaction(async (tx) => {
+        let inv = await tx.invoice.findFirst({
           where: {
             OR: [
               { id: invoiceId },
@@ -2905,40 +2908,85 @@ export const dbService = {
             ]
           }
         });
-        if (inv) {
-          let newPaid = inv.paidAmount;
-          if (normStatus === 'PAID') {
-            newPaid = inv.amount;
-          } else if (normStatus === 'DUE') {
-            newPaid = 0;
-          }
-          await tx.invoice.update({
-            where: { id: inv.id },
-            data: {
-              status: normStatus,
-              paidAmount: newPaid
-            }
+
+        if (!inv && tenantId) {
+          const tenantObj = await tx.tenant.findUnique({
+            where: { id: tenantId },
+            include: { profile: true }
           });
-          if (normStatus === 'PAID') {
-            const outstanding = Math.max(0, inv.amount - (inv.paidAmount || 0));
-            if (outstanding > 0) {
-              await tx.payment.create({
-                data: {
-                  tenantId: inv.tenantId,
-                  invoiceId: inv.id,
-                  amount: outstanding,
-                  paymentMethod: 'STATUS_OVERRIDE',
-                  type: 'Monthly Rent',
-                  status: 'PAID',
-                  notes: `Status updated to PAID by ${updatedBy}`
-                }
-              });
-            }
+          if (tenantObj) {
+            const now = new Date();
+            const rentAmt = tenantObj.rentAmount || 8500;
+            inv = await tx.invoice.create({
+              data: {
+                id: invoiceId && !invoiceId.startsWith('inv-') ? invoiceId : `inv-${tenantId}`,
+                number: `INV-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(tenantId).replace(/[^0-9]/g, '').slice(-3) || '001'}`,
+                tenantId: tenantId,
+                amount: rentAmt,
+                paidAmount: 0,
+                status: 'DUE',
+                itemsJson: JSON.stringify([{ description: 'Monthly Rent', amount: rentAmt }]),
+                dueDate: new Date(now.getFullYear(), now.getMonth(), 5)
+              }
+            });
           }
         }
+
+        if (!inv) {
+          throw new Error(`Payment update failed: No database invoice row matched ID ${invoiceId} or tenant ID ${tenantId}.`);
+        }
+
+        let newPaid = inv.paidAmount;
+        if (normStatus === 'PAID') {
+          newPaid = inv.amount;
+        } else if (normStatus === 'DUE' || normStatus === 'OVERDUE') {
+          newPaid = 0;
+        }
+
+        const resInv = await tx.invoice.update({
+          where: { id: inv.id },
+          data: {
+            status: normStatus,
+            paidAmount: newPaid
+          }
+        });
+
+        if (normStatus === 'PAID') {
+          const currentPaidSum = await tx.payment.aggregate({
+            where: { invoiceId: inv.id, status: { in: ['PAID', 'APPROVED'] } },
+            _sum: { amount: true }
+          });
+          const paidSum = currentPaidSum._sum.amount || 0;
+          const outstanding = Math.max(0, inv.amount - paidSum);
+          if (outstanding > 0) {
+            await tx.payment.create({
+              data: {
+                tenantId: inv.tenantId,
+                invoiceId: inv.id,
+                amount: outstanding,
+                paymentMethod: 'STATUS_OVERRIDE',
+                type: 'Monthly Rent',
+                status: 'PAID',
+                notes: `Status updated to PAID by ${updatedBy}`
+              }
+            });
+          }
+        }
+
+        const reSelected = await tx.invoice.findUnique({
+          where: { id: inv.id }
+        });
+
+        if (!reSelected) {
+          throw new Error(`Database verification error: Invoice ${inv.id} lost post-update.`);
+        }
+
+        console.log(`[DB VERIFIED SUCCESS] Invoice ID ${reSelected.id}: Status=${reSelected.status}, PaidAmount=${reSelected.paidAmount}`);
+        return reSelected;
       });
-    } catch (e) {
-      logDebug('updateInvoiceStatus DB fallback:', e);
+    } catch (e: any) {
+      console.error('updateInvoiceStatus DB Error:', e);
+      throw new Error(`Database Payment Status Update Failed: ${e.message}`);
     }
 
     const invMock = mockInvoices.find(i => i.id === invoiceId || (tenantId && i.tenantId === tenantId));
@@ -2946,22 +2994,13 @@ export const dbService = {
       invMock.status = normStatus;
       if (normStatus === 'PAID') {
         invMock.paidAmount = invMock.amount;
-      } else if (normStatus === 'DUE') {
+      } else if (normStatus === 'DUE' || normStatus === 'OVERDUE') {
         invMock.paidAmount = 0;
       }
     }
 
-    mockAuditLogs.unshift({
-      id: `audit-${Date.now()}`,
-      action: 'INVOICE_STATUS_CHANGED',
-      userName: updatedBy,
-      entityId: invoiceId,
-      details: `Payment status changed to ${normStatus} by ${updatedBy}`,
-      createdAt: new Date().toISOString()
-    });
-
     saveDevStore({ invoices: mockInvoices });
-    return { success: true, status: normStatus };
+    return { success: true, status: normStatus, invoice: updatedDbInvoice };
   },
 
   async reverseTransaction(data: { paymentId: string; reason: string; reversedBy?: string; reversalAmount?: number }) {
@@ -3707,7 +3746,7 @@ export const dbService = {
         }
       });
 
-      return payment;
+      return await this.getShortStayGuestById(guestId);
     } catch (e) {
       logDebug("addShortStayPayment DB fallback:", e);
       if (!globalForPrisma.shortStayGuests || globalForPrisma.shortStayGuests.length === 0) {
