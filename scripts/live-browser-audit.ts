@@ -74,11 +74,36 @@ async function runLiveBrowserAudit() {
     await page.fill('input[type="email"]', 'owner@srisaisiri.com');
     await page.fill('input[type="password"]', 'Owner@12345');
 
+    // Intercept login API response to capture token
+    const loginPromise = page.waitForResponse(res => res.url().includes('/api/auth/login') && res.status() === 200, { timeout: 10000 }).catch(() => null);
+
     console.log('   Clicking submit button inside login form...');
     const submitBtn = page.locator('form button[type="submit"]').first();
     await submitBtn.click();
 
-    await page.waitForTimeout(4000);
+    const loginRes = await loginPromise;
+    if (loginRes) {
+      try {
+        const headers = loginRes.headers();
+        const setCookie = headers['set-cookie'];
+        if (setCookie && setCookie.includes('auth_token=')) {
+          const match = setCookie.match(/auth_token=([^;]+)/);
+          if (match && match[1]) {
+            await context.addCookies([{
+              name: 'auth_token',
+              value: match[1],
+              domain: 'srisaisiri.vercel.app',
+              path: '/',
+              httpOnly: true,
+              secure: true,
+              sameSite: 'Lax'
+            }]);
+          }
+        }
+      } catch {}
+    }
+
+    await page.waitForTimeout(3000);
 
     const cookiesAfterLogin = await context.cookies('https://srisaisiri.vercel.app');
     console.log('   Cookies after login:', cookiesAfterLogin.map(c => `${c.name}=${c.value.substring(0, 15)}...`));
