@@ -84,8 +84,8 @@ async function runLiveBrowserAudit() {
     console.log('   Cookies after login:', cookiesAfterLogin.map(c => `${c.name}=${c.value.substring(0, 15)}...`));
 
     // Handle Welcome Screen Overlay if present
-    const welcomeOverlayBtn = page.locator('button:has-text("ENTER MANAGEMENT PORTAL"), button:has-text("ENTER PORTAL"), button:has-text("ENTER MY PORTAL")').first();
-    if (await welcomeOverlayBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
+    const welcomeOverlayBtn = page.locator('button:has-text("ENTER MANAGEMENT PORTAL"), button:has-text("ENTER MY PORTAL"), button:has-text("Skip for now")').first();
+    if (await welcomeOverlayBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
       console.log('   👋 Welcome Overlay detected! Clicking Enter Management Portal...');
       await welcomeOverlayBtn.click();
       await page.waitForTimeout(3000);

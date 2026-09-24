@@ -3495,6 +3495,36 @@ export const dbService = {
     const guestId = `ssg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const receiptNo = `SS-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}`;
 
+    if (data.bedId) {
+      try {
+        const targetBed = await prisma.bed.findUnique({
+          where: { id: data.bedId },
+          include: { tenant: true }
+        });
+        if (targetBed?.tenantId || (targetBed?.tenant && targetBed.tenant.status !== 'INACTIVE')) {
+          throw new Error(`Bed ${data.bedNumber || ''} is currently occupied by active resident ${(targetBed.tenant as any)?.name || 'Tenant'}.`);
+        }
+
+        const newIn = new Date(data.checkInDate);
+        const newOut = new Date(data.expectedCheckOutDate);
+        const overlappingGuest = await prisma.shortStayGuest.findFirst({
+          where: {
+            bedId: data.bedId,
+            status: 'ACTIVE',
+            checkInDate: { lte: newOut },
+            expectedCheckOutDate: { gte: newIn }
+          }
+        });
+        if (overlappingGuest) {
+          throw new Error(`Bed ${data.bedNumber || ''} is already booked for guest ${overlappingGuest.name} from ${new Date(overlappingGuest.checkInDate).toLocaleDateString()} to ${new Date(overlappingGuest.expectedCheckOutDate).toLocaleDateString()}.`);
+        }
+      } catch (err: any) {
+        if (err.message && (err.message.includes('occupied') || err.message.includes('already booked'))) {
+          throw err;
+        }
+      }
+    }
+
     try {
       const createdGuest = await prisma.shortStayGuest.create({
         data: {

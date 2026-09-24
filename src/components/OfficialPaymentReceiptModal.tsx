@@ -321,7 +321,7 @@ export default function OfficialPaymentReceiptModal({
       pdf.setTextColor(30, 58, 138);
       pdf.setFontSize(9);
       pdf.setFont('Helvetica', 'bold');
-      pdf.text(`In Words : *** ${amountInWords} Only ***`, 18, currentY + 6.5);
+      pdf.text(`In Words : *** ${amountInWords} ***`, 18, currentY + 6.5);
       currentY += 14;
 
       // Metadata & Verification Box
@@ -610,7 +610,7 @@ export default function OfficialPaymentReceiptModal({
               {/* AMOUNT IN WORDS */}
               <div className="p-2 sm:p-2.5 bg-blue-50/60 border border-blue-200 rounded-lg text-[10px] sm:text-[11px] text-blue-900">
                 <span className="font-bold">In Words: </span>
-                <span className="font-semibold italic capitalize">{amountInWords} Only</span>
+                <span className="font-semibold italic uppercase">{amountInWords}</span>
               </div>
 
               {/* PAYMENT METADATA & QR CODE */}
