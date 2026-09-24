@@ -3,6 +3,12 @@ import { prisma, dbService } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
+function serializeBigInt(obj: any): any {
+  return JSON.parse(JSON.stringify(obj, (_, value) =>
+    typeof value === 'bigint' ? Number(value) : value
+  ));
+}
+
 export async function GET() {
   const envUrl = process.env.DATABASE_URL || '';
   
@@ -41,7 +47,7 @@ export async function GET() {
     parsedHost: host,
     parsedDatabase: dbName,
     sslParams: sslMode,
-    buildVersion: 'PAYMENT-RECOVERY-019',
+    buildVersion: 'PAYMENT-RECOVERY-020',
     rawUrlLength: envUrl.length,
     tests: {}
   };
@@ -83,10 +89,10 @@ export async function GET() {
       diagnostics.schemaAuditError = e.message || String(e);
     }
 
-    return NextResponse.json({
+    return NextResponse.json(serializeBigInt({
       status: 'HEALTHY',
       diagnostics
-    });
+    }));
   } catch (error: any) {
     diagnostics.error = {
       name: error.name,
@@ -95,9 +101,9 @@ export async function GET() {
       clientVersion: error.clientVersion
     };
 
-    return NextResponse.json({
+    return NextResponse.json(serializeBigInt({
       status: 'UNHEALTHY',
       diagnostics
-    }, { status: 500 });
+    }), { status: 500 });
   }
 }
