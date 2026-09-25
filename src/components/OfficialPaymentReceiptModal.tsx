@@ -27,7 +27,7 @@ import {
   Globe
 } from 'lucide-react';
 import { numberToWords, formatDate, formatDateTime } from '@/utils/formatters';
-import { generateQRCodeDataURL } from '@/utils/qrcode';
+import { CUSTOM_QR_BASE64 } from '@/utils/qrBase64';
 
 export interface ReceiptItem {
   sNo?: number;
@@ -119,9 +119,8 @@ export default function OfficialPaymentReceiptModal({
     statusStamp = 'PENDING';
   }
 
-  // Real Scannable QR Code URL linking directly to active website
-  const websiteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://srisaisiri.vercel.app';
-  const qrCodeDataUrl = generateQRCodeDataURL(websiteUrl, 180);
+  // Use the User's uploaded exact QR code image
+  const qrCodeDataUrl = CUSTOM_QR_BASE64;
 
   const handleShare = async () => {
     const text = `Official ${isShortStay ? 'Short-Stay' : 'Monthly'} Receipt from Sri Sai Siri Boys Hostel\nReceipt No: ${receiptData.receiptNo}\nName: ${displayName}\nAmount: ₹${totalAmount.toLocaleString('en-IN')}\nStatus: ${statusStamp.replace('_', ' ')}`;
@@ -140,8 +139,74 @@ export default function OfficialPaymentReceiptModal({
     }
   };
 
+  // Bulletproof Isolated Frame Printing: Prints ONLY the receipt element, never the background page
   const handlePrint = () => {
-    window.print();
+    if (!receiptRef.current) return;
+    const printIframe = document.createElement('iframe');
+    printIframe.style.position = 'fixed';
+    printIframe.style.right = '0';
+    printIframe.style.bottom = '0';
+    printIframe.style.width = '0';
+    printIframe.style.height = '0';
+    printIframe.style.border = '0';
+    document.body.appendChild(printIframe);
+
+    const doc = printIframe.contentWindow?.document;
+    if (!doc) return;
+
+    const receiptHtml = receiptRef.current.outerHTML;
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Receipt ${receiptData.receiptNo}</title>
+          <script src="https://cdn.tailwindcss.com"></script>
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 0;
+            }
+            * {
+              box-sizing: border-box;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            body {
+              margin: 0;
+              padding: 20px;
+              background: #180731 !important;
+              font-family: system-ui, -apple-system, sans-serif;
+            }
+            #printable-official-receipt {
+              margin: 0 auto;
+              width: 100%;
+              max-width: 800px;
+              background: linear-gradient(to bottom, #180731, #2d0b5a, #120427) !important;
+              color: white;
+              border-radius: 28px;
+              border: 2px solid rgba(212, 175, 55, 0.4);
+              padding: 24px;
+              box-shadow: none !important;
+            }
+          </style>
+        </head>
+        <body>
+          ${receiptHtml}
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    setTimeout(() => {
+      printIframe.contentWindow?.focus();
+      printIframe.contentWindow?.print();
+      setTimeout(() => {
+        if (document.body.contains(printIframe)) {
+          document.body.removeChild(printIframe);
+        }
+      }, 1000);
+    }, 500);
   };
 
   const handleDownloadPDF = async () => {
@@ -157,7 +222,7 @@ export default function OfficialPaymentReceiptModal({
         // High resolution capture for 100% visual parity with viewing modal
         const canvas = await html2canvas(receiptRef.current, {
           scale: 2,
-          useCORS: false,
+          useCORS: true,
           allowTaint: true,
           backgroundColor: '#180731',
           logging: false
@@ -188,7 +253,7 @@ export default function OfficialPaymentReceiptModal({
       <AnimatePresence>
         <div className="fixed inset-0 z-[999999] overflow-y-auto font-sans bg-slate-950/85 backdrop-blur-md flex justify-center items-center p-3 sm:p-4 no-print text-left">
           
-          {/* Robust Print CSS Rules */}
+          {/* Global Print CSS Safeguard */}
           <style jsx global>{`
             @media print {
               @page {
@@ -202,9 +267,11 @@ export default function OfficialPaymentReceiptModal({
                 print-color-adjust: exact !important;
                 margin: 0 !important;
                 padding: 0 !important;
-                height: 100% !important;
               }
               .no-print {
+                display: none !important;
+              }
+              body > *:not(#print-receipt-portal-wrapper) {
                 display: none !important;
               }
               #print-receipt-portal-wrapper {
@@ -305,7 +372,6 @@ export default function OfficialPaymentReceiptModal({
                 {/* TOP BRAND HEADER WITH CROWN */}
                 <div className="text-center space-y-1 relative z-10 pt-1">
                   <div className="flex items-center justify-center">
-                    {/* Pinkish Gold Crown Icon matching reference */}
                     <svg className="w-9 h-9 text-amber-300 drop-shadow-md mb-0.5" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z" />
                     </svg>
@@ -412,7 +478,7 @@ export default function OfficialPaymentReceiptModal({
                   </div>
                 </div>
 
-                {/* 3. FINANCIAL ACCOUNT PARTICULARS TABLE */}
+                {/* 3. FINANCIAL ACCOUNT PARTICULARS TABLE (PREVIOUSLY PAID REMOVED) */}
                 <div className="bg-white rounded-2xl border border-purple-200 overflow-hidden shadow-sm text-xs relative z-10">
                   <div className="bg-[#2b0c54] text-white px-4 py-2.5 font-bold flex justify-between items-center">
                     <div className="flex items-center gap-2">
@@ -424,29 +490,15 @@ export default function OfficialPaymentReceiptModal({
 
                   <div className="divide-y divide-purple-100 font-medium text-slate-800">
                     {isShortStay ? (
-                      <>
-                        <div className="px-4 py-2.5 flex justify-between items-center">
-                          <span>Total Stay Charges ({receiptData.numberOfDays || 1} Days)</span>
-                          <span className="font-bold font-mono text-slate-950">₹{(receiptData.totalStayAmount || totalAmount).toLocaleString('en-IN')}</span>
-                        </div>
-                        {receiptData.previousPaid !== undefined && receiptData.previousPaid > 0 && (
-                          <div className="px-4 py-2.5 flex justify-between items-center text-slate-600">
-                            <span>Previously Paid Installments</span>
-                            <span className="font-semibold font-mono">₹{receiptData.previousPaid.toLocaleString('en-IN')}</span>
-                          </div>
-                        )}
-                      </>
+                      <div className="px-4 py-2.5 flex justify-between items-center">
+                        <span>Total Stay Charges ({receiptData.numberOfDays || 1} Days)</span>
+                        <span className="font-bold font-mono text-slate-950">₹{(receiptData.totalStayAmount || totalAmount).toLocaleString('en-IN')}</span>
+                      </div>
                     ) : (
-                      <>
-                        <div className="px-4 py-2.5 flex justify-between items-center">
-                          <span>Room Rent & Boarding ({receiptData.billingPeriod || 'September 2026'})</span>
-                          <span className="font-bold font-mono text-slate-950">₹{billAmount.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div className="px-4 py-2.5 flex justify-between items-center text-slate-600">
-                          <span>Previously Paid Amount</span>
-                          <span className="font-semibold font-mono">₹{(receiptData.previousPaid || 0).toLocaleString('en-IN')}</span>
-                        </div>
-                      </>
+                      <div className="px-4 py-2.5 flex justify-between items-center">
+                        <span>Room Rent & Boarding ({receiptData.billingPeriod || 'September 2026'})</span>
+                        <span className="font-bold font-mono text-slate-950">₹{billAmount.toLocaleString('en-IN')}</span>
+                      </div>
                     )}
 
                     {/* Highlighted Received & Total Rows */}
@@ -473,7 +525,7 @@ export default function OfficialPaymentReceiptModal({
                     <div className="px-4 py-2.5 bg-rose-50/80 text-rose-950 font-bold flex justify-between items-center border-t border-rose-100">
                       <div className="flex items-center gap-2">
                         <div className="w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px] shrink-0">
-                          <Clock className="w-3 h-3" />
+                          <Clock className="w-3.5 h-3.5" />
                         </div>
                         <span className="text-rose-900 font-bold">Remaining Balance Dues</span>
                       </div>
@@ -491,7 +543,7 @@ export default function OfficialPaymentReceiptModal({
                   </div>
                 </div>
 
-                {/* 5. PAYMENT METHOD & REAL SCANNABLE QR CODE CARD */}
+                {/* 5. PAYMENT METHOD & EXACT UPLOADED QR CODE CARD */}
                 <div className="bg-white rounded-2xl p-3.5 border border-purple-100 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs relative z-10">
                   <div className="space-y-2.5 w-full sm:w-auto">
                     <div className="flex items-center gap-2.5">
@@ -525,7 +577,7 @@ export default function OfficialPaymentReceiptModal({
                     </div>
                   </div>
 
-                  {/* Real Scannable QR Code */}
+                  {/* Exact Uploaded Scannable QR Code */}
                   <div className="flex flex-col items-center justify-center p-2 rounded-2xl border-2 border-purple-200 bg-white shrink-0 shadow-xs">
                     <img src={qrCodeDataUrl} alt="Website QR Code" className="w-24 h-24 object-contain rounded-lg" />
                     <div className="bg-[#2b0c54] text-white text-[8px] font-bold px-2.5 py-0.5 rounded-full mt-1.5 flex items-center gap-1 shadow-2xs">
@@ -534,7 +586,7 @@ export default function OfficialPaymentReceiptModal({
                   </div>
                 </div>
 
-                {/* 6. FOOTER SECTION: BUILDING IMAGE + THANK YOU SCRIPT + SIGNATURE & STAMP */}
+                {/* 6. FOOTER SECTION: BUILDING IMAGE + THANK YOU SCRIPT + STAMP IN PLACE OF SIGNATURE */}
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-3 border-t border-purple-400/30 text-white relative z-10">
                   
                   {/* Left: Building Vector Illustration */}
@@ -555,21 +607,10 @@ export default function OfficialPaymentReceiptModal({
                     </p>
                   </div>
 
-                  {/* Right: SIGNATURE & OFFICIAL CIRCULAR STAMP OVERLAY */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    
-                    {/* Cursive Signature Graphic */}
-                    <div className="text-center">
-                      <div className="font-serif italic text-white text-lg font-bold tracking-widest leading-none drop-shadow-xs mb-1">
-                        Joniafo
-                      </div>
-                      <div className="w-24 h-0.5 border-b border-white/30 my-0.5"></div>
-                      <span className="font-bold text-slate-200 uppercase tracking-wider text-[8px] block">Authorized Signature</span>
-                      <span className="text-[7.5px] text-amber-300/90 font-semibold block">Hostel Manager</span>
-                    </div>
-
-                    {/* 🔴 AUTHENTIC CIRCULAR RED HOSTEL STAMP */}
-                    <div className="relative w-20 h-20 rounded-full border-2 border-dashed border-red-500 p-0.5 flex items-center justify-center text-center transform -rotate-12 pointer-events-none select-none bg-red-500/10 backdrop-blur-3xs shadow-lg shrink-0">
+                  {/* Right: OFFICIAL CIRCULAR STAMP ONLY IN PLACE OF SIGNATURE */}
+                  <div className="flex flex-col items-center justify-center text-center shrink-0">
+                    {/* 🔴 AUTHENTIC CIRCULAR RED HOSTEL STAMP IN PLACE OF SIGNATURE */}
+                    <div className="relative w-22 h-22 rounded-full border-2 border-dashed border-red-500 p-0.5 flex items-center justify-center text-center transform -rotate-12 pointer-events-none select-none bg-red-500/10 backdrop-blur-3xs shadow-lg mb-1">
                       <div className="w-full h-full rounded-full border border-solid border-red-500 flex flex-col items-center justify-center p-0.5 bg-white/10">
                         <span className="text-[6.5px] font-black tracking-tight text-red-500 uppercase leading-none">
                           SRI SAI SIRI
@@ -583,6 +624,9 @@ export default function OfficialPaymentReceiptModal({
                       </div>
                     </div>
 
+                    <div className="w-24 h-0.5 border-b border-white/30 my-0.5"></div>
+                    <span className="font-bold text-slate-200 uppercase tracking-wider text-[8.5px]">Authorized Signature</span>
+                    <span className="text-[8px] text-amber-300/90 font-semibold">Hostel Manager</span>
                   </div>
 
                 </div>
