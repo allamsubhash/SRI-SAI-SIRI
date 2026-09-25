@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { prisma } from '@/lib/db';
+import { prisma, dbService } from '@/lib/db';
 import { verifyToken } from '@/lib/auth';
 import { formatDate } from '@/utils/formatters';
 
@@ -18,32 +18,31 @@ export async function GET(request: Request) {
     }
 
     const userId = currentUser?.userId || 'u-guest';
-    const { dbService } = await import('@/lib/db');
     const dbReadIds = await dbService.getReadNotificationIds(userId);
     const readIds = Array.from(new Set([...(readCookie ? readCookie.split(',') : []), ...dbReadIds]));
 
     const isOwner = currentUser?.role === 'OWNER';
     const isTenant = currentUser?.role === 'TENANT';
 
-    // Fetch real-time data from DB for notifications
+    // Optimized parallel data fetch
     const [recentPayments, recentComplaints, recentVisitors, recentNotices] = await Promise.all([
       prisma.payment.findMany({
-        take: 15,
+        take: 6,
         orderBy: { date: 'desc' },
         include: { tenant: { include: { profile: true } } }
       }),
       prisma.complaint.findMany({
-        take: 15,
+        take: 6,
         orderBy: { createdAt: 'desc' },
         include: { tenant: { include: { profile: true } } }
       }),
       prisma.visitor.findMany({
-        take: 15,
+        take: 6,
         orderBy: { createdAt: 'desc' },
         include: { tenant: { include: { profile: true } } }
       }),
       prisma.notice.findMany({
-        take: 15,
+        take: 6,
         orderBy: { createdAt: 'desc' }
       })
     ]);

@@ -81,7 +81,7 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetchOwnerNotifications();
-    const interval = setInterval(fetchOwnerNotifications, 10000);
+    const interval = setInterval(fetchOwnerNotifications, 30000);
     return () => clearInterval(interval);
   }, []);
 
