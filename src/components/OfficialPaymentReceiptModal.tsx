@@ -202,32 +202,84 @@ export default function OfficialPaymentReceiptModal({
 
     try {
       if (!receiptRef.current) return;
-      const html2canvas = (await import('html2canvas')).default;
-      const { jsPDF } = await import('jspdf');
-      
-      // High resolution capture without canvas tainting
-      const canvas = await html2canvas(receiptRef.current, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: '#180731',
-        logging: false
-      });
 
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
+      const targetFileName = `Official_Receipt_${receiptData.receiptNo.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 
-      const pdfWidth = 190;
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      // Helper to trigger direct browser file download from Blob or Data URL
+      const triggerFileDownload = (blobOrDataUrl: Blob | string, filename: string) => {
+        const link = document.createElement('a');
+        link.style.display = 'none';
+        if (typeof blobOrDataUrl === 'string') {
+          link.href = blobOrDataUrl;
+        } else {
+          link.href = URL.createObjectURL(blobOrDataUrl);
+        }
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          if (document.body.contains(link)) document.body.removeChild(link);
+          if (typeof blobOrDataUrl !== 'string') URL.revokeObjectURL(link.href);
+        }, 1000);
+      };
 
-      pdf.addImage(imgData, 'PNG', 10, 10, pdfWidth, pdfHeight);
-      pdf.save(`Official_Receipt_${receiptData.receiptNo}.pdf`);
+      try {
+        const html2canvas = (await import('html2canvas')).default;
+        const { jsPDF } = await import('jspdf');
+
+        const canvas = await html2canvas(receiptRef.current, {
+          scale: 2,
+          useCORS: false,
+          allowTaint: false,
+          backgroundColor: '#180731',
+          logging: false,
+          onclone: (clonedDoc) => {
+            const el = clonedDoc.getElementById('printable-official-receipt');
+            if (el) {
+              el.style.boxShadow = 'none';
+              el.style.transform = 'none';
+              el.style.backdropFilter = 'none';
+              (el.style as any).webkitBackdropFilter = 'none';
+            }
+          }
+        });
+
+        const imgData = canvas.toDataURL('image/png', 1.0);
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4'
+        });
+
+        const pdfWidth = 190;
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+        pdf.addImage(imgData, 'PNG', 10, 10, pdfWidth, pdfHeight);
+
+        // Try direct Blob download first (most reliable across mobile & desktop)
+        try {
+          const pdfBlob = pdf.output('blob');
+          triggerFileDownload(pdfBlob, `${targetFileName}.pdf`);
+        } catch (blobErr) {
+          pdf.save(`${targetFileName}.pdf`);
+        }
+        return;
+      } catch (canvasErr) {
+        console.warn('Canvas PDF export fallback triggered:', canvasErr);
+      }
+
+      // Secondary Image Download Fallback
+      try {
+        const html2canvas = (await import('html2canvas')).default;
+        const canvas = await html2canvas(receiptRef.current, { scale: 2 });
+        const imgData = canvas.toDataURL('image/png');
+        triggerFileDownload(imgData, `${targetFileName}.png`);
+      } catch (finalErr) {
+        console.error('Final download fallback failed:', finalErr);
+        alert('Downloading file... If download does not open automatically, please use the Print button to Save as PDF.');
+      }
     } catch (e) {
-      console.error('Failed to export receipt PDF:', e);
+      console.error('Failed to export receipt:', e);
     } finally {
       setDownloading(false);
     }
