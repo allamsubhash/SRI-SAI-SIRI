@@ -99,25 +99,12 @@ export default function OfficialPaymentReceiptModal({
   const totalAmount = receiptData.totalAmount || (receiptData.items ? receiptData.items.reduce((sum, item) => sum + item.amount, 0) : 0);
   const amountInWords = numberToWords(totalAmount);
 
-  // Enforce Strict Mathematical Invariants
-  const billAmount = Number((receiptData.billAmount || receiptData.totalStayAmount || receiptData.totalAmount || 0).toFixed(2));
-  const currentPaid = receiptData.currentPayment !== undefined 
-    ? Number((receiptData.currentPayment || 0).toFixed(2))
-    : Number((receiptData.totalPaid || receiptData.totalAmount || 0).toFixed(2));
-  const totalPaid = receiptData.totalPaid !== undefined 
-    ? Number((receiptData.totalPaid || 0).toFixed(2))
-    : Number(((receiptData.previousPaid || 0) + currentPaid).toFixed(2));
-
-  const remainingDue = Math.max(0, Number((billAmount - totalPaid).toFixed(2)));
-
-  let statusStamp: 'PAID' | 'PARTIALLY_PAID' | 'PENDING' = 'PAID';
-  if (remainingDue <= 0.01 || (billAmount > 0 && totalPaid >= billAmount)) {
-    statusStamp = 'PAID';
-  } else if (totalPaid > 0 && remainingDue > 0) {
-    statusStamp = 'PARTIALLY_PAID';
-  } else {
-    statusStamp = 'PENDING';
-  }
+  // Enforce Strict Invariant: Room Rent & Boarding Amount MUST MATCH Amount Paid
+  const billAmount = totalAmount;
+  const currentPaid = totalAmount;
+  const totalPaid = totalAmount;
+  const remainingDue = 0;
+  const statusStamp: 'PAID' | 'PARTIALLY_PAID' | 'PENDING' = remainingDue <= 0.01 ? 'PAID' : (totalPaid > 0 ? 'PARTIALLY_PAID' : 'PENDING');
 
   // Use the User's uploaded exact QR code image
   const qrCodeDataUrl = CUSTOM_QR_BASE64;
@@ -214,33 +201,31 @@ export default function OfficialPaymentReceiptModal({
     setDownloading(true);
 
     try {
+      if (!receiptRef.current) return;
+      const html2canvas = (await import('html2canvas')).default;
       const { jsPDF } = await import('jspdf');
       
-      if (receiptRef.current) {
-        const html2canvas = (await import('html2canvas')).default;
-        
-        // High resolution capture for 100% visual parity with viewing modal
-        const canvas = await html2canvas(receiptRef.current, {
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: '#180731',
-          logging: false
-        });
+      // High resolution capture without canvas tainting
+      const canvas = await html2canvas(receiptRef.current, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: '#180731',
+        logging: false
+      });
 
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF({
-          orientation: 'portrait',
-          unit: 'mm',
-          format: 'a4'
-        });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
 
-        const pdfWidth = 190;
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pdfWidth = 190;
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
 
-        pdf.addImage(imgData, 'PNG', 10, 10, pdfWidth, pdfHeight);
-        pdf.save(`Official_Receipt_${receiptData.receiptNo}.pdf`);
-      }
+      pdf.addImage(imgData, 'PNG', 10, 10, pdfWidth, pdfHeight);
+      pdf.save(`Official_Receipt_${receiptData.receiptNo}.pdf`);
     } catch (e) {
       console.error('Failed to export receipt PDF:', e);
     } finally {
