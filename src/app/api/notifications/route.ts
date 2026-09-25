@@ -225,14 +225,15 @@ export async function PUT(request: Request) {
       await dbService.markNotificationAsRead(userId, id);
     }
 
-    cookieStore.set('read_notifs', readIds.join(','), {
+    const response = NextResponse.json({ success: true, readIds });
+    response.cookies.set('read_notifs', readIds.join(','), {
       path: '/',
       maxAge: 60 * 60 * 24 * 30,
       httpOnly: false,
       sameSite: 'lax'
     });
 
-    return NextResponse.json({ success: true, readIds });
+    return response;
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to update notification state' }, { status: 500 });
   }

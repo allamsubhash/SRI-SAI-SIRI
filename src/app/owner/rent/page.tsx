@@ -585,6 +585,14 @@ export default function OwnerPaymentsPage() {
 
   // Status Change Handler
   const handleStatusChange = async (billId: string, tenantId: string, tenantName: string, newStatus: string) => {
+    if (newStatus === 'PARTIAL') {
+      const bill = allBills.find(b => b.id === billId || b.tenantId === tenantId);
+      if (bill) {
+        handleOpenRecordForBill(bill);
+        return;
+      }
+    }
+
     try {
       const res = await fetch('/api/payments/status', {
         method: 'POST',
@@ -987,9 +995,23 @@ export default function OwnerPaymentsPage() {
                           <div className="flex items-center justify-center gap-1.5">
 
                             <button
+                              onClick={() => handleOpenRecordForBill(bill)}
+                              title="Record or Edit Payment Amount"
+                              className="px-2.5 py-1 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer border border-emerald-500/20"
+                            >
+                              <CreditCard className="w-3.5 h-3.5" />
+                              <span>{bill.outstandingAmount > 0 ? 'Collect' : 'Edit'}</span>
+                            </button>
+
+                            <button
                               onClick={() => handleOpenReceipt(bill)}
-                              title="View Official Receipt"
-                              className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                              disabled={bill.status !== 'PAID' && bill.outstandingAmount > 0.01}
+                              title={bill.status === 'PAID' || bill.outstandingAmount <= 0.01 ? "View Official Receipt" : "Receipt available after full payment"}
+                              className={`p-1.5 rounded-xl transition-colors ${
+                                bill.status === 'PAID' || bill.outstandingAmount <= 0.01
+                                  ? 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer'
+                                  : 'bg-slate-100/50 dark:bg-slate-800/30 text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-40'
+                              }`}
                             >
                               <Receipt className="w-3.5 h-3.5" />
                             </button>

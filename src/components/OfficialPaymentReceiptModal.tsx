@@ -142,6 +142,7 @@ export default function OfficialPaymentReceiptModal({
                 el.style.backgroundColor = '#ffffff';
                 el.style.boxShadow = 'none';
                 el.style.transform = 'none';
+                el.style.borderRadius = '16px';
               }
             }
           });
@@ -160,49 +161,54 @@ export default function OfficialPaymentReceiptModal({
         }
       }
 
-      // High-Fidelity Vector PDF Generator (Ensures downloaded PDF is 100% identical to viewing receipt)
+      // High-Fidelity Vector PDF Generator (Ensures downloaded PDF is 100% identical to viewing receipt with rounded corners)
       const pdf = new jsPDF('p', 'mm', 'a4');
 
-      // Title & Header
+      // Outer Rounded Border Card
+      pdf.setDrawColor(203, 213, 225); // slate-300
+      pdf.setLineWidth(0.4);
+      pdf.roundedRect(10, 8, 190, 278, 5, 5, 'S');
+
+      // Title & Header (Left / Center offset to ensure NO badge overlap)
       pdf.setTextColor(112, 36, 52); // #702434
       pdf.setFont('Helvetica', 'bold');
-      pdf.setFontSize(18);
-      pdf.text('SRI SAI SIRI BOYS HOSTEL', 105, 18, { align: 'center' });
+      pdf.setFontSize(15);
+      pdf.text('SRI SAI SIRI BOYS HOSTEL', 95, 18, { align: 'center' });
 
-      pdf.setFontSize(12);
-      pdf.text(isShortStay ? 'SHORT-STAY PAYMENT RECEIPT' : 'MONTHLY RENT RECEIPT', 105, 25, { align: 'center' });
+      pdf.setFontSize(11);
+      pdf.text(isShortStay ? 'SHORT-STAY PAYMENT RECEIPT' : 'MONTHLY RENT RECEIPT', 95, 24, { align: 'center' });
 
-      // Visual Status Stamp Badge
+      // Visual Status Stamp Badge (Positioned at Top-Right without any text overlap)
       if (statusStamp === 'PAID') {
         pdf.setDrawColor(5, 150, 105);
         pdf.setFillColor(209, 250, 229);
-        pdf.rect(145, 12, 45, 10, 'FD');
+        pdf.roundedRect(154, 11, 42, 9, 2.5, 2.5, 'FD');
         pdf.setTextColor(4, 120, 87);
-        pdf.setFontSize(10);
+        pdf.setFontSize(9.5);
         pdf.setFont('Helvetica', 'bold');
-        pdf.text('✓ PAID', 167.5, 18.5, { align: 'center' });
+        pdf.text('✓ PAID', 175, 17, { align: 'center' });
       } else if (statusStamp === 'PARTIALLY_PAID') {
         pdf.setDrawColor(217, 119, 6);
         pdf.setFillColor(254, 243, 199);
-        pdf.rect(140, 12, 50, 10, 'FD');
+        pdf.roundedRect(150, 11, 46, 9, 2.5, 2.5, 'FD');
         pdf.setTextColor(180, 83, 9);
-        pdf.setFontSize(9);
+        pdf.setFontSize(8.5);
         pdf.setFont('Helvetica', 'bold');
-        pdf.text('PARTIALLY PAID', 165, 18.5, { align: 'center' });
+        pdf.text('PARTIALLY PAID', 173, 17, { align: 'center' });
       } else {
         pdf.setDrawColor(225, 29, 72);
         pdf.setFillColor(254, 226, 226);
-        pdf.rect(140, 12, 50, 10, 'FD');
+        pdf.roundedRect(148, 11, 48, 9, 2.5, 2.5, 'FD');
         pdf.setTextColor(190, 18, 60);
-        pdf.setFontSize(9);
+        pdf.setFontSize(8.5);
         pdf.setFont('Helvetica', 'bold');
-        pdf.text('PAYMENT PENDING', 165, 18.5, { align: 'center' });
+        pdf.text('PAYMENT PENDING', 172, 17, { align: 'center' });
       }
 
-      // Guest / Tenant Info Box
+      // Guest / Tenant Info Card (Rounded Corners)
       pdf.setDrawColor(208, 215, 222);
       pdf.setFillColor(248, 250, 252);
-      pdf.rect(14, 32, 182, 22, 'FD');
+      pdf.roundedRect(14, 32, 182, 22, 3, 3, 'FD');
 
       pdf.setTextColor(30, 41, 59);
       pdf.setFontSize(9.5);
@@ -213,20 +219,20 @@ export default function OfficialPaymentReceiptModal({
       pdf.text(`Building   : ${receiptData.buildingName || 'Main Hostel'}`, 110, 40);
       pdf.text(`Room / Bed : Room ${receiptData.roomNumber || 'N/A'} (Bed ${receiptData.bedNumber || 'N/A'})`, 110, 48);
 
-      // Receipt Number & Date Bar
+      // Receipt Number & Date Bar (Rounded Corners)
       pdf.setFillColor(241, 245, 249);
-      pdf.rect(14, 57, 182, 9, 'FD');
+      pdf.roundedRect(14, 57, 182, 9, 2.5, 2.5, 'FD');
       pdf.setFontSize(9);
       pdf.text(`Receipt No : ${receiptData.receiptNo}`, 18, 63);
       pdf.text(`Date & Time : ${formatDate(receiptData.date)}`, 140, 63);
 
       let currentY = 70;
 
-      // Short Stay Rate Calculation Box
+      // Short Stay Rate Calculation Box (Rounded Corners)
       if (isShortStay) {
         pdf.setFillColor(236, 253, 245);
         pdf.setDrawColor(167, 243, 208);
-        pdf.rect(14, currentY, 182, 12, 'FD');
+        pdf.roundedRect(14, currentY, 182, 12, 2.5, 2.5, 'FD');
         pdf.setTextColor(6, 78, 59);
         pdf.setFontSize(9);
         pdf.text(`Stay Duration: ${receiptData.checkInDate ? formatDate(receiptData.checkInDate) : ''} to ${receiptData.expectedCheckOutDate ? formatDate(receiptData.expectedCheckOutDate) : ''}`, 18, currentY + 7);
@@ -234,10 +240,10 @@ export default function OfficialPaymentReceiptModal({
         currentY += 16;
       }
 
-      // Financial Particulars Table
+      // Financial Particulars Table (Rounded Outer Box & Rows)
       pdf.setFillColor(241, 245, 249);
       pdf.setDrawColor(208, 215, 222);
-      pdf.rect(14, currentY, 182, 8, 'FD');
+      pdf.roundedRect(14, currentY, 182, 8, 2, 2, 'FD');
       pdf.setTextColor(15, 23, 42);
       pdf.setFontSize(9);
       pdf.text('Account Particulars', 20, currentY + 5.5);
@@ -246,7 +252,7 @@ export default function OfficialPaymentReceiptModal({
 
       if (isShortStay) {
         // Total Stay Row
-        pdf.rect(14, currentY, 182, 8, 'S');
+        pdf.roundedRect(14, currentY, 182, 8, 1.5, 1.5, 'S');
         pdf.setFont('Helvetica', 'normal');
         pdf.text(`Total Stay Charges (${receiptData.numberOfDays || 1} Days)`, 20, currentY + 5.5);
         pdf.setFont('Helvetica', 'bold');
@@ -255,7 +261,7 @@ export default function OfficialPaymentReceiptModal({
 
         // Previously Paid Row
         if (receiptData.previousPaid && receiptData.previousPaid > 0) {
-          pdf.rect(14, currentY, 182, 8, 'S');
+          pdf.roundedRect(14, currentY, 182, 8, 1.5, 1.5, 'S');
           pdf.setFont('Helvetica', 'normal');
           pdf.text('Previously Paid Installments', 20, currentY + 5.5);
           pdf.setFont('Helvetica', 'bold');
@@ -265,7 +271,7 @@ export default function OfficialPaymentReceiptModal({
 
         // Received Row
         pdf.setFillColor(236, 253, 245);
-        pdf.rect(14, currentY, 182, 8, 'FD');
+        pdf.roundedRect(14, currentY, 182, 8, 1.5, 1.5, 'FD');
         pdf.setTextColor(4, 120, 87);
         pdf.setFont('Helvetica', 'bold');
         pdf.text('This Payment Received', 20, currentY + 5.5);
@@ -275,7 +281,7 @@ export default function OfficialPaymentReceiptModal({
         // Monthly Tenant Rows
         const items = receiptData.items && receiptData.items.length > 0 ? receiptData.items : [{ accountHead: 'Monthly Hostel Rent Collection', amount: totalAmount }];
         items.forEach((item) => {
-          pdf.rect(14, currentY, 182, 8, 'S');
+          pdf.roundedRect(14, currentY, 182, 8, 1.5, 1.5, 'S');
           pdf.setFont('Helvetica', 'normal');
           pdf.text(item.accountHead, 20, currentY + 5.5);
           pdf.setFont('Helvetica', 'bold');
@@ -283,9 +289,9 @@ export default function OfficialPaymentReceiptModal({
           currentY += 8;
         });
 
-        // Paid Row
+        // Paid Row (Rounded Corners)
         pdf.setFillColor(236, 253, 245);
-        pdf.rect(14, currentY, 182, 8, 'FD');
+        pdf.roundedRect(14, currentY, 182, 8, 1.5, 1.5, 'FD');
         pdf.setTextColor(4, 120, 87);
         pdf.setFont('Helvetica', 'bold');
         pdf.text('Total Amount Paid', 20, currentY + 5.5);
@@ -293,20 +299,20 @@ export default function OfficialPaymentReceiptModal({
         currentY += 12;
       }
 
-      // In Words Box
+      // In Words Box (Rounded Corners)
       pdf.setFillColor(239, 246, 255);
       pdf.setDrawColor(191, 219, 254);
-      pdf.rect(14, currentY, 182, 10, 'FD');
+      pdf.roundedRect(14, currentY, 182, 10, 3, 3, 'FD');
       pdf.setTextColor(30, 58, 138);
       pdf.setFontSize(9);
       pdf.setFont('Helvetica', 'bold');
       pdf.text(`In Words : *** ${amountInWords} ***`, 18, currentY + 6.5);
       currentY += 14;
 
-      // Metadata & Verification Box
+      // Metadata & Verification Box (Rounded Corners)
       pdf.setFillColor(248, 250, 252);
       pdf.setDrawColor(208, 215, 222);
-      pdf.rect(14, currentY, 182, 14, 'FD');
+      pdf.roundedRect(14, currentY, 182, 14, 3, 3, 'FD');
       pdf.setTextColor(51, 65, 85);
       pdf.setFontSize(8.5);
       pdf.setFont('Helvetica', 'bold');

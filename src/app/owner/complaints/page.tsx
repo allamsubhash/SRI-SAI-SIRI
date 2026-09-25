@@ -124,6 +124,27 @@ export default function ComplaintsManagement() {
     }
   };
 
+  const handleMarkAsRead = async (complaint: any) => {
+    try {
+      fetch('/api/notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: `notif-comp-${complaint.id}` })
+      }).catch(console.error);
+
+      if (complaint.status === 'PENDING') {
+        await handleUpdateStatus(complaint.id, 'IN_PROGRESS');
+        showToast('Complaint Acknowledged', 'Status updated to IN_PROGRESS & marked as read.', 'success');
+      } else {
+        showToast('Marked as Read', 'Ticket acknowledged by hostel management.', 'info');
+        setSelectedComplaint(null);
+        fetchComplaintsData();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleDeleteComplaint = async (compId: string) => {
     try {
       const res = await fetch('/api/complaints', {
@@ -547,131 +568,139 @@ export default function ComplaintsManagement() {
 
       </div>
 
-      {/* 📌 5. COMPLAINT DETAILS RIGHT-SIDE DRAWER (480px) */}
-      <AnimatePresence>
-        {selectedComplaint && (
-          <motion.div 
-            key="complaint-side-panel-overlay"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[99999] flex justify-end bg-slate-900/40 dark:bg-black/70 backdrop-blur-md cursor-pointer"
-            onClick={() => setSelectedComplaint(null)}
-          >
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-[#FDFBF9]/95 dark:bg-[#121826]/95 w-full max-w-[480px] h-full p-6 sm:p-7 shadow-2xl border-l border-white/80 dark:border-zinc-800 backdrop-blur-2xl flex flex-col justify-between text-left overflow-y-auto custom-scrollbar cursor-default"
-            >
-              <div className="space-y-6">
-                
-                {/* Header */}
-                <div className="flex justify-between items-start border-b border-slate-200/80 dark:border-zinc-800/80 pb-4">
-                  <div>
-                    <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest block">COMPLAINT DETAILS</span>
-                    <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">{selectedComplaint.title}</h3>
-                    <p className="text-xs text-slate-400 font-mono mt-0.5">ID: CMP-{selectedComplaint.id.slice(-4).toUpperCase()}</p>
-                  </div>
+      {/* 📌 5. COMPLAINT DETAILS POP-UP MODAL */}
+      {selectedComplaint && (
+        <NeonModal
+          isOpen={true}
+          onClose={() => setSelectedComplaint(null)}
+          title={selectedComplaint.title}
+          subtitle={`Ticket ID: CMP-${selectedComplaint.id.slice(-4).toUpperCase()} • Category: ${selectedComplaint.category || 'General'}`}
+          size="lg"
+          accentColor="purple"
+        >
+          <div className="space-y-5 text-left">
+            
+            {/* Status & Priority Badges */}
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400">Status:</span>
+                <span className={`px-2.5 py-0.5 rounded-full font-black text-[10px] uppercase ${
+                  selectedComplaint.status === 'RESOLVED' ? 'bg-emerald-500/15 text-emerald-600' :
+                  selectedComplaint.status === 'ASSIGNED' || selectedComplaint.status === 'IN_PROGRESS' ? 'bg-amber-500/15 text-amber-600' :
+                  'bg-rose-500/15 text-rose-600'
+                }`}>
+                  {selectedComplaint.status}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400">Priority:</span>
+                <span className="px-2.5 py-0.5 rounded-full bg-purple-500/15 text-purple-600 font-black text-[10px] uppercase">
+                  {selectedComplaint.priority || 'HIGH'}
+                </span>
+              </div>
+            </div>
 
-                  <button
-                    onClick={() => setSelectedComplaint(null)}
-                    className="w-8 h-8 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center justify-center cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+            {/* Resident Info Card */}
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 space-y-2 text-xs font-bold">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">RESIDENT & LOCATION</span>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Resident Name:</span>
+                <span className="text-slate-900 dark:text-white font-black">{selectedComplaint.tenantName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Room Number:</span>
+                <span className="text-purple-600 dark:text-purple-400 font-black">Room {selectedComplaint.roomNumber || 'N/A'}</span>
+              </div>
+              {selectedComplaint.dateCreated && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Date Filed:</span>
+                  <span className="text-slate-700 dark:text-zinc-300 font-semibold">{selectedComplaint.dateCreated}</span>
                 </div>
+              )}
+            </div>
 
-                {/* Section 1: Resident Info */}
-                <div className="space-y-2">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">RESIDENT</span>
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 space-y-2 text-xs font-bold">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Name</span>
-                      <span className="text-slate-900 dark:text-white font-black">{selectedComplaint.tenantName}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Room</span>
-                      <span className="text-purple-600 dark:text-purple-400 font-black">Room {selectedComplaint.roomNumber || 'A-101'}</span>
-                    </div>
+            {/* Description Card */}
+            <div className="space-y-1">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">COMPLAINT DESCRIPTION</span>
+              <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-xs font-bold text-slate-900 dark:text-white leading-relaxed">
+                {selectedComplaint.description}
+              </div>
+            </div>
+
+            {/* Assigned Technician */}
+            <div className="space-y-1">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">ASSIGNED STAFF</span>
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold">
+                {selectedComplaint.assignedEmployeeName ? (
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-900 dark:text-white font-black">{selectedComplaint.assignedEmployeeName}</span>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 text-[10px] font-extrabold">Active Technician</span>
                   </div>
-                </div>
+                ) : (
+                  <p className="text-slate-400 italic">No technician assigned yet.</p>
+                )}
+              </div>
+            </div>
 
-                {/* Section 2: Description */}
-                <div className="space-y-2">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">DESCRIPTION</span>
-                  <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-xs font-bold text-slate-900 dark:text-white leading-relaxed">
-                    {selectedComplaint.description}
-                  </div>
-                </div>
-
-                {/* Section 3: Assigned Tech */}
-                <div className="space-y-2">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">ASSIGNED TECHNICIAN</span>
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 text-xs font-bold">
-                    {selectedComplaint.assignedEmployeeName ? (
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-900 dark:text-white font-black">{selectedComplaint.assignedEmployeeName}</span>
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 text-[10px]">Active Tech</span>
-                      </div>
-                    ) : (
-                      <p className="text-slate-400 italic">No technician assigned yet.</p>
-                    )}
-                  </div>
-                </div>
-
+            {/* Action Buttons Toolbar */}
+            <div className="pt-3 border-t border-slate-200 dark:border-zinc-800 space-y-2.5">
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  onClick={() => handleMarkAsRead(selectedComplaint)}
+                  className="py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Mark as Read</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setAssignComplaint(selectedComplaint);
+                    setShowAssignModal(true);
+                  }}
+                  className="py-3 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>Assign Staff</span>
+                </button>
               </div>
 
-              {/* Actions Footer Buttons */}
-              <div className="space-y-2 pt-4 border-t border-slate-200/80 dark:border-zinc-800/80">
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => {
-                      setAssignComplaint(selectedComplaint);
-                      setShowAssignModal(true);
-                    }}
-                    className="py-3 rounded-2xl bg-purple-600 text-white font-black text-xs shadow-md hover:scale-[1.01] transition-transform cursor-pointer"
-                  >
-                    Assign Staff
-                  </button>
-                  <button
-                    onClick={() => {
-                      setResolveComplaint(selectedComplaint);
-                      setShowResolveModal(true);
-                    }}
-                    className="py-3 rounded-2xl bg-emerald-600 text-white font-black text-xs shadow-md hover:scale-[1.01] transition-transform cursor-pointer"
-                  >
-                    Mark Resolved
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => {
-                      setNoteComplaint(selectedComplaint);
-                      setShowNoteModal(true);
-                    }}
-                    className="py-2.5 rounded-2xl bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 font-bold text-xs hover:bg-slate-200 cursor-pointer"
-                  >
-                    Add Note
-                  </button>
-                  <button
-                    onClick={() => {
-                      setDeleteComplaint(selectedComplaint);
-                      setShowDeleteModal(true);
-                    }}
-                    className="py-2.5 rounded-2xl bg-rose-500/15 text-rose-600 font-bold text-xs hover:bg-rose-500 hover:text-white cursor-pointer"
-                  >
-                    Delete Ticket
-                  </button>
-                </div>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => {
+                    setResolveComplaint(selectedComplaint);
+                    setShowResolveModal(true);
+                  }}
+                  className="py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-sm hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-1"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Resolve</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setNoteComplaint(selectedComplaint);
+                    setShowNoteModal(true);
+                  }}
+                  className="py-2.5 rounded-2xl bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 font-bold text-xs cursor-pointer flex items-center justify-center gap-1"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Add Note</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setDeleteComplaint(selectedComplaint);
+                    setShowDeleteModal(true);
+                  }}
+                  className="py-2.5 rounded-2xl bg-rose-500/15 text-rose-600 hover:bg-rose-500 hover:text-white font-bold text-xs cursor-pointer transition-colors flex items-center justify-center gap-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
               </div>
+            </div>
 
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+        </NeonModal>
+      )}
 
       {/* 🚀 6. ASSIGN STAFF POPUP */}
       {showAssignModal && (
