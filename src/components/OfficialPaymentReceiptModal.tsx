@@ -172,13 +172,26 @@ export default function OfficialPaymentReceiptModal({
               display: flex;
               align-items: center;
               justify-content: center;
-              padding: 10mm;
+              padding: 8mm;
+            }
+            img {
+              max-width: 100% !important;
+              height: auto !important;
+            }
+            img[alt*="QR"], img[alt*="Code"] {
+              width: 72px !important;
+              height: 72px !important;
+              max-width: 72px !important;
+              max-height: 72px !important;
+              min-width: 72px !important;
+              min-height: 72px !important;
+              object-fit: contain !important;
             }
             #printable-official-receipt {
               margin: 0 auto;
               width: 100%;
-              max-width: 760px;
-              max-height: 275mm;
+              max-width: 740px;
+              max-height: 270mm;
               background: linear-gradient(to bottom, #180731, #2d0b5a, #120427) !important;
               color: white;
               border-radius: 24px;
@@ -241,19 +254,36 @@ export default function OfficialPaymentReceiptModal({
 
         const canvas = await html2canvas(receiptRef.current, {
           scale: 2,
-          useCORS: true,
+          useCORS: false,
           allowTaint: true,
           backgroundColor: '#180731',
           logging: false,
           onclone: (clonedDoc) => {
             const el = clonedDoc.getElementById('printable-official-receipt');
             if (el) {
+              // Strip decorative SVG gradients that crash Safari canvas export
+              const svgs = el.querySelectorAll('svg');
+              svgs.forEach((svg) => {
+                if (svg.querySelector('linearGradient') || svg.getAttribute('viewBox') === '0 0 500 120') {
+                  svg.remove();
+                }
+              });
+
               el.style.boxShadow = 'none';
               el.style.transform = 'none';
               el.style.backdropFilter = 'none';
               (el.style as any).webkitBackdropFilter = 'none';
               el.style.margin = '0 auto';
               el.style.padding = '16px';
+
+              // Enforce explicit inline dimensions on images in captured DOM
+              const imgs = el.querySelectorAll('img');
+              imgs.forEach((img) => {
+                img.style.width = '72px';
+                img.style.height = '72px';
+                img.style.maxWidth = '72px';
+                img.style.maxHeight = '72px';
+              });
             }
           }
         });
@@ -282,10 +312,10 @@ export default function OfficialPaymentReceiptModal({
 
         pdf.addImage(imgData, 'PNG', xOffset, 10, renderWidth, renderHeight);
 
-        // Native jsPDF save
+        // Primary: Native jsPDF save
         pdf.save(`${targetFileName}.pdf`);
 
-        // Additional Blob trigger for mobile browsers or pop-up strict environments
+        // Secondary Blob trigger for mobile browsers
         try {
           const pdfBlob = pdf.output('blob');
           triggerFileDownload(pdfBlob, `${targetFileName}.pdf`);
@@ -299,7 +329,7 @@ export default function OfficialPaymentReceiptModal({
       // Secondary Fallback: Image PNG Download
       try {
         const html2canvas = (await import('html2canvas')).default;
-        const canvas = await html2canvas(receiptRef.current, { scale: 2, useCORS: true, allowTaint: true });
+        const canvas = await html2canvas(receiptRef.current, { scale: 2, useCORS: false, allowTaint: true });
         const imgData = canvas.toDataURL('image/png');
         triggerFileDownload(imgData, `${targetFileName}.png`);
       } catch (finalErr) {
@@ -354,7 +384,7 @@ export default function OfficialPaymentReceiptModal({
                 display: block !important;
                 visibility: visible !important;
                 width: 100% !important;
-                max-width: 760px !important;
+                max-width: 740px !important;
                 margin: 0 auto !important;
                 padding: 16px !important;
                 background: #180731 !important;
@@ -369,6 +399,15 @@ export default function OfficialPaymentReceiptModal({
                 visibility: visible !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
+              }
+              #printable-official-receipt img[alt*="QR"], #printable-official-receipt img[alt*="Code"] {
+                width: 72px !important;
+                height: 72px !important;
+                max-width: 72px !important;
+                max-height: 72px !important;
+                min-width: 72px !important;
+                min-height: 72px !important;
+                object-fit: contain !important;
               }
             }
           `}</style>
@@ -650,7 +689,12 @@ export default function OfficialPaymentReceiptModal({
 
                   {/* Exact Uploaded Scannable QR Code */}
                   <div className="flex flex-col items-center justify-center p-1.5 rounded-xl border-2 border-purple-200 bg-white shrink-0 shadow-2xs">
-                    <img src={qrCodeDataUrl} alt="Website QR Code" className="w-18 h-18 object-contain rounded-md" />
+                    <img 
+                      src={qrCodeDataUrl} 
+                      alt="Website QR Code" 
+                      className="w-18 h-18 object-contain rounded-md shrink-0" 
+                      style={{ width: '72px', height: '72px', maxWidth: '72px', maxHeight: '72px', minWidth: '72px', minHeight: '72px' }} 
+                    />
                     <div className="bg-[#2b0c54] text-white text-[7.5px] font-bold px-2 py-0.5 rounded-full mt-1 flex items-center gap-1">
                       <Globe className="w-2.5 h-2.5 text-amber-300" /> Scan to visit website
                     </div>
