@@ -228,14 +228,23 @@ export function computeTenantBillingState(
     return false;
   });
 
-  // Current month string representation (e.g. "September 2026")
+  // Current month string representation (e.g. "October 2026")
   const currentMonthStr = asOfDate.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+  const currentYearMonthPrefix = `${asOfDate.getFullYear()}-${String(asOfDate.getMonth() + 1).padStart(2, '0')}`;
 
-  // If no invoice exists, generate a standard authoritative invoice for current month
-  if (tenantInvoicesRaw.length === 0) {
+  const hasCurrentMonthInvoice = tenantInvoicesRaw.some((inv: any) => {
+    if (inv.billingMonth && inv.billingMonth.toLowerCase() === currentMonthStr.toLowerCase()) return true;
+    if (inv.billingPeriod && inv.billingPeriod.toLowerCase() === currentMonthStr.toLowerCase()) return true;
+    if (inv.dueDate && typeof inv.dueDate === 'string' && inv.dueDate.startsWith(currentYearMonthPrefix)) return true;
+    if (inv.itemsJson && typeof inv.itemsJson === 'string' && inv.itemsJson.toLowerCase().includes(currentMonthStr.toLowerCase())) return true;
+    return false;
+  });
+
+  // If no invoice exists for current month, generate an authoritative bill for current month
+  if (!hasCurrentMonthInvoice) {
     const dueDateStr = new Date(asOfDate.getFullYear(), asOfDate.getMonth(), 5).toISOString().split('T')[0];
-    tenantInvoicesRaw = [{
-      id: `inv-${tenantId}`,
+    const autoCurrentInvoice = {
+      id: `inv-${asOfDate.getFullYear()}-${String(asOfDate.getMonth() + 1).padStart(2, '0')}-${tenantId}`,
       number: `INV-${asOfDate.getFullYear()}-${String(asOfDate.getMonth() + 1).padStart(2, '0')}-${String(tenantId).replace(/[^0-9]/g, '').slice(-3) || '001'}`,
       tenantId: tenantId,
       tenantName: tenantName,
@@ -244,9 +253,11 @@ export function computeTenantBillingState(
       paidAmount: 0,
       dueDate: dueDateStr,
       billingMonth: currentMonthStr,
+      billingPeriod: currentMonthStr,
       itemsJson: JSON.stringify([{ description: `Monthly Hostel Rent - ${currentMonthStr}`, amount: monthlyRent }]),
       createdAt: new Date().toISOString()
-    }];
+    };
+    tenantInvoicesRaw.unshift(autoCurrentInvoice);
   }
 
   // 3. Associate transactions and reminders with each bill

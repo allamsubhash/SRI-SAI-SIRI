@@ -199,12 +199,14 @@ export default function OwnerPaymentsPage() {
   // Available Months Generator
   const availableMonths = useMemo(() => {
     const set = new Set<string>();
+    const currentMonthStr = new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+    set.add(currentMonthStr);
     allBills.forEach(b => {
       if (b.billingMonth) set.add(b.billingMonth);
       if (b.billingPeriod) set.add(b.billingPeriod);
     });
     const list = Array.from(set);
-    if (!list.includes('September 2026')) list.unshift('September 2026');
+    if (!list.includes('September 2026')) list.push('September 2026');
     if (!list.includes('August 2026')) list.push('August 2026');
     if (!list.includes('July 2026')) list.push('July 2026');
     return list;

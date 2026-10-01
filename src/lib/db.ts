@@ -3280,7 +3280,9 @@ export const dbService = {
   },
 
   // --- AUTO-GENERATE MONTHLY INVOICES & NOTIFICATIONS ---
-  async autoGenerateMonthlyInvoices(billingMonth: string = 'September 2026') {
+  async autoGenerateMonthlyInvoices(billingMonth?: string) {
+    const defaultMonth = new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+    const targetMonth = billingMonth || defaultMonth;
     const tenants = await this.getTenants();
     const activeTenants = tenants.filter(t => t.status === 'ACTIVE' || !t.status);
     const existingInvoices = await this.getInvoices();
@@ -3292,7 +3294,7 @@ export const dbService = {
     for (const tenant of activeTenants) {
       const alreadyHasInvoice = existingInvoices.some((inv: any) => 
         (inv.tenantId === tenant.id || inv.tenantName === tenant.name) &&
-        (inv.billingMonth === billingMonth || (inv.itemsJson && inv.itemsJson.includes(billingMonth)))
+        (inv.billingMonth === targetMonth || (inv.itemsJson && inv.itemsJson.includes(targetMonth)))
       );
 
       if (!alreadyHasInvoice) {
@@ -3300,7 +3302,7 @@ export const dbService = {
           const inv = await this.createInvoice(
             tenant.id,
             tenant.rentAmount || 8500,
-            [{ description: `Hostel Room Rent (${billingMonth})`, amount: tenant.rentAmount || 8500 }],
+            [{ description: `Hostel Room Rent (${targetMonth})`, amount: tenant.rentAmount || 8500 }],
             dueDateStr
           );
           createdInvoices.push(inv);
@@ -3315,9 +3317,9 @@ export const dbService = {
             amount: tenant.rentAmount || 8500,
             paidAmount: 0,
             dueDate: dueDateStr,
-            billingMonth,
+            billingMonth: targetMonth,
             status: 'PENDING' as const,
-            items: [{ description: `Hostel Room Rent (${billingMonth})`, amount: tenant.rentAmount || 8500 }],
+            items: [{ description: `Hostel Room Rent (${targetMonth})`, amount: tenant.rentAmount || 8500 }],
             dateCreated: new Date().toISOString().split('T')[0]
           };
           mockInvoices.unshift(fallbackInv);
@@ -3331,8 +3333,8 @@ export const dbService = {
       try {
         await prisma.notice.create({
           data: {
-            title: `Rent Invoice Dues Notice (${billingMonth})`,
-            content: `Monthly rent dues invoices for ${billingMonth} have been generated. Please clear your rent dues on or before 5th ${billingMonth.split(' ')[0]}.`,
+            title: `Rent Invoice Dues Notice (${targetMonth})`,
+            content: `Monthly rent dues invoices for ${targetMonth} have been generated. Please clear your rent dues on or before 5th ${targetMonth.split(' ')[0]}.`,
             target: 'TENANTS',
             isEmergency: false,
             scheduleDate: new Date()

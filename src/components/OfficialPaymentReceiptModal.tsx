@@ -230,24 +230,6 @@ export default function OfficialPaymentReceiptModal({
 
       const targetFileName = `Official_Receipt_${receiptData.receiptNo.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 
-      // Helper to trigger direct browser file download
-      const triggerFileDownload = (blobOrDataUrl: Blob | string, filename: string) => {
-        const link = document.createElement('a');
-        link.style.display = 'none';
-        if (typeof blobOrDataUrl === 'string') {
-          link.href = blobOrDataUrl;
-        } else {
-          link.href = URL.createObjectURL(blobOrDataUrl);
-        }
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(() => {
-          if (document.body.contains(link)) document.body.removeChild(link);
-          if (typeof blobOrDataUrl !== 'string') URL.revokeObjectURL(link.href);
-        }, 1500);
-      };
-
       try {
         const html2canvas = (await import('html2canvas')).default;
         const { jsPDF } = await import('jspdf');
@@ -312,26 +294,37 @@ export default function OfficialPaymentReceiptModal({
 
         pdf.addImage(imgData, 'PNG', xOffset, 10, renderWidth, renderHeight);
 
-        // Primary: Native jsPDF save
-        pdf.save(`${targetFileName}.pdf`);
-
-        // Secondary Blob trigger for mobile browsers
-        try {
-          const pdfBlob = pdf.output('blob');
-          triggerFileDownload(pdfBlob, `${targetFileName}.pdf`);
-        } catch {}
+        // Single clean download trigger using Data URI (compatible with mobile Safari & desktop)
+        const pdfDataUri = pdf.output('datauristring');
+        const link = document.createElement('a');
+        link.style.display = 'none';
+        link.href = pdfDataUri;
+        link.download = `${targetFileName}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          if (document.body.contains(link)) document.body.removeChild(link);
+        }, 1000);
 
         return;
       } catch (canvasErr) {
         console.warn('Canvas PDF export fallback triggered:', canvasErr);
       }
 
-      // Secondary Fallback: Image PNG Download
+      // Secondary Fallback: Direct Image PNG Download
       try {
         const html2canvas = (await import('html2canvas')).default;
         const canvas = await html2canvas(receiptRef.current, { scale: 2, useCORS: false, allowTaint: true });
         const imgData = canvas.toDataURL('image/png');
-        triggerFileDownload(imgData, `${targetFileName}.png`);
+        const link = document.createElement('a');
+        link.style.display = 'none';
+        link.href = imgData;
+        link.download = `${targetFileName}.png`;
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          if (document.body.contains(link)) document.body.removeChild(link);
+        }, 1000);
       } catch (finalErr) {
         console.error('Final download fallback failed, triggering print dialog:', finalErr);
         handlePrint();

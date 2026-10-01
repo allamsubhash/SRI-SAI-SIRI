@@ -22,7 +22,8 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const billingMonth = body.billingMonth || 'September 2026';
+    const currentMonth = new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+    const billingMonth = body.billingMonth || currentMonth;
 
     const result = await dbService.autoGenerateMonthlyInvoices(billingMonth);
 
