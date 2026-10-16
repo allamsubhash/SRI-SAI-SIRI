@@ -33,6 +33,7 @@ interface DevStoreData {
   payments?: any[];
   shortStayGuests?: any[];
   guidelines?: any[];
+  notificationReads?: string[];
 }
 
 function loadDevStore(): DevStoreData {
@@ -58,6 +59,12 @@ function saveDevStore(data: Partial<DevStoreData>) {
 }
 
 // Initialize memory arrays from disk store on module load
+try {
+  const diskData = loadDevStore();
+  if (Array.isArray(diskData.notificationReads)) {
+    diskData.notificationReads.forEach(id => mockNotificationReads.add(id));
+  }
+} catch (e) {}
 const initialDiskData = loadDevStore();
 if (Array.isArray(initialDiskData.buildings)) {
   mockBuildings.length = 0;
@@ -180,6 +187,20 @@ async function ensureSchemaUpToDate() {
           createdAt DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
           UNIQUE INDEX ShortStayReceipt_receiptNumber_key(receiptNumber),
           UNIQUE INDEX ShortStayReceipt_paymentId_key(paymentId),
+          PRIMARY KEY (id)
+        ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      `);
+    } catch (e) {}
+
+    // 5. Create NotificationRead table if missing
+    try {
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS NotificationRead (
+          id VARCHAR(191) NOT NULL,
+          userId VARCHAR(191) NOT NULL,
+          notificationId VARCHAR(191) NOT NULL,
+          createdAt DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+          UNIQUE INDEX NotificationRead_userId_notificationId_key(userId, notificationId),
           PRIMARY KEY (id)
         ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
       `);
@@ -961,10 +982,11 @@ export const dbService = {
           }
         });
 
-        // 5. Create initial rent invoice for newly registered tenant
-        const now = new Date();
-        const currentMonthStr = now.toLocaleString('default', { month: 'long', year: 'numeric' });
-        const dueDate = new Date(now.getFullYear(), now.getMonth(), 5);
+        // 5. Create initial rent invoice for newly registered tenant according to moveInDate cycle
+        const moveIn = data.moveInDate ? new Date(data.moveInDate) : new Date();
+        const cycleDay = !isNaN(moveIn.getTime()) ? moveIn.getDate() : 15;
+        const initialMonthStr = moveIn.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+        const initialDueDate = new Date(moveIn.getFullYear(), moveIn.getMonth(), cycleDay);
         const invNumber = `INV-${Date.now().toString().slice(-6)}`;
         await tx.invoice.create({
           data: {
@@ -973,9 +995,9 @@ export const dbService = {
             tenantId: createdTenant.id,
             amount: data.rentAmount || 8500,
             paidAmount: 0,
-            dueDate: dueDate,
-            status: now.getDate() > 5 ? 'OVERDUE' : 'PENDING',
-            itemsJson: JSON.stringify([{ description: `Monthly Hostel Rent - ${currentMonthStr}`, amount: data.rentAmount || 8500 }])
+            dueDate: initialDueDate,
+            status: new Date() > initialDueDate ? 'OVERDUE' : 'PENDING',
+            itemsJson: JSON.stringify([{ description: `Monthly Hostel Rent - ${initialMonthStr}`, amount: data.rentAmount || 8500 }])
           }
         });
 
@@ -1019,9 +1041,11 @@ export const dbService = {
       };
       mockTenants.push(newMockTenant);
 
-      const now = new Date();
-      const currentMonthStr = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-      const dueDate = new Date(now.getFullYear(), now.getMonth(), 5).toISOString().split('T')[0];
+      const moveIn = data.moveInDate ? new Date(data.moveInDate) : new Date();
+      const cycleDay = !isNaN(moveIn.getTime()) ? moveIn.getDate() : 15;
+      const initialMonthStr = moveIn.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+      const initialDueDate = new Date(moveIn.getFullYear(), moveIn.getMonth(), cycleDay);
+      const dueDateStr = initialDueDate.toISOString().split('T')[0];
       const invNumber = `INV-${Date.now().toString().slice(-6)}`;
       const initialInvoice: any = {
         id: `inv-${tenantId}`,
@@ -1032,10 +1056,10 @@ export const dbService = {
         bedNumber: newMockTenant.bedNumber,
         amount: data.rentAmount || 8500,
         paidAmount: 0,
-        dueDate: dueDate,
-        billingPeriod: currentMonthStr,
-        status: now.getDate() > 5 ? 'OVERDUE' : 'PENDING',
-        items: [{ description: `Monthly Hostel Rent - ${currentMonthStr}`, amount: data.rentAmount || 8500 }]
+        dueDate: dueDateStr,
+        billingPeriod: initialMonthStr,
+        status: new Date() > initialDueDate ? 'OVERDUE' : 'PENDING',
+        items: [{ description: `Monthly Hostel Rent - ${initialMonthStr}`, amount: data.rentAmount || 8500 }]
       };
       mockInvoices.push(initialInvoice);
 
@@ -1459,6 +1483,8 @@ export const dbService = {
     invoiceIdOrData: string | {
       invoiceId?: string;
       tenantId: string;
+      billingPeriod?: string;
+      billingMonth?: string;
       amount: number;
       paymentMethod: string;
       paymentType?: string;
@@ -1473,6 +1499,7 @@ export const dbService = {
   ) {
     let invoiceId: string | undefined;
     let tenantId: string | undefined;
+    let billingPeriod: string | undefined;
     let amount: number;
     let method: string;
     let paymentType: string = 'Monthly Rent';
@@ -1485,6 +1512,7 @@ export const dbService = {
     if (typeof invoiceIdOrData === 'object') {
       invoiceId = invoiceIdOrData.invoiceId;
       tenantId = invoiceIdOrData.tenantId;
+      billingPeriod = invoiceIdOrData.billingPeriod || invoiceIdOrData.billingMonth;
       amount = Number(invoiceIdOrData.amount);
       method = invoiceIdOrData.paymentMethod || 'UPI';
       paymentType = invoiceIdOrData.paymentType || 'Monthly Rent';
@@ -1519,11 +1547,39 @@ export const dbService = {
         }) : null;
 
         if (!dbInv && tenantId) {
-          dbInv = await tx.invoice.findFirst({
-            where: { tenantId },
-            orderBy: { createdAt: 'desc' },
-            include: { tenant: { include: { profile: true } } }
-          });
+          if (billingPeriod) {
+            const invoicesForTenant = await tx.invoice.findMany({
+              where: { tenantId },
+              include: { tenant: { include: { profile: true } } }
+            });
+            const cleanB = billingPeriod.toLowerCase().replace(/[^a-z0-9]/g, '');
+            dbInv = invoicesForTenant.find(i => {
+              const pStr = ((i as any).billingPeriod || (i as any).billingMonth || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+              if (pStr && pStr === cleanB) return true;
+              if (i.itemsJson && i.itemsJson.toLowerCase().includes(billingPeriod!.toLowerCase())) return true;
+              return false;
+            }) || null;
+          }
+
+          if (!dbInv) {
+            // Target the earliest unpaid/overdue invoice for this tenant (FIFO allocation)
+            dbInv = await tx.invoice.findFirst({
+              where: {
+                tenantId,
+                status: { in: ['PENDING', 'OVERDUE', 'PARTIAL'] }
+              },
+              orderBy: { dueDate: 'asc' },
+              include: { tenant: { include: { profile: true } } }
+            });
+          }
+
+          if (!dbInv) {
+            dbInv = await tx.invoice.findFirst({
+              where: { tenantId },
+              orderBy: { createdAt: 'desc' },
+              include: { tenant: { include: { profile: true } } }
+            });
+          }
         }
 
         const resolvedTenantId = dbInv?.tenantId || tenantId;
@@ -1591,7 +1647,26 @@ export const dbService = {
     // In-memory fallback
     let targetInv = invoiceId ? mockInvoices.find(i => i.id === invoiceId) : null;
     if (!targetInv && tenantId) {
-      targetInv = mockInvoices.find(i => i.tenantId === tenantId);
+      if (billingPeriod) {
+        const cleanB = billingPeriod.toLowerCase().replace(/[^a-z0-9]/g, '');
+        targetInv = mockInvoices.find(i => {
+          if (i.tenantId !== tenantId) return false;
+          const pStr = (i.billingPeriod || (i as any).billingMonth || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (pStr && pStr === cleanB) return true;
+          if (i.items && Array.isArray(i.items) && i.items.some((it: any) => it.description?.toLowerCase().includes(billingPeriod!.toLowerCase()))) return true;
+          return false;
+        });
+      }
+      if (!targetInv) {
+        // Target earliest unpaid invoice
+        const unpaid = mockInvoices
+          .filter(i => i.tenantId === tenantId && i.status !== 'PAID')
+          .sort((a, b) => new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime());
+        targetInv = unpaid[0];
+      }
+      if (!targetInv) {
+        targetInv = mockInvoices.find(i => i.tenantId === tenantId);
+      }
     }
 
     const resolvedTenantId = targetInv?.tenantId || tenantId || 't-1';
@@ -1603,6 +1678,7 @@ export const dbService = {
       tenantId: resolvedTenantId,
       tenantName,
       invoiceId: targetInv ? targetInv.id : undefined,
+      billingPeriod: targetInv?.billingPeriod || billingPeriod,
       amount,
       date: paymentDate,
       type: paymentType,
@@ -2674,6 +2750,8 @@ export const dbService = {
     referenceId?: string;
     screenshotUrl?: string;
     notes?: string;
+    invoiceId?: string;
+    billingPeriod?: string;
   }) {
     const paymentId = `pay-${Date.now()}`;
     const todayStr = new Date().toISOString().split('T')[0];
@@ -2705,8 +2783,9 @@ export const dbService = {
           type: 'Monthly Rent',
           paymentMethod: data.paymentMethod,
           status: 'PENDING',
+          invoiceId: data.invoiceId || null,
           referenceId: data.referenceId || null,
-          notes: data.notes || null
+          notes: data.notes || (data.billingPeriod ? `Payment for ${data.billingPeriod}` : null)
         }
       });
       return {
@@ -2719,6 +2798,8 @@ export const dbService = {
         status: created.status,
         referenceId: created.referenceId,
         notes: created.notes,
+        invoiceId: created.invoiceId || undefined,
+        billingPeriod: data.billingPeriod,
         createdAt: created.createdAt.toISOString()
       };
     } catch (e: any) {
@@ -2739,7 +2820,9 @@ export const dbService = {
       status: 'PENDING_VERIFICATION' as const,
       referenceId: data.referenceId,
       screenshotUrl: data.screenshotUrl,
-      notes: data.notes,
+      notes: data.notes || (data.billingPeriod ? `Payment for ${data.billingPeriod}` : undefined),
+      invoiceId: data.invoiceId || undefined,
+      billingPeriod: data.billingPeriod || undefined,
       createdAt: new Date().toISOString()
     };
     mockPayments.unshift(mockPayObj);
@@ -2780,29 +2863,33 @@ export const dbService = {
           data: { status: 'APPROVED' }
         });
 
-        // Synchronize all open/unpaid invoices for this tenant
-        const openInvoices = await tx.invoice.findMany({
-          where: {
-            OR: [
-              { tenantId: existing.tenantId },
-              ...(existing.invoiceId ? [{ id: existing.invoiceId }] : [])
-            ]
-          }
-        });
+        // Find the specific invoice targeted by this payment
+        let targetInvoice = existing.invoiceId ? await tx.invoice.findUnique({
+          where: { id: existing.invoiceId }
+        }) : null;
 
-        if (openInvoices.length > 0) {
-          for (const inv of openInvoices) {
-            const newPaid = Math.min(inv.amount, (inv.paidAmount || 0) + existing.amount);
-            const dueDateStr = inv.dueDate ? inv.dueDate.toISOString() : new Date().toISOString();
-            const newStatus = calculateBillStatus(inv.amount, newPaid, dueDateStr, false, new Date());
-            await tx.invoice.update({
-              where: { id: inv.id },
-              data: {
-                paidAmount: newPaid,
-                status: newStatus
-              }
-            });
-          }
+        if (!targetInvoice && existing.tenantId) {
+          // Find the earliest unpaid/overdue invoice for this tenant (FIFO allocation)
+          targetInvoice = await tx.invoice.findFirst({
+            where: {
+              tenantId: existing.tenantId,
+              status: { in: ['PENDING', 'OVERDUE', 'PARTIAL'] }
+            },
+            orderBy: { dueDate: 'asc' }
+          });
+        }
+
+        if (targetInvoice) {
+          const newPaid = Math.min(targetInvoice.amount, (targetInvoice.paidAmount || 0) + existing.amount);
+          const dueDateStr = targetInvoice.dueDate ? targetInvoice.dueDate.toISOString() : new Date().toISOString();
+          const newStatus = calculateBillStatus(targetInvoice.amount, newPaid, dueDateStr, false, new Date());
+          await tx.invoice.update({
+            where: { id: targetInvoice.id },
+            data: {
+              paidAmount: newPaid,
+              status: newStatus
+            }
+          });
         }
         return updated;
       });
@@ -2819,8 +2906,14 @@ export const dbService = {
       }
       target.status = 'APPROVED';
 
-      // Update target invoice if present
-      const inv = mockInvoices.find(i => i.id === target.invoiceId || i.tenantId === target.tenantId);
+      // Update strictly the targeted invoice
+      let inv = target.invoiceId ? mockInvoices.find(i => i.id === target.invoiceId) : null;
+      if (!inv && target.tenantId) {
+        const unpaid = mockInvoices
+          .filter(i => i.tenantId === target.tenantId && i.status !== 'PAID')
+          .sort((a, b) => new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime());
+        inv = unpaid[0] || mockInvoices.find(i => i.tenantId === target.tenantId);
+      }
       if (inv) {
         inv.paidAmount = Math.min(inv.amount, (inv.paidAmount || 0) + target.amount);
         const calcSt = calculateBillStatus(inv.amount, inv.paidAmount, inv.dueDate || new Date().toISOString(), false, new Date());
@@ -3234,6 +3327,7 @@ export const dbService = {
       logDebug('markNotificationAsRead DB fallback:', e);
     }
     mockNotificationReads.add(notificationId);
+    saveDevStore({ notificationReads: Array.from(mockNotificationReads) });
     return true;
   },
 

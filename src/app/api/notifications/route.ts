@@ -6,6 +6,164 @@ import { formatDate } from '@/utils/formatters';
 
 export const dynamic = 'force-dynamic';
 
+async function generateNotifications(currentUser: any, readIds: string[]) {
+  const isOwner = currentUser?.role === 'OWNER';
+  const isTenant = currentUser?.role === 'TENANT';
+
+  // Optimized parallel data fetch
+  const [recentPayments, recentComplaints, recentVisitors, recentNotices] = await Promise.all([
+    prisma.payment.findMany({
+      take: 8,
+      orderBy: { date: 'desc' },
+      include: { tenant: { include: { profile: true } } }
+    }).catch(() => []),
+    prisma.complaint.findMany({
+      take: 8,
+      orderBy: { createdAt: 'desc' },
+      include: { tenant: { include: { profile: true } } }
+    }).catch(() => []),
+    prisma.visitor.findMany({
+      take: 8,
+      orderBy: { createdAt: 'desc' },
+      include: { tenant: { include: { profile: true } } }
+    }).catch(() => []),
+    prisma.notice.findMany({
+      take: 8,
+      orderBy: { createdAt: 'desc' }
+    }).catch(() => [])
+  ]);
+
+  const notifications: any[] = [];
+
+  // Helper for matching tenant
+  const isTenantMatch = (tenantObj: any) => {
+    if (!isTenant) return false;
+    if (!tenantObj) return false;
+    if (currentUser?.userId && (tenantObj.userId === currentUser.userId || tenantObj.id === currentUser.userId)) return true;
+    if (currentUser?.tenantId && tenantObj.id === currentUser.tenantId) return true;
+    if (currentUser?.email && tenantObj.email?.toLowerCase() === currentUser.email?.toLowerCase()) return true;
+    if (currentUser?.name && tenantObj.profile?.firstName && currentUser.name.toLowerCase().trim() === `${tenantObj.profile.firstName} ${tenantObj.profile.lastName}`.toLowerCase().trim()) return true;
+    return false;
+  };
+
+  // 1. PAYMENT NOTIFICATIONS
+  recentPayments.forEach(p => {
+    const name = p.tenant?.profile ? `${p.tenant.profile.firstName} ${p.tenant.profile.lastName}`.trim() : 'Resident';
+    const notifId = `notif-pay-${p.id}`;
+
+    if (isOwner) {
+      notifications.push({
+        id: notifId,
+        type: 'PAYMENT',
+        tag: 'RENT PAYMENT',
+        title: `Payment Received: ₹${p.amount.toLocaleString('en-IN')}`,
+        desc: `Received from ${name} via ${p.paymentMethod || 'UPI'}.`,
+        time: formatDate(p.date),
+        link: '/owner/rent',
+        read: readIds.includes(notifId)
+      });
+    } else if (isTenantMatch(p.tenant)) {
+      notifications.push({
+        id: notifId,
+        type: 'PAYMENT',
+        tag: 'PAYMENT RECEIPT',
+        title: `Rent Payment Settled: ₹${p.amount.toLocaleString('en-IN')}`,
+        desc: `Your rent payment has been processed and verified cleanly.`,
+        time: formatDate(p.date),
+        link: '/tenant/billing',
+        read: readIds.includes(notifId)
+      });
+    }
+  });
+
+  // 2. COMPLAINT NOTIFICATIONS
+  recentComplaints.forEach(c => {
+    const name = c.tenant?.profile ? `${c.tenant.profile.firstName} ${c.tenant.profile.lastName}`.trim() : 'Resident';
+    const notifId = `notif-comp-${c.id}`;
+
+    if (isOwner) {
+      notifications.push({
+        id: notifId,
+        type: 'COMPLAINT',
+        tag: 'SERVICE TICKET',
+        title: `Support Ticket: ${c.title}`,
+        desc: `Filed by ${name} (${c.category}). Status: ${c.status}`,
+        time: formatDate(c.createdAt),
+        link: '/owner/complaints',
+        read: readIds.includes(notifId)
+      });
+    } else if (isTenantMatch(c.tenant)) {
+      notifications.push({
+        id: notifId,
+        type: 'COMPLAINT',
+        tag: 'TICKET STATUS',
+        title: `Ticket "${c.title}" updated`,
+        desc: `Current status: ${c.status}. Maintenance desk is processing your request.`,
+        time: formatDate(c.createdAt),
+        link: '/tenant/complaints',
+        read: readIds.includes(notifId)
+      });
+    }
+  });
+
+  // 3. VISITOR GATE PASS NOTIFICATIONS
+  recentVisitors.forEach(v => {
+    const name = v.tenant?.profile ? `${v.tenant.profile.firstName} ${v.tenant.profile.lastName}`.trim() : v.personVisiting;
+    const notifId = `notif-vis-${v.id}`;
+    const status = (v as any).status || (v as any).approvalStatus || 'APPROVED';
+
+    if (isOwner) {
+      notifications.push({
+        id: notifId,
+        type: 'VISITOR',
+        tag: 'GATE PASS',
+        title: `Gate Pass Request: ${v.name}`,
+        desc: `Visiting ${name}. Phone: ${v.phone}. Status: ${status}`,
+        time: formatDate(v.createdAt),
+        link: '/owner/visitors',
+        read: readIds.includes(notifId)
+      });
+    } else if (isTenantMatch(v.tenant)) {
+      notifications.push({
+        id: notifId,
+        type: 'VISITOR',
+        tag: 'VISITOR PASS',
+        title: `Visitor Gate Pass: ${v.name}`,
+        desc: `Pass for ${v.name} is ${status}. Scheduled: ${v.checkIn || 'Today'}.`,
+        time: formatDate(v.createdAt),
+        link: '/tenant/visitors',
+        read: readIds.includes(notifId)
+      });
+    }
+  });
+
+  // 4. WARDEN BROADCAST ANNOUNCEMENTS & TARGETED REMINDERS
+  recentNotices.forEach(n => {
+    const notifId = `notif-notice-${n.id}`;
+    let matchesRecipient = true;
+    if (isTenant) {
+      if (n.target && n.target.startsWith('TENANT_')) {
+        const targetId = n.target.replace('TENANT_', '');
+        matchesRecipient = (currentUser?.tenantId === targetId || currentUser?.userId === targetId);
+      }
+    }
+    if (matchesRecipient) {
+      notifications.push({
+        id: notifId,
+        type: 'ANNOUNCEMENT',
+        tag: n.isEmergency ? 'EMERGENCY ALERT' : (n.target?.startsWith('TENANT_') ? 'PAYMENT REMINDER' : 'ANNOUNCEMENT'),
+        title: n.title,
+        desc: n.content,
+        time: formatDate(n.createdAt),
+        link: isOwner ? '/owner/notices' : '/tenant/announcements',
+        read: readIds.includes(notifId)
+      });
+    }
+  });
+
+  return notifications;
+}
+
 export async function GET(request: Request) {
   try {
     const cookieStore = await cookies();
@@ -19,163 +177,9 @@ export async function GET(request: Request) {
 
     const userId = currentUser?.userId || 'u-guest';
     const dbReadIds = await dbService.getReadNotificationIds(userId);
-    const readIds = Array.from(new Set([...(readCookie ? readCookie.split(',') : []), ...dbReadIds]));
+    const readIds = Array.from(new Set([...(readCookie ? readCookie.split(',').filter(Boolean) : []), ...dbReadIds]));
 
-    const isOwner = currentUser?.role === 'OWNER';
-    const isTenant = currentUser?.role === 'TENANT';
-
-    // Optimized parallel data fetch
-    const [recentPayments, recentComplaints, recentVisitors, recentNotices] = await Promise.all([
-      prisma.payment.findMany({
-        take: 6,
-        orderBy: { date: 'desc' },
-        include: { tenant: { include: { profile: true } } }
-      }),
-      prisma.complaint.findMany({
-        take: 6,
-        orderBy: { createdAt: 'desc' },
-        include: { tenant: { include: { profile: true } } }
-      }),
-      prisma.visitor.findMany({
-        take: 6,
-        orderBy: { createdAt: 'desc' },
-        include: { tenant: { include: { profile: true } } }
-      }),
-      prisma.notice.findMany({
-        take: 6,
-        orderBy: { createdAt: 'desc' }
-      })
-    ]);
-
-    const notifications: any[] = [];
-
-    // Helper for matching tenant
-    const isTenantMatch = (tenantObj: any) => {
-      if (!isTenant) return false;
-      if (!tenantObj) return false;
-      if (currentUser?.userId && (tenantObj.userId === currentUser.userId || tenantObj.id === currentUser.userId)) return true;
-      if (currentUser?.tenantId && tenantObj.id === currentUser.tenantId) return true;
-      if (currentUser?.email && tenantObj.email?.toLowerCase() === currentUser.email?.toLowerCase()) return true;
-      if (currentUser?.name && tenantObj.profile?.firstName && currentUser.name.toLowerCase().trim() === `${tenantObj.profile.firstName} ${tenantObj.profile.lastName}`.toLowerCase().trim()) return true;
-      return false;
-    };
-
-    // 1. PAYMENT NOTIFICATIONS
-    recentPayments.forEach(p => {
-      const name = p.tenant?.profile ? `${p.tenant.profile.firstName} ${p.tenant.profile.lastName}`.trim() : 'Resident';
-      const notifId = `notif-pay-${p.id}`;
-
-      if (isOwner) {
-        notifications.push({
-          id: notifId,
-          type: 'PAYMENT',
-          tag: 'RENT PAYMENT',
-          title: `Payment Received: ₹${p.amount.toLocaleString('en-IN')}`,
-          desc: `Received from ${name} via ${p.paymentMethod || 'UPI'}.`,
-          time: formatDate(p.date),
-          link: '/owner/rent',
-          read: readIds.includes(notifId)
-        });
-      } else if (isTenantMatch(p.tenant)) {
-        notifications.push({
-          id: notifId,
-          type: 'PAYMENT',
-          tag: 'PAYMENT RECEIPT',
-          title: `Rent Payment Settled: ₹${p.amount.toLocaleString('en-IN')}`,
-          desc: `Your rent payment has been processed and verified cleanly.`,
-          time: formatDate(p.date),
-          link: '/tenant/billing',
-          read: readIds.includes(notifId)
-        });
-      }
-    });
-
-    // 2. COMPLAINT NOTIFICATIONS
-    recentComplaints.forEach(c => {
-      const name = c.tenant?.profile ? `${c.tenant.profile.firstName} ${c.tenant.profile.lastName}`.trim() : 'Resident';
-      const notifId = `notif-comp-${c.id}`;
-
-      if (isOwner) {
-        notifications.push({
-          id: notifId,
-          type: 'COMPLAINT',
-          tag: 'SERVICE TICKET',
-          title: `Support Ticket: ${c.title}`,
-          desc: `Filed by ${name} (${c.category}). Status: ${c.status}`,
-          time: formatDate(c.createdAt),
-          link: '/owner/complaints',
-          read: readIds.includes(notifId)
-        });
-      } else if (isTenantMatch(c.tenant)) {
-        notifications.push({
-          id: notifId,
-          type: 'COMPLAINT',
-          tag: 'TICKET STATUS',
-          title: `Ticket "${c.title}" updated`,
-          desc: `Current status: ${c.status}. Maintenance desk is processing your request.`,
-          time: formatDate(c.createdAt),
-          link: '/tenant/complaints',
-          read: readIds.includes(notifId)
-        });
-      }
-    });
-
-    // 3. VISITOR GATE PASS NOTIFICATIONS
-    recentVisitors.forEach(v => {
-      const name = v.tenant?.profile ? `${v.tenant.profile.firstName} ${v.tenant.profile.lastName}`.trim() : v.personVisiting;
-      const notifId = `notif-vis-${v.id}`;
-      const status = (v as any).status || (v as any).approvalStatus || 'APPROVED';
-
-      if (isOwner) {
-        notifications.push({
-          id: notifId,
-          type: 'VISITOR',
-          tag: 'GATE PASS',
-          title: `Gate Pass Request: ${v.name}`,
-          desc: `Visiting ${name}. Phone: ${v.phone}. Status: ${status}`,
-          time: formatDate(v.createdAt),
-          link: '/owner/visitors',
-          read: readIds.includes(notifId)
-        });
-      } else if (isTenantMatch(v.tenant)) {
-        notifications.push({
-          id: notifId,
-          type: 'VISITOR',
-          tag: 'VISITOR PASS',
-          title: `Visitor Gate Pass: ${v.name}`,
-          desc: `Pass for ${v.name} is ${status}. Scheduled: ${v.checkIn || 'Today'}.`,
-          time: formatDate(v.createdAt),
-          link: '/tenant/visitors',
-          read: readIds.includes(notifId)
-        });
-      }
-    });
-
-    // 4. WARDEN BROADCAST ANNOUNCEMENTS & TARGETED REMINDERS
-    recentNotices.forEach(n => {
-      const notifId = `notif-notice-${n.id}`;
-      let matchesRecipient = true;
-      if (isTenant) {
-        if (n.target && n.target.startsWith('TENANT_')) {
-          const targetId = n.target.replace('TENANT_', '');
-          matchesRecipient = (currentUser?.tenantId === targetId || currentUser?.userId === targetId);
-        }
-      }
-      if (matchesRecipient) {
-        notifications.push({
-          id: notifId,
-          type: 'ANNOUNCEMENT',
-          tag: n.isEmergency ? 'EMERGENCY ALERT' : (n.target?.startsWith('TENANT_') ? 'PAYMENT REMINDER' : 'ANNOUNCEMENT'),
-          title: n.title,
-          desc: n.content,
-          time: formatDate(n.createdAt),
-          link: isOwner ? '/owner/notices' : '/tenant/announcements',
-          read: readIds.includes(notifId)
-        });
-      }
-    });
-
-    // Unread count
+    const notifications = await generateNotifications(currentUser, readIds);
     const unreadCount = notifications.filter(n => !n.read).length;
 
     return NextResponse.json({
@@ -193,9 +197,10 @@ export async function GET(request: Request) {
   }
 }
 
-export async function PUT(request: Request) {
+async function handleMarkRead(request: Request) {
   try {
-    const { id, markAll } = await request.json();
+    const body = await request.json().catch(() => ({}));
+    const { id, markAll } = body;
     const cookieStore = await cookies();
     const token = cookieStore.get('auth_token')?.value;
     let currentUser: any = null;
@@ -203,20 +208,16 @@ export async function PUT(request: Request) {
       currentUser = verifyToken(token);
     }
     const userId = currentUser?.userId || 'u-guest';
-    const { dbService } = await import('@/lib/db');
 
     const readCookie = cookieStore.get('read_notifs')?.value || '';
-    let readIds = readCookie ? readCookie.split(',') : [];
+    const dbReadIds = await dbService.getReadNotificationIds(userId);
+    let readIds = Array.from(new Set([...(readCookie ? readCookie.split(',').filter(Boolean) : []), ...dbReadIds]));
 
     if (markAll) {
-      // Mark all as read
-      const currentNotifsRes = await GET(request);
-      const currentData = await currentNotifsRes.json();
-      const allIds = currentData.notifications ? currentData.notifications.map((n: any) => n.id) : [];
+      const allNotifs = await generateNotifications(currentUser, []);
+      const allIds = allNotifs.map(n => n.id);
       readIds = Array.from(new Set([...readIds, ...allIds]));
-      for (const nid of allIds) {
-        await dbService.markNotificationAsRead(userId, nid);
-      }
+      await Promise.all(allIds.map(nid => dbService.markNotificationAsRead(userId, nid)));
     } else if (id) {
       if (!readIds.includes(id)) {
         readIds.push(id);
@@ -224,7 +225,7 @@ export async function PUT(request: Request) {
       await dbService.markNotificationAsRead(userId, id);
     }
 
-    const response = NextResponse.json({ success: true, readIds });
+    const response = NextResponse.json({ success: true, readIds, unreadCount: 0 });
     response.cookies.set('read_notifs', readIds.join(','), {
       path: '/',
       maxAge: 60 * 60 * 24 * 30,
@@ -236,4 +237,12 @@ export async function PUT(request: Request) {
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to update notification state' }, { status: 500 });
   }
+}
+
+export async function PUT(request: Request) {
+  return handleMarkRead(request);
+}
+
+export async function POST(request: Request) {
+  return handleMarkRead(request);
 }

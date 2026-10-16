@@ -73,6 +73,20 @@ export interface UnifiedBill {
   dateCreated: string;
 }
 
+export interface TenantNextDueInfo {
+  nextDueDate: string; // YYYY-MM-DD
+  formattedNextDueDate: string; // e.g. "November 15, 2026"
+  billingMonth: string; // e.g. "November 2026"
+  rentAmount: number; // e.g. 5000
+  outstandingBalance: number; // e.g. 0
+  status: 'Upcoming' | 'Due Today' | 'Overdue' | 'Paid';
+  daysDifference: number; // positive = days remaining, negative = days overdue, 0 = today
+  statusLabel: string; // e.g. "12 days remaining", "Due today", "3 days overdue", "Paid"
+  previousUnpaidRent: number; // Sum of unpaid amounts from previous cycles
+  previousUnpaidPeriods: { period: string; amount: number; dueDate: string }[];
+  cycleDay: number;
+}
+
 export interface UnifiedTenantBillingState {
   tenantId: string;
   tenantName: string;
@@ -100,6 +114,7 @@ export interface UnifiedTenantBillingState {
   currentBill: UnifiedBill | null;
   invoices: UnifiedBill[];
   payments: PaymentTransaction[];
+  nextDueInfo: TenantNextDueInfo;
 }
 
 /**
@@ -228,39 +243,152 @@ export function computeTenantBillingState(
     return false;
   });
 
-  // Current month string representation (e.g. "October 2026")
-  const currentMonthStr = asOfDate.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
-  const currentYearMonthPrefix = `${asOfDate.getFullYear()}-${String(asOfDate.getMonth() + 1).padStart(2, '0')}`;
-
-  const hasCurrentMonthInvoice = tenantInvoicesRaw.some((inv: any) => {
-    if (inv.billingMonth && inv.billingMonth.toLowerCase() === currentMonthStr.toLowerCase()) return true;
-    if (inv.billingPeriod && inv.billingPeriod.toLowerCase() === currentMonthStr.toLowerCase()) return true;
-    if (inv.dueDate && typeof inv.dueDate === 'string' && inv.dueDate.startsWith(currentYearMonthPrefix)) return true;
-    if (inv.itemsJson && typeof inv.itemsJson === 'string' && inv.itemsJson.toLowerCase().includes(currentMonthStr.toLowerCase())) return true;
-    return false;
-  });
-
-  // If no invoice exists for current month, generate an authoritative bill for current month
-  if (!hasCurrentMonthInvoice) {
-    const dueDateStr = new Date(asOfDate.getFullYear(), asOfDate.getMonth(), 5).toISOString().split('T')[0];
-    const autoCurrentInvoice = {
-      id: `inv-${asOfDate.getFullYear()}-${String(asOfDate.getMonth() + 1).padStart(2, '0')}-${tenantId}`,
-      number: `INV-${asOfDate.getFullYear()}-${String(asOfDate.getMonth() + 1).padStart(2, '0')}-${String(tenantId).replace(/[^0-9]/g, '').slice(-3) || '001'}`,
-      tenantId: tenantId,
-      tenantName: tenantName,
-      roomNumber: roomNumber,
-      amount: monthlyRent,
-      paidAmount: 0,
-      dueDate: dueDateStr,
-      billingMonth: currentMonthStr,
-      billingPeriod: currentMonthStr,
-      itemsJson: JSON.stringify([{ description: `Monthly Hostel Rent - ${currentMonthStr}`, amount: monthlyRent }]),
-      createdAt: new Date().toISOString()
-    };
-    tenantInvoicesRaw.unshift(autoCurrentInvoice);
+  // Derive tenant's billing cycle day from moveInDate / joiningDate
+  let cycleDay = 15;
+  if (moveInDate) {
+    const parsedMoveIn = new Date(moveInDate);
+    if (!isNaN(parsedMoveIn.getTime())) {
+      cycleDay = parsedMoveIn.getDate();
+    }
   }
 
-  // 3. Associate transactions and reminders with each bill
+  // Helper to normalize period name
+  const cleanPeriod = (str?: string) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+
+  // Current month string representation (e.g. "October 2026")
+  const currentMonthStr = asOfDate.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+
+  // Generate missing billing cycles from move-in date up to asOfDate
+  const startDate = new Date(moveInDate);
+  let startYear = !isNaN(startDate.getTime()) ? startDate.getFullYear() : asOfDate.getFullYear();
+  let startMonth = !isNaN(startDate.getTime()) ? startDate.getMonth() : asOfDate.getMonth();
+
+  // Clamp historical generation to at most 12 months back to preserve performance
+  const monthsDiff = (asOfDate.getFullYear() - startYear) * 12 + (asOfDate.getMonth() - startMonth);
+  if (monthsDiff > 12) {
+    const clamped = new Date(asOfDate.getFullYear(), asOfDate.getMonth() - 12, cycleDay);
+    startYear = clamped.getFullYear();
+    startMonth = clamped.getMonth();
+  }
+
+  let iterY = startYear;
+  let iterM = startMonth;
+  while (iterY < asOfDate.getFullYear() || (iterY === asOfDate.getFullYear() && iterM <= asOfDate.getMonth())) {
+    const cycleMonthStr = new Date(iterY, iterM, 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+    const cyclePrefix = `${iterY}-${String(iterM + 1).padStart(2, '0')}`;
+
+    const hasInvoiceForCycle = tenantInvoicesRaw.some((inv: any) => {
+      if (inv.billingMonth && cleanPeriod(inv.billingMonth) === cleanPeriod(cycleMonthStr)) return true;
+      if (inv.billingPeriod && cleanPeriod(inv.billingPeriod) === cleanPeriod(cycleMonthStr)) return true;
+      if (inv.dueDate && typeof inv.dueDate === 'string' && inv.dueDate.startsWith(cyclePrefix)) return true;
+      if (inv.itemsJson && typeof inv.itemsJson === 'string' && inv.itemsJson.toLowerCase().includes(cycleMonthStr.toLowerCase())) return true;
+      return false;
+    });
+
+    if (!hasInvoiceForCycle) {
+      const maxDaysInMonth = new Date(iterY, iterM + 1, 0).getDate();
+      const targetDay = Math.min(cycleDay, maxDaysInMonth);
+      const dueDateStr = `${iterY}-${String(iterM + 1).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}`;
+
+      const autoCycleInvoice = {
+        id: `inv-${iterY}-${String(iterM + 1).padStart(2, '0')}-${tenantId}`,
+        number: `INV-${iterY}-${String(iterM + 1).padStart(2, '0')}-${String(tenantId).replace(/[^0-9]/g, '').slice(-3) || '001'}`,
+        tenantId: tenantId,
+        tenantName: tenantName,
+        roomNumber: roomNumber,
+        amount: monthlyRent,
+        paidAmount: 0,
+        dueDate: dueDateStr,
+        billingMonth: cycleMonthStr,
+        billingPeriod: cycleMonthStr,
+        itemsJson: JSON.stringify([{ description: `Monthly Hostel Rent - ${cycleMonthStr}`, amount: monthlyRent }]),
+        createdAt: new Date(iterY, iterM, targetDay).toISOString()
+      };
+      tenantInvoicesRaw.push(autoCycleInvoice);
+    }
+
+    iterM++;
+    if (iterM > 11) {
+      iterM = 0;
+      iterY++;
+    }
+  }
+
+  // 3. STRICT PAYMENT ALLOCATION TO BILLING PERIODS
+  // Group payments strictly by invoiceId or billingPeriod to avoid cross-contamination
+  const invoicePaymentsMap = new Map<string, PaymentTransaction[]>();
+  const unallocatedPayments: { p: PaymentTransaction; remainingAmount: number }[] = [];
+
+  for (const p of tenantPayments) {
+    let matchedInvoiceId: string | null = null;
+
+    if (p.invoiceId) {
+      const matched = tenantInvoicesRaw.find((inv: any) => inv.id === p.invoiceId);
+      if (matched) matchedInvoiceId = matched.id;
+    }
+
+    if (!matchedInvoiceId) {
+      // Check notes or reference for explicit billing period (e.g. "September 2026")
+      const candidatePeriod = tenantInvoicesRaw.find((inv: any) => {
+        const pStr = cleanPeriod(inv.billingMonth || inv.billingPeriod);
+        if (!pStr) return false;
+        if (p.notes && cleanPeriod(p.notes).includes(pStr)) return true;
+        if ((p as any).billingPeriod && cleanPeriod((p as any).billingPeriod) === pStr) return true;
+        if ((p as any).billingMonth && cleanPeriod((p as any).billingMonth) === pStr) return true;
+        return false;
+      });
+      if (candidatePeriod) {
+        matchedInvoiceId = candidatePeriod.id;
+      }
+    }
+
+    if (matchedInvoiceId) {
+      const existing = invoicePaymentsMap.get(matchedInvoiceId) || [];
+      existing.push(p);
+      invoicePaymentsMap.set(matchedInvoiceId, existing);
+    } else {
+      unallocatedPayments.push({ p, remainingAmount: p.amount });
+    }
+  }
+
+  // Allocate remaining unallocated payments in FIFO order across invoices sorted by dueDate asc
+  const sortedRawInvoicesForAllocation = [...tenantInvoicesRaw].sort((a: any, b: any) => {
+    const da = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+    const db = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+    return da - db;
+  });
+
+  for (const inv of sortedRawInvoicesForAllocation) {
+    const invTotal = Number(inv.amount) || monthlyRent;
+    const alreadyAllocated = (invoicePaymentsMap.get(inv.id) || [])
+      .filter(p => p.status === 'APPROVED' || p.status === 'PAID')
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    let needed = Math.max(0, invTotal - alreadyAllocated);
+
+    if (needed > 0 && unallocatedPayments.length > 0) {
+      for (const unalloc of unallocatedPayments) {
+        if (unalloc.remainingAmount <= 0) continue;
+        const take = Math.min(needed, unalloc.remainingAmount);
+        unalloc.remainingAmount -= take;
+        needed -= take;
+
+        const allocatedTxn: PaymentTransaction = {
+          ...unalloc.p,
+          amount: take,
+          invoiceId: inv.id
+        };
+
+        const existing = invoicePaymentsMap.get(inv.id) || [];
+        existing.push(allocatedTxn);
+        invoicePaymentsMap.set(inv.id, existing);
+
+        if (needed <= 0) break;
+      }
+    }
+  }
+
+  // 4. Associate transactions and reminders with each bill
   const unifiedBills: UnifiedBill[] = tenantInvoicesRaw.map((inv: any) => {
     let itemsList: any[] = [];
     try {
@@ -271,43 +399,44 @@ export function computeTenantBillingState(
       itemsList = [];
     }
 
+    const billingPeriod = inv.billingMonth || inv.billingPeriod || currentMonthStr;
+
     if (itemsList.length === 0) {
-      itemsList = [{ description: `Monthly Hostel Rent (${inv.billingMonth || currentMonthStr})`, amount: Number(inv.amount) || monthlyRent }];
+      itemsList = [{ description: `Monthly Hostel Rent (${billingPeriod})`, amount: Number(inv.amount) || monthlyRent }];
     }
 
-    // Find all transactions specifically linked to this invoice or belonging to the tenant
-    const billTransactions = tenantPayments.filter((p) => {
-      if (p.invoiceId && p.invoiceId === inv.id) return true;
-      if (!p.invoiceId) {
-        return true;
-      }
-      return false;
-    });
+    // Transactions strictly allocated to THIS invoice
+    const billTransactions = invoicePaymentsMap.get(inv.id) || [];
 
     // Valid payments are APPROVED or PAID
     const approvedTxns = billTransactions.filter((p) => p.status === 'APPROVED' || p.status === 'PAID');
     const validPaidSum = approvedTxns.reduce((sum, p) => sum + p.amount, 0);
 
-    const pendingTxns = billTransactions.filter((p) => p.status === 'PENDING');
+    const pendingTxns = billTransactions.filter((p) => p.status === 'PENDING' || (p.status as string) === 'PENDING_VERIFICATION');
     const hasPendingVerification = pendingTxns.length > 0;
 
     const totalBillAmount = Number((Number(inv.amount) || monthlyRent).toFixed(2));
-    let effectivePaidAmount = Math.min(totalBillAmount, Number((Math.max(Number(inv.paidAmount) || 0, validPaidSum)).toFixed(2)));
-    if ((inv.status === 'DUE' || inv.status === 'OVERDUE') && (inv.paidAmount === 0 || inv.paidAmount === undefined)) {
-      effectivePaidAmount = 0;
+    
+    // Effective paid amount: use sum of allocated approved payments, or fallback to inv.paidAmount if no transactions recorded
+    let effectivePaidAmount = 0;
+    if (approvedTxns.length > 0) {
+      effectivePaidAmount = Math.min(totalBillAmount, Number(validPaidSum.toFixed(2)));
+    } else if (Number(inv.paidAmount) > 0) {
+      effectivePaidAmount = Math.min(totalBillAmount, Number(Number(inv.paidAmount).toFixed(2)));
     }
+
     const outstanding = Math.max(0, Number((totalBillAmount - effectivePaidAmount).toFixed(2)));
 
+    const maxDays = new Date(asOfDate.getFullYear(), asOfDate.getMonth() + 1, 0).getDate();
+    const fallbackDay = Math.min(cycleDay, maxDays);
     const dueDateStr = inv.dueDate 
       ? (typeof inv.dueDate === 'string' ? inv.dueDate.split('T')[0] : new Date(inv.dueDate).toISOString().split('T')[0])
-      : new Date(asOfDate.getFullYear(), asOfDate.getMonth(), 5).toISOString().split('T')[0];
+      : `${asOfDate.getFullYear()}-${String(asOfDate.getMonth() + 1).padStart(2, '0')}-${String(fallbackDay).padStart(2, '0')}`;
 
     const computedStatus = calculateBillStatus(totalBillAmount, effectivePaidAmount, dueDateStr, hasPendingVerification, asOfDate);
 
     // Bill reminders
     const billReminders = (rawReminders || []).filter((r: any) => r.invoiceId === inv.id || r.tenantId === tenantId);
-
-    const billingPeriod = inv.billingMonth || currentMonthStr;
 
     return {
       id: inv.id,
@@ -338,7 +467,7 @@ export function computeTenantBillingState(
     };
   });
 
-  // Sort bills by creation date descending
+  // Sort bills by due date descending (newest first for UI presentation)
   unifiedBills.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime());
 
   // Aggregate Tenant-Level Metrics
@@ -346,14 +475,117 @@ export function computeTenantBillingState(
   const totalApprovedPaid = unifiedBills.reduce((sum, b) => sum + b.paidAmount, 0);
   const remainingOutstanding = Math.max(0, totalExpectedRent - totalApprovedPaid);
 
-  const pendingVerificationTxns = tenantPayments.filter((p) => p.status === 'PENDING');
+  const pendingVerificationTxns = tenantPayments.filter((p) => p.status === 'PENDING' || (p.status as string) === 'PENDING_VERIFICATION');
   const totalPendingVerification = pendingVerificationTxns.reduce((sum, p) => sum + p.amount, 0);
 
-  // Determine current active bill (e.g. unpaid bill or the newest bill)
-  const unpaidBills = unifiedBills.filter((b) => b.outstandingAmount > 0);
-  const currentBill = unpaidBills.length > 0 ? unpaidBills[0] : (unifiedBills[0] || null);
+  // 5. COMPUTE EXACT AUTHORITATIVE NEXT DUE DATE & SCHEDULE BREAKDOWN
+  // Sort ascending by dueDate to identify earliest unpaid / upcoming bills
+  const billsAscending = [...unifiedBills].sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+  const unpaidBillsAsc = billsAscending.filter(b => b.outstandingAmount > 0);
 
-  const primaryDueDate = currentBill ? currentBill.dueDate : new Date(asOfDate.getFullYear(), asOfDate.getMonth(), 5).toISOString().split('T')[0];
+  let nextDueInfo: TenantNextDueInfo;
+
+  if (unpaidBillsAsc.length > 0) {
+    const targetBill = unpaidBillsAsc[0];
+    const targetDueDateObj = new Date(targetBill.dueDate);
+    const targetDueTime = new Date(targetDueDateObj.getFullYear(), targetDueDateObj.getMonth(), targetDueDateObj.getDate()).getTime();
+    const asOfTime = new Date(asOfDate.getFullYear(), asOfDate.getMonth(), asOfDate.getDate()).getTime();
+    const diffDays = Math.round((targetDueTime - asOfTime) / (1000 * 60 * 60 * 24));
+
+    let status: 'Upcoming' | 'Due Today' | 'Overdue' | 'Paid';
+    let statusLabel: string;
+
+    if (diffDays < 0) {
+      status = 'Overdue';
+      statusLabel = `${Math.abs(diffDays)} ${Math.abs(diffDays) === 1 ? 'day' : 'days'} overdue`;
+    } else if (diffDays === 0) {
+      status = 'Due Today';
+      statusLabel = 'Due today';
+    } else {
+      status = 'Upcoming';
+      statusLabel = `${diffDays} ${diffDays === 1 ? 'day' : 'days'} remaining`;
+    }
+
+    // Previous unpaid rent (unpaid bills older than the target bill)
+    const previousUnpaidPeriods = unpaidBillsAsc
+      .filter(b => b.id !== targetBill.id && new Date(b.dueDate).getTime() < targetDueTime)
+      .map(b => ({ period: b.billingPeriod, amount: b.outstandingAmount, dueDate: b.dueDate }));
+
+    const previousUnpaidRent = previousUnpaidPeriods.reduce((sum, p) => sum + p.amount, 0);
+
+    const formattedNextDueDate = targetDueDateObj.toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    nextDueInfo = {
+      nextDueDate: targetBill.dueDate,
+      formattedNextDueDate,
+      billingMonth: targetBill.billingMonth,
+      rentAmount: targetBill.amount,
+      outstandingBalance: targetBill.outstandingAmount,
+      status,
+      daysDifference: diffDays,
+      statusLabel,
+      previousUnpaidRent,
+      previousUnpaidPeriods,
+      cycleDay
+    };
+  } else {
+    // All generated bills are PAID! Calculate next upcoming cycle
+    const latestBill = billsAscending[billsAscending.length - 1];
+    let nextMonth = asOfDate.getMonth() + 1;
+    let nextYear = asOfDate.getFullYear();
+    if (latestBill && latestBill.dueDate) {
+      const latestDue = new Date(latestBill.dueDate);
+      nextMonth = latestDue.getMonth() + 1;
+      nextYear = latestDue.getFullYear();
+    }
+    if (nextMonth > 11) {
+      nextMonth = nextMonth % 12;
+      nextYear += 1;
+    }
+
+    const maxDaysInNextMonth = new Date(nextYear, nextMonth + 1, 0).getDate();
+    const targetDay = Math.min(cycleDay, maxDaysInNextMonth);
+    const nextDueDateStr = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}`;
+    const nextDueDateObj = new Date(nextYear, nextMonth, targetDay);
+
+    const asOfTime = new Date(asOfDate.getFullYear(), asOfDate.getMonth(), asOfDate.getDate()).getTime();
+    const targetDueTime = nextDueDateObj.getTime();
+    const diffDays = Math.max(0, Math.round((targetDueTime - asOfTime) / (1000 * 60 * 60 * 24)));
+
+    const formattedNextDueDate = nextDueDateObj.toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+    const nextBillingMonth = nextDueDateObj.toLocaleDateString('en-IN', {
+      month: 'long',
+      year: 'numeric'
+    });
+
+    nextDueInfo = {
+      nextDueDate: nextDueDateStr,
+      formattedNextDueDate,
+      billingMonth: nextBillingMonth,
+      rentAmount: monthlyRent,
+      outstandingBalance: 0,
+      status: 'Upcoming',
+      daysDifference: diffDays,
+      statusLabel: diffDays === 0 ? 'Due today' : `${diffDays} days remaining`,
+      previousUnpaidRent: 0,
+      previousUnpaidPeriods: [],
+      cycleDay
+    };
+  }
+
+  // Determine primary bill to show on cards
+  const unpaidBills = unifiedBills.filter((b) => b.outstandingAmount > 0);
+  const currentBill = unpaidBills.length > 0 ? unpaidBills[unpaidBills.length - 1] : (unifiedBills[0] || null);
+
+  const primaryDueDate = nextDueInfo.nextDueDate;
   const primaryStatus = currentBill ? currentBill.status : (remainingOutstanding <= 0 ? 'PAID' : 'DUE');
 
   return {
@@ -373,12 +605,13 @@ export function computeTenantBillingState(
     primaryStatus,
     isPayable: remainingOutstanding > 0 && primaryStatus !== 'VERIFICATION_PENDING' && primaryStatus !== 'PAID',
     isUnderVerification: primaryStatus === 'VERIFICATION_PENDING',
-    isFullyPaid: primaryStatus === 'PAID',
-    isPartiallyPaid: primaryStatus === 'PARTIAL',
-    isOverdue: primaryStatus === 'OVERDUE',
+    isFullyPaid: remainingOutstanding <= 0,
+    isPartiallyPaid: remainingOutstanding > 0 && totalApprovedPaid > 0,
+    isOverdue: primaryStatus === 'OVERDUE' || nextDueInfo.status === 'Overdue',
     currentBill,
     invoices: unifiedBills,
-    payments: tenantPayments
+    payments: tenantPayments,
+    nextDueInfo
   };
 }
 

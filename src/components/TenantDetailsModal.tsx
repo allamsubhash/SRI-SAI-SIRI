@@ -8,7 +8,9 @@ import {
   Plus, 
   Edit2,
   Send,
-  CheckCircle2
+  CheckCircle2,
+  Clock,
+  AlertTriangle
 } from 'lucide-react';
 import NeonModal from '@/components/NeonModal';
 import { formatINR, formatDate, formatDateTime } from '@/utils/formatters';
@@ -95,7 +97,26 @@ export default function TenantDetailsModal({
 
   const handleOpenOfficialReceipt = (txn?: any) => {
     const targetTxn = txn || latestApprovedPayment;
-    const isPaid = totalPaid >= monthlyRent || (targetTxn && (targetTxn.status === 'APPROVED' || targetTxn.status === 'PAID'));
+    const matchingInvoice = billingState?.invoices?.find(inv =>
+      (targetTxn?.invoiceId && inv.id === targetTxn.invoiceId) ||
+      (targetTxn?.billingPeriod && inv.billingMonth && inv.billingMonth.toLowerCase().trim() === targetTxn.billingPeriod.toLowerCase().trim())
+    ) || billingState?.currentBill || billingState?.invoices?.[0];
+
+    const targetBillingPeriod = targetTxn?.billingPeriod || matchingInvoice?.billingPeriod || matchingInvoice?.billingMonth || billingState?.currentBill?.billingPeriod || new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+    const billAmount = matchingInvoice?.amount || monthlyRent;
+    const currentPaid = targetTxn?.amount || (targetTxn ? targetTxn.amount : monthlyRent);
+
+    const earlierTxns = tenantTxns.filter((p: any) =>
+      (p.status === 'APPROVED' || p.status === 'PAID') &&
+      p.id !== targetTxn?.id &&
+      new Date(p.date || p.createdAt).getTime() <= new Date(targetTxn?.date || targetTxn?.createdAt || new Date()).getTime() &&
+      ((targetTxn?.invoiceId && p.invoiceId === targetTxn.invoiceId) || (targetTxn?.billingPeriod && p.billingPeriod === targetTxn.billingPeriod))
+    );
+    const previousPaid = earlierTxns.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+    const totalPaidTowardsBill = previousPaid + currentPaid;
+    const billRemaining = Math.max(0, billAmount - totalPaidTowardsBill);
+
+    const isPaid = billRemaining === 0 || targetTxn?.status === 'APPROVED' || targetTxn?.status === 'PAID';
     
     const receiptData: OfficialReceiptData = {
       receiptNo: targetTxn?.receiptNumber || `SSR-RCP-${Date.now().toString().slice(-6)}`,
@@ -106,23 +127,24 @@ export default function TenantDetailsModal({
       roomNumber: roomNumber,
       buildingName: buildingName,
       mobileNumber: phone,
-      billingPeriod: billingState?.currentBill?.billingPeriod || new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
+      billingPeriod: targetBillingPeriod,
       paymentMethod: targetTxn?.paymentMethod || (isPaid ? 'UPI' : 'OFFICIAL TARIFF'),
       referenceId: targetTxn?.referenceId || (isPaid ? 'SSR-VERIFIED-TXN' : 'OFFICIAL_INVOICE'),
       recordedBy: targetTxn?.recordedBy || 'Sri Sai Siri Management',
-      paymentStatus: isPaid ? 'PAID' : remainingDue < monthlyRent && remainingDue > 0 ? 'PARTIAL' : 'DUE',
-      billAmount: monthlyRent,
-      previousPaid: Math.max(0, totalPaid - (targetTxn?.amount || 0)),
-      currentPayment: targetTxn?.amount || (isPaid ? monthlyRent : totalPaid > 0 ? totalPaid : monthlyRent),
+      paymentStatus: billRemaining === 0 ? 'PAID' : (currentPaid > 0 ? 'PARTIAL' : 'DUE'),
+      billAmount: billAmount,
+      previousPaid: previousPaid,
+      currentPayment: currentPaid,
       items: [
         {
           sNo: 1,
-          accountHead: targetTxn?.notes || `Room Rent & Boarding (${billingState?.currentBill?.billingPeriod || new Date().toLocaleString('default', { month: 'long', year: 'numeric' })})`,
-          amount: targetTxn?.amount || (isPaid ? monthlyRent : monthlyRent)
+          accountHead: targetTxn?.notes || `Room Rent & Boarding (${targetBillingPeriod})`,
+          amount: currentPaid
         }
       ],
-      totalAmount: targetTxn?.amount || monthlyRent,
-      remainingDue: remainingDue,
+      totalAmount: currentPaid,
+      remainingDue: billRemaining,
+      nextDueDate: billingState?.nextDueInfo?.formattedNextDueDate || billingState?.dueDate,
       generatedOn: formatDateTime(new Date())
     };
 
@@ -210,6 +232,71 @@ export default function TenantDetailsModal({
                 {email}
               </span>
             </div>
+          </div>
+
+          {/* 📅 NEXT RENT DUE DATE & BILLING SCHEDULE */}
+          <div className="p-3.5 rounded-2xl bg-[#FFFDF9] dark:bg-[#141D19] border-2 border-emerald-500/30 dark:border-emerald-500/40 space-y-2.5 shadow-sm">
+            <div className="flex justify-between items-center text-[11px] font-black text-emerald-600 dark:text-emerald-400">
+              <span className="uppercase tracking-wider flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
+                Next Rent Due Schedule
+              </span>
+              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${
+                billingState?.nextDueInfo?.status === 'Overdue'
+                  ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30'
+                  : billingState?.nextDueInfo?.status === 'Due Today'
+                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                  : billingState?.nextDueInfo?.status === 'Paid'
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                  : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30'
+              }`}>
+                ● {billingState?.nextDueInfo?.statusLabel || 'Upcoming'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <div className="p-2 rounded-xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832]">
+                <span className="text-[9px] font-bold text-[#68736E] dark:text-[#9BAAA4] uppercase block">Next Due Date</span>
+                <span className="text-xs font-black text-[#1C2522] dark:text-[#F2F5F2] block mt-0.5">
+                  {billingState?.nextDueInfo?.formattedNextDueDate || formatDate(billingState?.dueDate || moveInDate)}
+                </span>
+              </div>
+
+              <div className="p-2 rounded-xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832]">
+                <span className="text-[9px] font-bold text-[#68736E] dark:text-[#9BAAA4] uppercase block">Billing Month</span>
+                <span className="text-xs font-black text-[#1C2522] dark:text-[#F2F5F2] block mt-0.5 truncate">
+                  {billingState?.nextDueInfo?.billingMonth || 'Current Cycle'}
+                </span>
+              </div>
+
+              <div className="p-2 rounded-xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832]">
+                <span className="text-[9px] font-bold text-[#68736E] dark:text-[#9BAAA4] uppercase block">Rent Due</span>
+                <span className="text-xs font-black text-[#1C2522] dark:text-[#F2F5F2] font-mono block mt-0.5">
+                  {formatINR(billingState?.nextDueInfo?.rentAmount ?? monthlyRent)}
+                </span>
+              </div>
+
+              <div className="p-2 rounded-xl bg-[#F1EEE7] dark:bg-[#1A2621] border border-[#DDD8CE] dark:border-[#293832]">
+                <span className="text-[9px] font-bold text-[#68736E] dark:text-[#9BAAA4] uppercase block">Balance</span>
+                <span className={`text-xs font-black font-mono block mt-0.5 ${(billingState?.nextDueInfo?.outstandingBalance ?? 0) > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                  {formatINR(billingState?.nextDueInfo?.outstandingBalance ?? 0)}
+                </span>
+              </div>
+            </div>
+
+            {/* Display Previous Unpaid Rent Separately if applicable */}
+            {(billingState?.nextDueInfo?.previousUnpaidRent ?? 0) > 0 && (
+              <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 font-bold">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  <span>Unpaid Previous Dues:</span>
+                  <span className="font-mono font-black">{formatINR(billingState?.nextDueInfo?.previousUnpaidRent || 0)}</span>
+                </div>
+                <span className="text-[10px] font-extrabold uppercase">
+                  {billingState?.nextDueInfo?.previousUnpaidPeriods?.map(p => p.period).join(', ')}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* 💳 3. LIVE FINANCIAL OVERVIEW */}

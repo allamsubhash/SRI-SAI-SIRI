@@ -21,8 +21,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="h-full antialiased dark">
-      <body className="min-h-full flex flex-col bg-background text-foreground font-sans selection:bg-primary/30">
+    <html lang="en" className="min-h-full antialiased dark">
+      <body className="min-h-[100dvh] flex flex-col bg-background text-foreground font-sans selection:bg-primary/30">
         <AuthProvider>
           {children}
         </AuthProvider>

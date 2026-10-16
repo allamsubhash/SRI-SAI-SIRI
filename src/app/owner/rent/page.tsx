@@ -86,6 +86,7 @@ export default function OwnerPaymentsPage() {
   const [showRecordModal, setShowRecordModal] = useState(false);
   const [recordTenantId, setRecordTenantId] = useState('');
   const [recordInvoiceId, setRecordInvoiceId] = useState('');
+  const [recordBillingPeriod, setRecordBillingPeriod] = useState('');
   const [recordAmount, setRecordAmount] = useState<number | ''>(8500);
   const [recordMethod, setRecordMethod] = useState<'UPI' | 'Cash' | 'Bank Transfer' | 'Card' | 'Other'>('UPI');
   const [recordType, setRecordType] = useState('Monthly Rent');
@@ -212,13 +213,41 @@ export default function OwnerPaymentsPage() {
     return list;
   }, [allBills]);
 
+  // Deduplicated list of tenants from allBills
+  const uniqueTenants = useMemo(() => {
+    const map = new Map<string, { tenantId: string; tenantName: string; roomNumber: string; totalOutstanding: number }>();
+    for (const b of allBills) {
+      if (!map.has(b.tenantId)) {
+        map.set(b.tenantId, {
+          tenantId: b.tenantId,
+          tenantName: b.tenantName,
+          roomNumber: b.roomNumber,
+          totalOutstanding: b.outstandingAmount
+        });
+      } else {
+        const item = map.get(b.tenantId)!;
+        item.totalOutstanding += b.outstandingAmount;
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.tenantName.localeCompare(b.tenantName));
+  }, [allBills]);
+
+  // Invoices for currently selected recordTenantId
+  const tenantInvoicesForRecord = useMemo(() => {
+    if (!recordTenantId) return [];
+    return allBills
+      .filter(b => b.tenantId === recordTenantId)
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+  }, [allBills, recordTenantId]);
+
   // Target Bill for Record Modal calculation
   const targetRecordBill = useMemo(() => {
     if (recordInvoiceId) {
       return allBills.find(b => b.id === recordInvoiceId) || null;
     }
     if (recordTenantId) {
-      return allBills.find(b => b.tenantId === recordTenantId) || null;
+      const tenantBills = allBills.filter(b => b.tenantId === recordTenantId);
+      return tenantBills.find(b => b.outstandingAmount > 0) || tenantBills[0] || null;
     }
     return null;
   }, [allBills, recordInvoiceId, recordTenantId]);
@@ -246,6 +275,7 @@ export default function OwnerPaymentsPage() {
   const handleOpenRecordForBill = (bill: UnifiedBill) => {
     setRecordTenantId(bill.tenantId);
     setRecordInvoiceId(bill.id);
+    setRecordBillingPeriod(bill.billingPeriod);
     setRecordAmount(bill.outstandingAmount > 0 ? bill.outstandingAmount : bill.amount);
     setRecordMethod('UPI');
     setRecordType(bill.billType || 'Monthly Rent');
@@ -275,6 +305,7 @@ export default function OwnerPaymentsPage() {
         body: JSON.stringify({
           tenantId: recordTenantId,
           invoiceId: recordInvoiceId || undefined,
+          billingPeriod: recordBillingPeriod || targetRecordBill?.billingPeriod || undefined,
           amount: Number(recordAmount),
           paymentMethod: recordMethod,
           paymentType: recordType,
@@ -301,14 +332,14 @@ export default function OwnerPaymentsPage() {
           roomNumber: targetRecordBill?.roomNumber || 'A-101',
           buildingName: targetRecordBill?.buildingName,
           mobileNumber: targetRecordBill?.tenantPhone || '9876543210',
-          billingPeriod: targetRecordBill?.billingPeriod || 'Current Month',
+          billingPeriod: targetRecordBill?.billingPeriod || recordBillingPeriod || 'Current Month',
           paymentMethod: recordMethod,
           referenceId: recordTxnId || 'OFFICIAL_RECORDED',
           paymentStatus: liveCalculation.resultingStatus,
           items: [
             {
               sNo: 1,
-              accountHead: `${recordType} (${targetRecordBill?.billingPeriod || 'Current Period'})`,
+              accountHead: `${recordType} (${targetRecordBill?.billingPeriod || recordBillingPeriod || 'Current Period'})`,
               amount: Number(recordAmount)
             }
           ],
@@ -316,7 +347,8 @@ export default function OwnerPaymentsPage() {
           billAmount: liveCalculation.totalBill,
           previousPaid: liveCalculation.alreadyPaid,
           currentPayment: Number(recordAmount),
-          remainingDue: liveCalculation.remaining
+          remainingDue: liveCalculation.remaining,
+          nextDueDate: targetRecordBill?.dueDate
         };
 
         setSuccessData({
@@ -340,8 +372,8 @@ export default function OwnerPaymentsPage() {
 
   // View Receipt Handler
   const handleOpenReceipt = (bill: UnifiedBill, txn?: PaymentTransaction) => {
-    if (bill.status !== 'PAID' && bill.outstandingAmount > 0.01) {
-      showToast('Receipts are generated only after full payment is completed.', 'info');
+    if (bill.paidAmount <= 0 && (!txn || txn.amount <= 0) && bill.status !== 'PAID') {
+      showToast('No payment recorded yet for this billing period.', 'info');
       return;
     }
     const rawNumber = bill.number.replace(/[^A-Za-z0-9]/g, '');
@@ -349,7 +381,7 @@ export default function OwnerPaymentsPage() {
 
     const items = bill.items && bill.items.length > 0 
       ? bill.items.map((it, idx) => ({ sNo: idx + 1, accountHead: it.description || 'HOSTEL RENT', amount: Number(it.amount) }))
-      : [{ sNo: 1, accountHead: `${bill.billType || 'HOSTEL RENT'} - ${bill.billingPeriod}`, amount: Number(txn?.amount || bill.paidAmount || bill.amount) }];
+      : [{ sNo: 1, accountHead: `${bill.billType || 'HOSTEL RENT'} - ${bill.billingPeriod}`, amount: Number(txn?.amount || (bill.paidAmount > 0 ? bill.paidAmount : bill.amount)) }];
 
     const data: OfficialReceiptData = {
       receiptNo,
@@ -367,10 +399,11 @@ export default function OwnerPaymentsPage() {
       paymentStatus: bill.status,
       items,
       billAmount: bill.amount,
-      previousPaid: Math.max(0, bill.paidAmount - (txn?.amount || 0)),
-      currentPayment: Number(txn?.amount || bill.paidAmount || bill.amount),
-      totalAmount: Number(txn?.amount || bill.paidAmount || bill.amount),
-      remainingDue: bill.outstandingAmount
+      previousPaid: Math.max(0, bill.paidAmount - (txn?.amount || bill.paidAmount)),
+      currentPayment: Number(txn?.amount || (bill.paidAmount > 0 ? bill.paidAmount : bill.amount)),
+      totalAmount: Number(txn?.amount || (bill.paidAmount > 0 ? bill.paidAmount : bill.amount)),
+      remainingDue: bill.outstandingAmount,
+      nextDueDate: bill.dueDate
     };
 
     setReceiptData(data);
@@ -1007,10 +1040,10 @@ export default function OwnerPaymentsPage() {
 
                             <button
                               onClick={() => handleOpenReceipt(bill)}
-                              disabled={bill.status !== 'PAID' && bill.outstandingAmount > 0.01}
-                              title={bill.status === 'PAID' || bill.outstandingAmount <= 0.01 ? "View Official Receipt" : "Receipt available after full payment"}
+                              disabled={bill.paidAmount <= 0 && bill.status !== 'PAID'}
+                              title={bill.paidAmount > 0 || bill.status === 'PAID' ? "View Official Receipt" : "No payment recorded yet"}
                               className={`p-1.5 rounded-xl transition-colors ${
-                                bill.status === 'PAID' || bill.outstandingAmount <= 0.01
+                                bill.paidAmount > 0 || bill.status === 'PAID'
                                   ? 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer'
                                   : 'bg-slate-100/50 dark:bg-slate-800/30 text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-40'
                               }`}
@@ -1517,24 +1550,60 @@ export default function OwnerPaymentsPage() {
             <select
               value={recordTenantId}
               onChange={(e) => {
-                setRecordTenantId(e.target.value);
-                const matched = allBills.find(b => b.tenantId === e.target.value);
-                if (matched) {
-                  setRecordInvoiceId(matched.id);
-                  setRecordAmount(matched.outstandingAmount > 0 ? matched.outstandingAmount : matched.amount);
+                const tId = e.target.value;
+                setRecordTenantId(tId);
+                const tenantBills = allBills.filter(b => b.tenantId === tId);
+                const unpaid = tenantBills.find(b => b.outstandingAmount > 0) || tenantBills[0];
+                if (unpaid) {
+                  setRecordInvoiceId(unpaid.id);
+                  setRecordBillingPeriod(unpaid.billingPeriod);
+                  setRecordAmount(unpaid.outstandingAmount > 0 ? unpaid.outstandingAmount : unpaid.amount);
+                } else {
+                  setRecordInvoiceId('');
+                  setRecordBillingPeriod('');
+                  setRecordAmount(8500);
                 }
               }}
               className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
               required
             >
               <option value="">-- Choose Resident --</option>
-              {allBills.map(b => (
-                <option key={b.tenantId} value={b.tenantId}>
-                  {b.tenantName} (Room {b.roomNumber} - Due: ₹{b.outstandingAmount})
+              {uniqueTenants.map(t => (
+                <option key={t.tenantId} value={t.tenantId}>
+                  {t.tenantName} (Room {t.roomNumber} - Total Due: {formatINR(t.totalOutstanding)})
                 </option>
               ))}
             </select>
           </div>
+
+          {/* Billing Period Selector */}
+          {tenantInvoicesForRecord.length > 0 && (
+            <div>
+              <label className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 block mb-1">
+                Select Billing Period / Month to Pay
+              </label>
+              <select
+                value={recordInvoiceId}
+                onChange={(e) => {
+                  const invId = e.target.value;
+                  setRecordInvoiceId(invId);
+                  const matched = tenantInvoicesForRecord.find(b => b.id === invId);
+                  if (matched) {
+                    setRecordBillingPeriod(matched.billingPeriod);
+                    setRecordAmount(matched.outstandingAmount > 0 ? matched.outstandingAmount : matched.amount);
+                  }
+                }}
+                className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-emerald-500/50 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                required
+              >
+                {tenantInvoicesForRecord.map(inv => (
+                  <option key={inv.id} value={inv.id}>
+                    {inv.billingPeriod} • Rent: ₹{inv.amount.toLocaleString()} (Due: ₹{inv.outstandingAmount.toLocaleString()} - {inv.status})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Live Balance Calculation Box */}
           <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-2">

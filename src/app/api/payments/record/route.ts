@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { tenantId, invoiceId, amount, paymentMethod, paymentType, referenceId, paymentDate, notes } = body;
+    const { tenantId, invoiceId, billingPeriod, amount, paymentMethod, paymentType, referenceId, paymentDate, notes } = body;
 
     if (!tenantId) {
       return NextResponse.json({ error: 'Tenant selection is required' }, { status: 400 });
@@ -35,6 +35,7 @@ export async function POST(request: Request) {
     const payment = await dbService.recordPayment({
       tenantId,
       invoiceId,
+      billingPeriod,
       amount: Number(amount),
       paymentMethod: paymentMethod || 'UPI',
       paymentType: paymentType || 'Monthly Rent',

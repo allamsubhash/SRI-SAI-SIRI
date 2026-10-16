@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { tenantId, amount, paymentMethod, referenceId, screenshotUrl, notes } = body;
+    const { tenantId, amount, paymentMethod, referenceId, screenshotUrl, notes, invoiceId, billingPeriod } = body;
 
     if (!amount || Number(amount) <= 0) {
       return NextResponse.json({ error: 'Valid payment amount is required' }, { status: 400 });
@@ -49,7 +49,9 @@ export async function POST(request: Request) {
       paymentMethod: paymentMethod || 'UPI',
       referenceId: referenceId.trim(),
       screenshotUrl: screenshotUrl || undefined,
-      notes: notes?.trim() || undefined
+      notes: notes?.trim() || undefined,
+      invoiceId: invoiceId || undefined,
+      billingPeriod: billingPeriod || undefined
     });
 
     return NextResponse.json({

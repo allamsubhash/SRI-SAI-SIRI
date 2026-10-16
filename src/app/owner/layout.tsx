@@ -86,6 +86,15 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
   }, []);
 
   const handleMarkNotifRead = async (id?: string, markAll: boolean = false) => {
+    // Optimistic UI update
+    if (markAll) {
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setUnreadNotifCount(0);
+    } else if (id) {
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+      setUnreadNotifCount(prev => Math.max(0, prev - 1));
+    }
+
     try {
       const res = await fetch('/api/notifications', {
         method: 'PUT',
@@ -97,6 +106,7 @@ function OwnerLayoutContent({ children }: { children: React.ReactNode }) {
       }
     } catch (err) {
       console.error(err);
+      fetchOwnerNotifications();
     }
   };
 

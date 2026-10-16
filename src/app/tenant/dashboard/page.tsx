@@ -313,17 +313,22 @@ export default function TenantDashboard() {
           animate={{ scale: 1, opacity: 1 }}
           className="p-6 rounded-[32px] bg-rose-500/10 dark:bg-rose-950/40 border-2 border-rose-500/40 text-left shadow-2xl backdrop-blur-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5"
         >
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 font-black text-xs uppercase tracking-wider">
               <AlertTriangle className="w-4 h-4 animate-bounce" />
-              <span>OUTSTANDING RENT PAYMENT DUE</span>
+              <span>OUTSTANDING RENT PAYMENT DUE • {duesCalculation.nextDueInfo?.statusLabel || 'OVERDUE'}</span>
             </div>
             <h3 className="text-2xl font-black text-slate-900 dark:text-white">
               Rent Due: {formatINR(duesCalculation.remainingOutstanding)}
             </h3>
             <p className="text-xs text-rose-600/90 dark:text-rose-300 font-bold">
-              Due Date: {duesCalculation.dueDate}. Please complete your payment on the Billing Desk to keep your account in good standing.
+              Next Due Date: <strong>{duesCalculation.nextDueInfo?.formattedNextDueDate || duesCalculation.dueDate}</strong> ({duesCalculation.nextDueInfo?.billingMonth || 'Current Cycle'})
             </p>
+            {(duesCalculation.nextDueInfo?.previousUnpaidRent ?? 0) > 0 && (
+              <p className="text-xs text-rose-700 dark:text-rose-300 font-extrabold bg-rose-500/20 px-3 py-1 rounded-xl inline-block">
+                ⚠️ Previous Unpaid Rent: {formatINR(duesCalculation.nextDueInfo?.previousUnpaidRent || 0)} ({duesCalculation.nextDueInfo?.previousUnpaidPeriods?.map(p => p.period).join(', ')})
+              </p>
+            )}
           </div>
 
           <button
@@ -335,7 +340,7 @@ export default function TenantDashboard() {
         </motion.div>
       ) : duesCalculation.isUnderVerification ? (
         <div className="p-6 rounded-[32px] bg-purple-500/10 border-2 border-purple-500/30 text-left shadow-xl backdrop-blur-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5">
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 font-black text-xs uppercase tracking-wider">
               <Clock className="w-4 h-4 animate-spin text-purple-500" />
               <span>PAYMENT UNDER OWNER VERIFICATION ⏳</span>
@@ -344,7 +349,7 @@ export default function TenantDashboard() {
               Submitted: {formatINR(duesCalculation.totalPendingVerification)}
             </h3>
             <p className="text-xs text-purple-600/90 dark:text-purple-300 font-bold">
-              Your transaction reference is currently under review by hostel management.
+              Your transaction reference is currently under review by hostel management. Next Cycle Due: <strong>{duesCalculation.nextDueInfo?.formattedNextDueDate}</strong>.
             </p>
           </div>
           <button
@@ -356,16 +361,16 @@ export default function TenantDashboard() {
         </div>
       ) : (
         <div className="p-6 rounded-[32px] bg-emerald-500/10 border-2 border-emerald-500/30 text-left shadow-xl backdrop-blur-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5">
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-black text-xs uppercase tracking-wider">
               <ShieldCheck className="w-4 h-4 text-emerald-500" />
               <span>RENT PAID IN FULL ✓</span>
             </div>
             <h3 className="text-2xl font-black text-emerald-900 dark:text-emerald-200">
-              Outstanding: ₹0
+              Next Due: {duesCalculation.nextDueInfo?.formattedNextDueDate || duesCalculation.dueDate}
             </h3>
             <p className="text-xs text-emerald-600/90 dark:text-emerald-300 font-bold">
-              Your account is in good standing. All rent tariffs are settled.
+              Outstanding: ₹0 • Billing Month: {duesCalculation.nextDueInfo?.billingMonth || 'Upcoming'} • Status: {duesCalculation.nextDueInfo?.statusLabel || 'Upcoming'}
             </p>
           </div>
           <button
@@ -429,25 +434,25 @@ export default function TenantDashboard() {
           className="p-5 rounded-[28px] bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-white/80 dark:border-[#293832] shadow-xl backdrop-blur-2xl hover:tenant-border-accent transition-all cursor-pointer flex flex-col justify-between space-y-3 group"
         >
           <div className="flex justify-between items-start">
-            <span className="text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-widest">ACCOUNT STATUS</span>
+            <span className="text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-widest">NEXT RENT DUE</span>
             <div className={`w-9 h-9 rounded-2xl flex items-center justify-center font-black shadow-sm ${
-              duesCalculation.isFullyPaid ? 'bg-emerald-500/15 text-emerald-400' : duesCalculation.isUnderVerification ? 'bg-purple-500/15 text-purple-400' : 'bg-amber-500/15 text-amber-400'
+              duesCalculation.nextDueInfo?.status === 'Paid' ? 'bg-emerald-500/15 text-emerald-400' :
+              duesCalculation.nextDueInfo?.status === 'Overdue' ? 'bg-rose-500/15 text-rose-400' :
+              duesCalculation.isUnderVerification ? 'bg-purple-500/15 text-purple-400' : 'bg-amber-500/15 text-amber-400'
             }`}>
-              <ShieldCheck className="w-4 h-4" />
+              <Clock className="w-4 h-4" />
             </div>
           </div>
           <div>
-            <div className={`text-2xl font-black ${
-              duesCalculation.isFullyPaid ? 'text-emerald-400' : duesCalculation.isUnderVerification ? 'text-purple-400' : 'text-amber-400'
-            }`}>
-              {duesCalculation.primaryStatus}
+            <div className="text-xl font-black text-[#1C2522] dark:text-[#F2F5F2]">
+              {duesCalculation.nextDueInfo?.formattedNextDueDate || duesCalculation.dueDate}
             </div>
-            <p className="text-[11px] font-extrabold text-slate-400 mt-1">
-              {duesCalculation.isFullyPaid ? 'Good Standing' : `Due: ${duesCalculation.dueDate}`}
+            <p className="text-[11px] font-extrabold text-slate-400 mt-1 truncate">
+              {duesCalculation.nextDueInfo?.billingMonth} • {duesCalculation.nextDueInfo?.statusLabel || duesCalculation.primaryStatus}
             </p>
           </div>
           <div className="w-full bg-[#F1EEE7] dark:bg-[#1A2621] h-1.5 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full ${duesCalculation.isFullyPaid ? 'bg-emerald-500 w-full' : duesCalculation.isUnderVerification ? 'bg-purple-500 w-3/4' : 'bg-amber-500 w-1/2'}`} />
+            <div className={`h-full rounded-full ${duesCalculation.nextDueInfo?.status === 'Paid' ? 'bg-emerald-500 w-full' : duesCalculation.nextDueInfo?.status === 'Overdue' ? 'bg-rose-500 w-full' : duesCalculation.isUnderVerification ? 'bg-purple-500 w-3/4' : 'bg-amber-500 w-1/2'}`} />
           </div>
         </motion.div>
 

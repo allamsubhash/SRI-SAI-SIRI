@@ -59,6 +59,7 @@ export interface OfficialReceiptData {
   currentPayment?: number;
   totalAmount: number;
   remainingDue?: number;
+  nextDueDate?: string;
   generatedOn?: string;
   // Short-Stay Specific Fields
   checkInDate?: string;
@@ -97,14 +98,15 @@ export default function OfficialPaymentReceiptModal({
   const isShortStay = receiptData.receiptType === 'SHORT_STAY';
   const displayName = isShortStay ? (receiptData.guestName || receiptData.tenantName || 'Guest') : (receiptData.tenantName || 'John Doe');
   const totalAmount = receiptData.totalAmount || (receiptData.items ? receiptData.items.reduce((sum, item) => sum + item.amount, 0) : 0);
-  const amountInWords = numberToWords(totalAmount);
 
-  // Enforce Strict Invariant: Room Rent & Boarding Amount MUST MATCH Amount Paid
-  const billAmount = totalAmount;
-  const currentPaid = totalAmount;
-  const totalPaid = totalAmount;
-  const remainingDue = 0;
+  // Accurate breakdown reflecting actual billing record and partial payments
+  const billAmount = receiptData.billAmount !== undefined ? receiptData.billAmount : (totalAmount || 8500);
+  const currentPaid = receiptData.currentPayment !== undefined ? receiptData.currentPayment : totalAmount;
+  const previousPaid = receiptData.previousPaid !== undefined ? receiptData.previousPaid : 0;
+  const totalPaid = receiptData.totalPaid !== undefined ? receiptData.totalPaid : (previousPaid + currentPaid);
+  const remainingDue = receiptData.remainingDue !== undefined ? receiptData.remainingDue : Math.max(0, billAmount - totalPaid);
   const statusStamp: 'PAID' | 'PARTIALLY_PAID' | 'PENDING' = remainingDue <= 0.01 ? 'PAID' : (totalPaid > 0 ? 'PARTIALLY_PAID' : 'PENDING');
+  const amountInWords = numberToWords(currentPaid);
 
   // Use the User's uploaded exact QR code image
   const qrCodeDataUrl = CUSTOM_QR_BASE64;
@@ -228,7 +230,9 @@ export default function OfficialPaymentReceiptModal({
     try {
       if (!receiptRef.current) return;
 
-      const targetFileName = `Official_Receipt_${receiptData.receiptNo.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+      const cleanTenant = (receiptData.tenantId || 'Tenant').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const cleanPeriod = (receiptData.billingPeriod || 'Period').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const targetFileName = `Receipt_${cleanTenant}_${cleanPeriod}.pdf`;
 
       try {
         const html2canvas = (await import('html2canvas')).default;
@@ -236,8 +240,8 @@ export default function OfficialPaymentReceiptModal({
 
         const canvas = await html2canvas(receiptRef.current, {
           scale: 2,
-          useCORS: false,
-          allowTaint: true,
+          useCORS: true,
+          allowTaint: false,
           backgroundColor: '#180731',
           logging: false,
           onclone: (clonedDoc) => {
@@ -294,17 +298,23 @@ export default function OfficialPaymentReceiptModal({
 
         pdf.addImage(imgData, 'PNG', xOffset, 10, renderWidth, renderHeight);
 
-        // Single clean download trigger using Data URI (compatible with mobile Safari & desktop)
-        const pdfDataUri = pdf.output('datauristring');
-        const link = document.createElement('a');
-        link.style.display = 'none';
-        link.href = pdfDataUri;
-        link.download = `${targetFileName}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(() => {
-          if (document.body.contains(link)) document.body.removeChild(link);
-        }, 1000);
+        // Download reliably using standard Blob URL
+        try {
+          const pdfBlob = pdf.output('blob');
+          const blobUrl = URL.createObjectURL(pdfBlob);
+          const link = document.createElement('a');
+          link.style.display = 'none';
+          link.href = blobUrl;
+          link.download = targetFileName;
+          document.body.appendChild(link);
+          link.click();
+          setTimeout(() => {
+            URL.revokeObjectURL(blobUrl);
+            if (document.body.contains(link)) document.body.removeChild(link);
+          }, 3000);
+        } catch (blobErr) {
+          pdf.save(targetFileName);
+        }
 
         return;
       } catch (canvasErr) {
@@ -314,12 +324,12 @@ export default function OfficialPaymentReceiptModal({
       // Secondary Fallback: Direct Image PNG Download
       try {
         const html2canvas = (await import('html2canvas')).default;
-        const canvas = await html2canvas(receiptRef.current, { scale: 2, useCORS: false, allowTaint: true });
+        const canvas = await html2canvas(receiptRef.current, { scale: 2, useCORS: true, allowTaint: false });
         const imgData = canvas.toDataURL('image/png');
         const link = document.createElement('a');
         link.style.display = 'none';
         link.href = imgData;
-        link.download = `${targetFileName}.png`;
+        link.download = `${targetFileName.replace('.pdf', '')}.png`;
         document.body.appendChild(link);
         link.click();
         setTimeout(() => {
@@ -559,6 +569,18 @@ export default function OfficialPaymentReceiptModal({
                       </div>
                     </div>
 
+                    {receiptData.nextDueDate && (
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                          <Clock className="w-3 h-3" />
+                        </div>
+                        <div>
+                          <span className="text-slate-500 text-[10px] font-medium">Next Due Date : </span>
+                          <span className="font-bold text-amber-800">{formatDate(receiptData.nextDueDate)}</span>
+                        </div>
+                      </div>
+                    )}
+
                   </div>
                 </div>
 
@@ -581,7 +603,7 @@ export default function OfficialPaymentReceiptModal({
                   </div>
                 </div>
 
-                {/* 3. FINANCIAL ACCOUNT PARTICULARS TABLE (PREVIOUSLY PAID REMOVED) */}
+                {/* 3. FINANCIAL ACCOUNT PARTICULARS TABLE */}
                 <div className="bg-white rounded-xl border border-purple-200 overflow-hidden shadow-2xs text-[11px] relative z-10">
                   <div className="bg-[#2b0c54] text-white px-3 py-1.5 font-bold flex justify-between items-center text-xs">
                     <div className="flex items-center gap-1.5">
@@ -601,6 +623,13 @@ export default function OfficialPaymentReceiptModal({
                       <div className="px-3 py-1.5 flex justify-between items-center">
                         <span>Room Rent & Boarding ({receiptData.billingPeriod || 'September 2026'})</span>
                         <span className="font-bold font-mono text-slate-950">₹{billAmount.toLocaleString('en-IN')}</span>
+                      </div>
+                    )}
+
+                    {previousPaid > 0 && (
+                      <div className="px-3 py-1.5 flex justify-between items-center bg-slate-50 text-slate-700">
+                        <span className="text-slate-600 font-medium">Previously Paid Towards This Month</span>
+                        <span className="font-bold font-mono text-slate-950">₹{previousPaid.toLocaleString('en-IN')}</span>
                       </div>
                     )}
 

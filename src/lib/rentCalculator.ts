@@ -174,9 +174,14 @@ export function calculateMonthlyDues(
     status = 'UNPAID';
   }
 
-  // Next due date: 5th of current/next month
-  const nextDueDateObj = new Date(asOfDate.getFullYear(), asOfDate.getMonth() + (totalDues === 0 ? 1 : 0), 5);
-  const nextDueDate = nextDueDateObj.toISOString().split('T')[0];
+  // Next due date: tenant's cycle day of current/next month
+  const cycleDay = startDate.getDate() || 15;
+  const targetMonth = asOfDate.getMonth() + (totalDues === 0 ? 1 : 0);
+  const targetYear = asOfDate.getFullYear() + (targetMonth > 11 ? 1 : 0);
+  const adjMonth = targetMonth % 12;
+  const maxDays = new Date(targetYear, adjMonth + 1, 0).getDate();
+  const targetDay = Math.min(cycleDay, maxDays);
+  const nextDueDate = `${targetYear}-${String(adjMonth + 1).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}`;
 
   return {
     monthlyRent,

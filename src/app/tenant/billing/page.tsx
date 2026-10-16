@@ -45,6 +45,8 @@ export default function TenantBilling() {
 
   // Submit Payment Modal state
   const [showPayModal, setShowPayModal] = useState(false);
+  const [payInvoiceId, setPayInvoiceId] = useState('');
+  const [payBillingPeriod, setPayBillingPeriod] = useState('');
   const [payAmount, setPayAmount] = useState('');
   const [payMethod, setPayMethod] = useState('UPI');
   const [payRefId, setPayRefId] = useState('');
@@ -156,7 +158,11 @@ export default function TenantBilling() {
   };
 
   const handleOpenPayModal = () => {
-    setPayAmount(billingState.remainingOutstanding > 0 ? String(billingState.remainingOutstanding) : String(billingState.monthlyRent));
+    const unpaidInvoice = billingState.invoices.find(inv => (inv.outstandingAmount ?? (inv.amount - (inv.paidAmount || 0))) > 0) || billingState.invoices[0];
+    setPayInvoiceId(unpaidInvoice?.id || '');
+    setPayBillingPeriod(unpaidInvoice?.billingMonth || activeBill?.billingMonth || new Date().toLocaleString('default', { month: 'long', year: 'numeric' }));
+    const targetDue = unpaidInvoice ? (unpaidInvoice.outstandingAmount ?? (unpaidInvoice.amount - (unpaidInvoice.paidAmount || 0))) : billingState.remainingOutstanding;
+    setPayAmount(targetDue > 0 ? String(targetDue) : String(billingState.monthlyRent));
     setPayRefId('');
     setPayNotes('');
     setSubmitError('');
@@ -189,7 +195,9 @@ export default function TenantBilling() {
           amount: numericAmount,
           paymentMethod: payMethod,
           referenceId: payRefId.trim(),
-          notes: payNotes.trim()
+          notes: payNotes.trim(),
+          invoiceId: payInvoiceId || undefined,
+          billingPeriod: payBillingPeriod || undefined
         })
       });
 
@@ -214,10 +222,23 @@ export default function TenantBilling() {
   };
 
   const handleOpenOfficialReceipt = (pay: any) => {
-    if (billingState.primaryStatus !== 'PAID' && billingState.remainingOutstanding > 0.01) {
-      alert('Receipt is available only after full payment is completed.');
-      return;
-    }
+    const matchingInvoice = billingState.invoices.find(inv => 
+      (pay.invoiceId && inv.id === pay.invoiceId) ||
+      (pay.billingPeriod && inv.billingMonth && inv.billingMonth.toLowerCase().trim() === pay.billingPeriod.toLowerCase().trim())
+    ) || billingState.invoices[0] || activeBill;
+
+    const billAmount = matchingInvoice?.amount || billingState.monthlyRent;
+    const currentPaid = pay.amount || 0;
+    const earlierPayments = payments.filter(p => 
+      (p.status === 'APPROVED' || p.status === 'PAID') &&
+      p.id !== pay.id &&
+      new Date(p.date || p.createdAt).getTime() <= new Date(pay.date || pay.createdAt).getTime() &&
+      ((pay.invoiceId && p.invoiceId === pay.invoiceId) || (pay.billingPeriod && p.billingPeriod === pay.billingPeriod))
+    );
+    const previousPaid = earlierPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const totalPaidTowardsBill = previousPaid + currentPaid;
+    const remainingDue = Math.max(0, billAmount - totalPaidTowardsBill);
+
     const formattedData: OfficialReceiptData = {
       receiptNo: pay.receiptNumber || `SSR-RCP-${(pay.id || '000000').slice(-6).toUpperCase()}`,
       date: formatDate(pay.date || pay.createdAt),
@@ -227,19 +248,20 @@ export default function TenantBilling() {
       roomNumber: tenantData?.roomNumber || 'A-101',
       buildingName: tenantData?.buildingName || 'Sri Sai Siri Hostel',
       mobileNumber: tenantData?.phone || (user as any)?.phone || '+91 98765 43210',
-      billingPeriod: activeBill?.billingMonth || new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
+      billingPeriod: pay.billingPeriod || matchingInvoice?.billingMonth || activeBill?.billingMonth || new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
       paymentMethod: pay.paymentMethod || pay.method || 'ONLINE UPI',
       referenceId: pay.referenceId || pay.id || 'N/A',
       recordedBy: pay.recordedBy || 'Hostel Management',
-      paymentStatus: 'PAID',
-      billAmount: activeBill?.amount || billingState.monthlyRent,
-      previousPaid: Math.max(0, (billingState.totalApprovedPaid || 0) - (pay.amount || 0)),
-      currentPayment: pay.amount || 0,
+      paymentStatus: remainingDue === 0 ? 'PAID' : 'PARTIAL',
+      billAmount: billAmount,
+      previousPaid: previousPaid,
+      currentPayment: currentPaid,
       items: [
-        { sNo: 1, accountHead: pay.notes || 'Monthly Hostel Accommodation & Rent Settlement', amount: pay.amount || 0 }
+        { sNo: 1, accountHead: pay.notes || `Hostel Rent & Accommodation - ${pay.billingPeriod || matchingInvoice?.billingMonth || 'Monthly Rent'}`, amount: currentPaid }
       ],
-      totalAmount: pay.amount || 0,
-      remainingDue: billingState.remainingOutstanding,
+      totalAmount: currentPaid,
+      remainingDue: remainingDue,
+      nextDueDate: billingState.nextDueInfo?.formattedNextDueDate || billingState.dueDate,
       generatedOn: formatDateTime(new Date())
     };
     setSelectedReceipt(formattedData);
@@ -304,20 +326,54 @@ export default function TenantBilling() {
       </div>
 
       {/* 📊 2. AUTHORITATIVE SUMMARY METRICS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {/* Card 1: NEXT RENT DUE DATE */}
+        <div className="p-6 rounded-[32px] bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border-2 border-emerald-500/30 dark:border-emerald-500/40 shadow-xl backdrop-blur-2xl space-y-2 relative overflow-hidden">
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">NEXT RENT DUE DATE</span>
+            <Clock className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div className="text-2xl font-black text-[#1C2522] dark:text-[#F2F5F2]">
+            {billingState.nextDueInfo?.formattedNextDueDate || billingState.dueDate}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border ${
+              billingState.nextDueInfo?.status === 'Overdue'
+                ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30'
+                : billingState.nextDueInfo?.status === 'Due Today'
+                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                : billingState.nextDueInfo?.status === 'Paid'
+                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30'
+            }`}>
+              ● {billingState.nextDueInfo?.statusLabel || 'Upcoming'}
+            </span>
+            <span className="text-[11px] font-bold text-[#68736E] dark:text-[#9BAAA4]">
+              {billingState.nextDueInfo?.billingMonth}
+            </span>
+          </div>
+          {(billingState.nextDueInfo?.previousUnpaidRent ?? 0) > 0 && (
+            <div className="mt-2 pt-2 border-t border-rose-500/20 text-[11px] font-black text-rose-600 dark:text-rose-400">
+              ⚠️ Previous Due: {formatINR(billingState.nextDueInfo?.previousUnpaidRent || 0)} ({billingState.nextDueInfo?.previousUnpaidPeriods?.map(p => p.period).join(', ')})
+            </div>
+          )}
+        </div>
+
+        {/* Card 2: CURRENT OUTSTANDING */}
         <div className="p-6 rounded-[32px] bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-white/80 dark:border-[#293832] shadow-xl backdrop-blur-2xl space-y-2">
           <div className="flex justify-between items-center">
-            <span className="text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider">MONTHLY TARIFF</span>
-            <DollarSign className="w-5 h-5 text-emerald-400" />
+            <span className="text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider">OUTSTANDING BALANCE</span>
+            <AlertCircle className={`w-5 h-5 ${billingState.remainingOutstanding > 0 ? 'text-amber-400' : 'text-emerald-400'}`} />
           </div>
-          <div className="text-3xl font-black text-[#1C2522] dark:text-[#F2F5F2]">
-            {formatINR(billingState.monthlyRent)}
+          <div className={`text-3xl font-black ${billingState.remainingOutstanding > 0 ? 'text-amber-500 dark:text-amber-400' : 'text-emerald-500 dark:text-emerald-400'}`}>
+            {formatINR(billingState.remainingOutstanding)}
           </div>
           <p className="text-xs text-[#68736E] dark:text-[#9BAAA4]">
-            Due on 5th of every month
+            {billingState.remainingOutstanding === 0 ? 'All rent cleared for current cycle ✓' : `Due by ${billingState.dueDate}`}
           </p>
         </div>
 
+        {/* Card 3: TOTAL SETTLED */}
         <div className="p-6 rounded-[32px] bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-white/80 dark:border-[#293832] shadow-xl backdrop-blur-2xl space-y-2">
           <div className="flex justify-between items-center">
             <span className="text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider">TOTAL SETTLED (PAID)</span>
@@ -331,16 +387,17 @@ export default function TenantBilling() {
           </p>
         </div>
 
+        {/* Card 4: MONTHLY TARIFF */}
         <div className="p-6 rounded-[32px] bg-[#FFFDF9]/95 dark:bg-[#141D19]/95 border border-white/80 dark:border-[#293832] shadow-xl backdrop-blur-2xl space-y-2">
           <div className="flex justify-between items-center">
-            <span className="text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider">CURRENT OUTSTANDING</span>
-            <AlertCircle className={`w-5 h-5 ${billingState.remainingOutstanding > 0 ? 'text-amber-400' : 'text-emerald-400'}`} />
+            <span className="text-[10px] font-black text-[#68736E] dark:text-[#9BAAA4] uppercase tracking-wider">MONTHLY TARIFF</span>
+            <DollarSign className="w-5 h-5 text-emerald-400" />
           </div>
-          <div className={`text-3xl font-black ${billingState.remainingOutstanding > 0 ? 'text-amber-500 dark:text-amber-400' : 'text-emerald-500 dark:text-emerald-400'}`}>
-            {formatINR(billingState.remainingOutstanding)}
+          <div className="text-3xl font-black text-[#1C2522] dark:text-[#F2F5F2]">
+            {formatINR(billingState.monthlyRent)}
           </div>
           <p className="text-xs text-[#68736E] dark:text-[#9BAAA4]">
-            {billingState.remainingOutstanding === 0 ? 'All rent cleared for current cycle ✓' : `Due by ${billingState.dueDate}`}
+            Cycle due: {billingState.nextDueInfo?.formattedNextDueDate || billingState.dueDate}
           </p>
         </div>
       </div>
@@ -599,6 +656,40 @@ export default function TenantBilling() {
                   <span>{submitSuccess}</span>
                 </div>
               )}
+
+              <div>
+                <label className="text-xs font-bold text-[#1C2522] dark:text-[#F2F5F2] block mb-1">
+                  Billing Period / Month to Pay *
+                </label>
+                <select
+                  value={payBillingPeriod}
+                  onChange={(e) => {
+                    const selected = e.target.value;
+                    setPayBillingPeriod(selected);
+                    const matched = billingState.invoices.find(inv => inv.billingMonth === selected);
+                    if (matched) {
+                      setPayInvoiceId(matched.id);
+                      const rem = matched.outstandingAmount ?? Math.max(0, matched.amount - (matched.paidAmount || 0));
+                      if (rem > 0) setPayAmount(String(rem));
+                    }
+                  }}
+                  className="w-full bg-white dark:bg-[#101916] border border-[#DDD8CE] dark:border-[#293832] rounded-xl px-4 py-2.5 text-xs text-[#1C2522] dark:text-[#F2F5F2] font-bold focus:outline-none focus:border-emerald-500"
+                >
+                  {billingState.invoices.map((inv) => {
+                    const dueAmt = inv.outstandingAmount ?? Math.max(0, inv.amount - (inv.paidAmount || 0));
+                    return (
+                      <option key={inv.id || inv.billingMonth} value={inv.billingMonth}>
+                        {inv.billingMonth} — {formatINR(inv.amount)} ({dueAmt > 0 ? `Due: ${formatINR(dueAmt)}` : 'Cleared ✓'} • Due {inv.dueDate})
+                      </option>
+                    );
+                  })}
+                  {billingState.invoices.length === 0 && (
+                    <option value={new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}>
+                      {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}
+                    </option>
+                  )}
+                </select>
+              </div>
 
               <div>
                 <label className="text-xs font-bold text-[#1C2522] dark:text-[#F2F5F2] block mb-1">
