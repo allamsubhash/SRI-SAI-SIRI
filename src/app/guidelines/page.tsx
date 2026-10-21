@@ -70,6 +70,20 @@ export default function PublicGuidelinesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [adminPhone, setAdminPhone] = useState('+91 98765 00000');
+  const [adminEmail, setAdminEmail] = useState('contact@srisaisiri.com');
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(d => {
+        if (d?.settings) {
+          if (d.settings.contactPhone) setAdminPhone(d.settings.contactPhone);
+          if (d.settings.contactEmail) setAdminEmail(d.settings.contactEmail);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch('/api/guidelines')
@@ -342,11 +356,11 @@ export default function PublicGuidelinesPage() {
         <div className="flex flex-wrap items-center gap-4 text-slate-300 font-medium">
           <div className="flex items-center gap-1.5">
             <Phone className="w-3.5 h-3.5 text-cyan-400" />
-            <span>+91 98765 43210</span>
+            <a href={`tel:${adminPhone}`} className="hover:text-cyan-400 transition-colors">{adminPhone}</a>
           </div>
           <div className="flex items-center gap-1.5">
             <Mail className="w-3.5 h-3.5 text-cyan-400" />
-            <span>info@srisaisiri.com</span>
+            <a href={`mailto:${adminEmail}`} className="hover:text-cyan-400 transition-colors">{adminEmail}</a>
           </div>
         </div>
 

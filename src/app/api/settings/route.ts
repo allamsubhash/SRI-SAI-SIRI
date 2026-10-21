@@ -1,25 +1,17 @@
 import { NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
-import { prisma } from '@/lib/db';
+import { dbService } from '@/lib/db';
 
-export async function GET(request: Request) {
+export const dynamic = 'force-dynamic';
+
+export async function GET() {
   try {
-    const settings = await prisma.setting.findMany();
-    const settingsMap: Record<string, string> = {};
-    settings.forEach(s => {
-      settingsMap[s.key] = s.value;
-    });
-
+    const settings = await dbService.getSettings();
     return NextResponse.json({
       success: true,
-      settings: {
-        hostelName: settingsMap['hostelName'] || 'Sri Sai Siri Boys Hostel',
-        address: settingsMap['address'] || 'Plot 42, Knowledge Park III, Greater Noida',
-        contactPhone: settingsMap['contactPhone'] || '+91 98765 00000',
-        contactEmail: settingsMap['contactEmail'] || 'contact@srisaisiri.com',
-        currency: settingsMap['currency'] || 'INR (₹)',
-        curfewTime: settingsMap['curfewTime'] || '10:30 PM'
-      }
+      settings
+    }, {
+      headers: { 'Cache-Control': 'no-store, max-age=0, must-revalidate' }
     });
   } catch (error: any) {
     return NextResponse.json({
@@ -54,24 +46,11 @@ export async function POST(request: Request) {
     }
 
     const data = await request.json();
-
-    // Persist settings key-value pairs
-    for (const [key, value] of Object.entries(data)) {
-      if (typeof value === 'string') {
-        try {
-          await prisma.setting.upsert({
-            where: { key },
-            update: { value },
-            create: { key, value }
-          });
-        } catch (e) {
-          // Fallback if upsert fails
-        }
-      }
-    }
+    const updatedSettings = await dbService.saveSettings(data);
 
     return NextResponse.json({
       success: true,
+      settings: updatedSettings,
       message: 'Property settings permanently updated.'
     });
   } catch (error: any) {

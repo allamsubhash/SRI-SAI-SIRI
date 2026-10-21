@@ -74,7 +74,11 @@ export default function TenantDetailsModal({
 
   const tenantName = tenant.name || (tenant.profile?.firstName ? `${tenant.profile?.firstName || ''} ${tenant.profile?.lastName || ''}`.trim() : 'Resident');
   const roomNumber = tenant.roomNumber || tenant.room?.number || 'A-101';
-  const bedNumber = tenant.bedNumber || tenant.bed?.number || 'Bed A';
+  let bedNumber = tenant.bedNumber || tenant.bed?.number || 'Bed A';
+  if (roomNumber && bedNumber && bedNumber.includes('-') && !bedNumber.startsWith(roomNumber)) {
+    const suffix = bedNumber.split('-').pop();
+    bedNumber = `${roomNumber}-${suffix}`;
+  }
   const buildingName = tenant.buildingName || tenant.building?.name || (roomNumber.startsWith('B') ? 'Block B - Classic Standard' : 'Block A - Premium Executive');
   const phone = tenant.phone || tenant.profile?.phone || '+91 98765 43210';
   const email = tenant.email || tenant.user?.email || 'resident@srisaisiri.com';
@@ -125,6 +129,7 @@ export default function TenantDetailsModal({
       tenantId: tenant.id || 'TEN-001',
       tenantName: tenantName,
       roomNumber: roomNumber,
+      bedNumber: bedNumber,
       buildingName: buildingName,
       mobileNumber: phone,
       billingPeriod: targetBillingPeriod,
@@ -144,7 +149,6 @@ export default function TenantDetailsModal({
       ],
       totalAmount: currentPaid,
       remainingDue: billRemaining,
-      nextDueDate: billingState?.nextDueInfo?.formattedNextDueDate || billingState?.dueDate,
       generatedOn: formatDateTime(new Date())
     };
 

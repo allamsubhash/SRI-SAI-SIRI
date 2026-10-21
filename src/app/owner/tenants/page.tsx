@@ -216,8 +216,14 @@ export default function TenantsManagement() {
     setEditGender(t.gender || 'Male');
     setEditMoveInDate(t.moveInDate || '');
     setEditPassword('');
-    setEditRoomNumber(t.roomNumber || '');
-    setEditBedNumber(t.bedNumber || '');
+    const roomNum = t.roomNumber || '';
+    setEditRoomNumber(roomNum);
+    let initialBed = t.bedNumber || '';
+    if (roomNum && initialBed && initialBed.includes('-') && !initialBed.startsWith(roomNum)) {
+      const suffix = initialBed.split('-').pop();
+      initialBed = `${roomNum}-${suffix}`;
+    }
+    setEditBedNumber(initialBed);
     setEditRoomRent(t.rentAmount || 8500);
     setEditAddress(t.address || '');
     setEditAadhaar(t.aadhaar || '');
@@ -940,7 +946,17 @@ export default function TenantsManagement() {
                   <input 
                     type="text" 
                     value={editRoomNumber}
-                    onChange={(e) => setEditRoomNumber(e.target.value)}
+                    onChange={(e) => {
+                      const newRoom = e.target.value;
+                      setEditRoomNumber(newRoom);
+                      if (newRoom && editBedNumber) {
+                        const spotSuffix = editBedNumber.split('-').pop() || 'A';
+                        if (editBedNumber.includes('-') && !editBedNumber.startsWith(newRoom)) {
+                          setEditBedNumber(`${newRoom}-${spotSuffix}`);
+                        }
+                      }
+                    }}
+                    placeholder="e.g. R-108"
                     className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
                   />
                 </div>
@@ -950,6 +966,7 @@ export default function TenantsManagement() {
                     type="text" 
                     value={editBedNumber}
                     onChange={(e) => setEditBedNumber(e.target.value)}
+                    placeholder={editRoomNumber ? `${editRoomNumber}-A` : 'e.g. R-108-A'}
                     className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
                   />
                 </div>

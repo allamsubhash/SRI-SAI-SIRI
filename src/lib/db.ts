@@ -34,6 +34,7 @@ interface DevStoreData {
   shortStayGuests?: any[];
   guidelines?: any[];
   notificationReads?: string[];
+  settings?: Record<string, string>;
 }
 
 function loadDevStore(): DevStoreData {
@@ -708,15 +709,15 @@ export const dbService = {
     }
   },
 
-  // --- TENANTS ---
   async getTenantByUserId(userId: string) {
     if (!userId) return null;
     try {
       const dbTenant = await prisma.tenant.findFirst({
         where: {
-          profile: {
-            userId: userId
-          }
+          OR: [
+            { id: userId },
+            { profile: { userId: userId } }
+          ]
         },
         include: {
           profile: {
@@ -730,19 +731,25 @@ export const dbService = {
 
       if (dbTenant) {
         const assignedBed = dbTenant.beds && dbTenant.beds.length > 0 ? dbTenant.beds[0] : null;
+        let finalBedNumber = assignedBed ? assignedBed.number : (dbTenant.bedNumber || 'N/A');
+        const roomNum = dbTenant.roomNumber || 'N/A';
+        if (roomNum !== 'N/A' && finalBedNumber !== 'N/A' && finalBedNumber.includes('-') && !finalBedNumber.startsWith(roomNum)) {
+          finalBedNumber = `${roomNum}-${finalBedNumber.split('-').pop()}`;
+        }
+
         const formattedDate = dbTenant.moveInDate
           ? dbTenant.moveInDate.toISOString().split('T')[0]
-          : (dbTenant.profile.moveInDate ? dbTenant.profile.moveInDate.toISOString().split('T')[0] : '2026-01-15');
+          : (dbTenant.profile?.moveInDate ? dbTenant.profile.moveInDate.toISOString().split('T')[0] : '2026-01-15');
 
         return {
           id: dbTenant.id,
           tenantId: dbTenant.id,
-          userId: dbTenant.profile.userId,
-          name: `${dbTenant.profile.firstName} ${dbTenant.profile.lastName}`.trim(),
-          email: dbTenant.profile.user.email,
-          phone: dbTenant.profile.phone,
-          roomNumber: dbTenant.roomNumber || 'N/A',
-          bedNumber: assignedBed ? assignedBed.number : (dbTenant.bedNumber || 'N/A'),
+          userId: dbTenant.profile?.userId,
+          name: dbTenant.profile ? `${dbTenant.profile.firstName} ${dbTenant.profile.lastName}`.trim() : 'Resident',
+          email: dbTenant.profile?.user?.email || 'tenant@srisaisiri.com',
+          phone: dbTenant.profile?.phone || '',
+          roomNumber: roomNum,
+          bedNumber: finalBedNumber,
           rentAmount: dbTenant.rentAmount || 8500,
           status: dbTenant.status as any,
           moveInDate: formattedDate,
@@ -786,6 +793,11 @@ export const dbService = {
       if (dbTenants) {
         const mapped = dbTenants.map(t => {
           const assignedBed = t.beds && t.beds.length > 0 ? t.beds[0] : null;
+          let finalBed = assignedBed ? assignedBed.number : (t.bedNumber || 'N/A');
+          const roomNum = t.roomNumber || 'N/A';
+          if (roomNum !== 'N/A' && finalBed !== 'N/A' && finalBed.includes('-') && !finalBed.startsWith(roomNum)) {
+            finalBed = `${roomNum}-${finalBed.split('-').pop()}`;
+          }
           const formattedDate = t.moveInDate
             ? t.moveInDate.toISOString().split('T')[0]
             : (t.profile?.moveInDate ? t.profile.moveInDate.toISOString().split('T')[0] : '2026-01-15');
@@ -797,8 +809,8 @@ export const dbService = {
             name: t.profile ? `${t.profile.firstName} ${t.profile.lastName}`.trim() : 'Resident',
             email: t.profile?.user?.email || 'tenant@srisaisiri.com',
             phone: t.profile?.phone || '',
-            roomNumber: t.roomNumber || 'N/A',
-            bedNumber: assignedBed ? assignedBed.number : (t.bedNumber || 'N/A'),
+            roomNumber: roomNum,
+            bedNumber: finalBed,
             rentAmount: t.rentAmount || 8500,
             status: t.status as any,
             moveInDate: formattedDate,
@@ -1178,7 +1190,21 @@ export const dbService = {
         if (data.bedNumber !== undefined) tenantUpdate.bedNumber = data.bedNumber;
         if (data.rentAmount !== undefined) tenantUpdate.rentAmount = data.rentAmount;
         if (data.medicalNotes !== undefined) tenantUpdate.medicalNotes = data.medicalNotes;
-        if (data.moveInDate !== undefined) tenantUpdate.moveInDate = new Date(data.moveInDate);
+        if (data.moveInDate !== undefined) {
+          const newMoveIn = new Date(data.moveInDate);
+          if (!isNaN(newMoveIn.getTime())) {
+            tenantUpdate.moveInDate = newMoveIn;
+            // Purge unpaid invoices prior to new moveIn month
+            const startOfMoveInMonth = new Date(newMoveIn.getFullYear(), newMoveIn.getMonth(), 1);
+            await tx.invoice.deleteMany({
+              where: {
+                tenantId: tenantId,
+                dueDate: { lt: startOfMoveInMonth },
+                paidAmount: 0
+              }
+            });
+          }
+        }
         if (newRoomId) tenantUpdate.roomId = newRoomId;
 
         return await tx.tenant.update({
@@ -1188,13 +1214,32 @@ export const dbService = {
       });
     } catch (e) {
       logDebug('updateTenantProfile fallback to mockTenants:', e);
-      const mockT = mockTenants.find(t => t.id === tenantId);
+      const mockT = mockTenants.find(t => t.id === tenantId || t.userId === tenantId);
       if (mockT) {
         if (data.name !== undefined) mockT.name = data.name;
         if (data.email !== undefined) mockT.email = data.email;
         if (data.phone !== undefined) mockT.phone = data.phone;
         if (data.gender !== undefined) mockT.gender = data.gender;
-        if (data.moveInDate !== undefined) mockT.moveInDate = data.moveInDate;
+        if (data.moveInDate !== undefined) {
+          mockT.moveInDate = data.moveInDate;
+          (mockT as any).joiningDate = data.moveInDate;
+          const newMoveIn = new Date(data.moveInDate);
+          if (!isNaN(newMoveIn.getTime())) {
+            const startYear = newMoveIn.getFullYear();
+            const startMonth = newMoveIn.getMonth();
+            for (let i = mockInvoices.length - 1; i >= 0; i--) {
+              const inv = mockInvoices[i];
+              if ((inv.tenantId === tenantId || inv.tenantId === mockT.id || inv.tenantId === mockT.userId) && (inv.paidAmount || 0) === 0 && inv.dueDate) {
+                const d = new Date(inv.dueDate);
+                if (!isNaN(d.getTime())) {
+                  if (d.getFullYear() < startYear || (d.getFullYear() === startYear && d.getMonth() < startMonth)) {
+                    mockInvoices.splice(i, 1);
+                  }
+                }
+              }
+            }
+          }
+        }
         if (data.roomNumber !== undefined) mockT.roomNumber = data.roomNumber;
         if (data.bedNumber !== undefined) mockT.bedNumber = data.bedNumber;
         if (data.rentAmount !== undefined) mockT.rentAmount = data.rentAmount;
@@ -1206,7 +1251,7 @@ export const dbService = {
         if (data.guardianPhone !== undefined) mockT.guardianPhone = data.guardianPhone;
         if (data.occupation !== undefined) mockT.occupation = data.occupation;
         if (data.medicalNotes !== undefined) mockT.medicalNotes = data.medicalNotes;
-        saveDevStore({ tenants: mockTenants });
+        saveDevStore({ tenants: mockTenants, invoices: mockInvoices });
         return mockT;
       }
       return { id: tenantId, ...data };
@@ -1299,6 +1344,14 @@ export const dbService = {
             itemsList = [];
           }
 
+          let derivedBillingPeriod = '';
+          if (inv.dueDate) {
+            const dueD = new Date(inv.dueDate);
+            if (!isNaN(dueD.getTime())) {
+              derivedBillingPeriod = dueD.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+            }
+          }
+
           return {
             id: inv.id,
             number: inv.number,
@@ -1308,6 +1361,8 @@ export const dbService = {
             amount: inv.amount,
             paidAmount: inv.paidAmount,
             dueDate: inv.dueDate.toISOString().split('T')[0],
+            billingMonth: derivedBillingPeriod,
+            billingPeriod: derivedBillingPeriod,
             status: inv.status as any,
             items: itemsList,
             itemsJson: inv.itemsJson,
@@ -3234,6 +3289,65 @@ export const dbService = {
     };
   },
 
+
+  // --- GENERAL PROPERTY SETTINGS ---
+  async getSettings() {
+    const defaultSettings = {
+      hostelName: 'Sri Sai Siri Boys Hostel',
+      address: 'Plot 42, Knowledge Park III, Greater Noida',
+      contactPhone: '+91 98765 00000',
+      contactEmail: 'contact@srisaisiri.com',
+      currency: 'INR (₹)',
+      curfewTime: '10:30 PM'
+    };
+
+    try {
+      const dbSettings = await prisma.setting.findMany();
+      if (dbSettings && dbSettings.length > 0) {
+        const settingsMap: Record<string, string> = {};
+        dbSettings.forEach(s => {
+          settingsMap[s.key] = s.value;
+        });
+        return {
+          hostelName: settingsMap['hostelName'] || defaultSettings.hostelName,
+          address: settingsMap['address'] || defaultSettings.address,
+          contactPhone: settingsMap['contactPhone'] || defaultSettings.contactPhone,
+          contactEmail: settingsMap['contactEmail'] || defaultSettings.contactEmail,
+          currency: settingsMap['currency'] || defaultSettings.currency,
+          curfewTime: settingsMap['curfewTime'] || defaultSettings.curfewTime
+        };
+      }
+    } catch (e) {
+      logDebug('getSettings DB fallback:', e);
+    }
+
+    const devStoreSettings = (loadDevStore() as any).settings;
+    if (devStoreSettings && typeof devStoreSettings === 'object') {
+      return { ...defaultSettings, ...devStoreSettings };
+    }
+    return defaultSettings;
+  },
+
+  async saveSettings(data: Record<string, string>) {
+    try {
+      for (const [key, value] of Object.entries(data)) {
+        if (typeof value === 'string') {
+          await prisma.setting.upsert({
+            where: { key },
+            update: { value },
+            create: { key, value }
+          });
+        }
+      }
+    } catch (e) {
+      logDebug('saveSettings DB fallback:', e);
+    }
+
+    const current = (loadDevStore() as any).settings || {};
+    const updated = { ...current, ...data };
+    saveDevStore({ settings: updated });
+    return this.getSettings();
+  },
 
   // --- QR PAYMENT SETTINGS ---
   async getQRPaymentSettings() {

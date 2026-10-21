@@ -246,6 +246,7 @@ export default function TenantBilling() {
       tenantId: tenantData?.id || user?.id || 'TENANT-001',
       tenantName: user?.name || tenantData?.name || 'Resident Tenant',
       roomNumber: tenantData?.roomNumber || 'A-101',
+      bedNumber: tenantData?.bedNumber || 'A-101-A',
       buildingName: tenantData?.buildingName || 'Sri Sai Siri Hostel',
       mobileNumber: tenantData?.phone || (user as any)?.phone || '+91 98765 43210',
       billingPeriod: pay.billingPeriod || matchingInvoice?.billingMonth || activeBill?.billingMonth || new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
@@ -261,7 +262,6 @@ export default function TenantBilling() {
       ],
       totalAmount: currentPaid,
       remainingDue: remainingDue,
-      nextDueDate: billingState.nextDueInfo?.formattedNextDueDate || billingState.dueDate,
       generatedOn: formatDateTime(new Date())
     };
     setSelectedReceipt(formattedData);

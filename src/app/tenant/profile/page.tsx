@@ -21,14 +21,21 @@ import { formatINR, formatDate } from '@/utils/formatters';
 export default function TenantProfilePage() {
   const { user, logout } = useAuth();
   const [currentTenant, setCurrentTenant] = useState<any>(null);
+  const [adminPhone, setAdminPhone] = useState('+91 98765 00000');
+  const [hostelName, setHostelName] = useState('Sri Sai Siri Boys Hostel');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       fetch('/api/tenants/me').then(res => res.ok ? res.json() : null),
-      fetch('/api/dashboard').then(res => res.ok ? res.json() : null)
+      fetch('/api/dashboard').then(res => res.ok ? res.json() : null),
+      fetch('/api/settings').then(res => res.ok ? res.json() : null)
     ])
-      .then(([meRes, dashData]) => {
+      .then(([meRes, dashData, setRes]) => {
+        if (setRes?.settings) {
+          if (setRes.settings.contactPhone) setAdminPhone(setRes.settings.contactPhone);
+          if (setRes.settings.hostelName) setHostelName(setRes.settings.hostelName);
+        }
         let activeTenant = meRes?.tenant;
         if (!activeTenant && dashData?.tenants) {
           activeTenant = dashData.tenants.find((t: any) => 
@@ -36,12 +43,6 @@ export default function TenantProfilePage() {
             (user?.email && t.email?.toLowerCase() === user.email.toLowerCase()) || 
             (user?.name && t.name?.toLowerCase() === user.name.toLowerCase())
           );
-        }
-        if (activeTenant) {
-          console.log("TENANT RAW DATA:", activeTenant);
-          console.log("TENANT PHONE:", activeTenant.phone);
-          console.log("TENANT MOVE-IN:", activeTenant.moveInDate);
-          console.log("TENANT ID:", activeTenant.id);
         }
         setCurrentTenant(activeTenant);
         setLoading(false);
@@ -135,7 +136,12 @@ export default function TenantProfilePage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-bold pt-2">
           <div className="p-4 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832] space-y-1">
             <span className="text-[#68736E] dark:text-[#9BAAA4] text-[10px] uppercase font-black tracking-wider block">Hostel Trade Name</span>
-            <span className="text-[#1C2522] dark:text-[#F2F5F2] text-sm font-black">Sri Sai Siri Boys Hostel</span>
+            <span className="text-[#1C2522] dark:text-[#F2F5F2] text-sm font-black">{hostelName}</span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832] space-y-1">
+            <span className="text-[#68736E] dark:text-[#9BAAA4] text-[10px] uppercase font-black tracking-wider block">Admin Helpline</span>
+            <a href={`tel:${adminPhone}`} className="text-emerald-600 dark:text-emerald-400 text-sm font-black hover:underline block">{adminPhone}</a>
           </div>
 
           <div className="p-4 rounded-2xl bg-[#F1EEE7]/90 dark:bg-[#1A2621]/90 border border-[#DDD8CE] dark:border-[#293832] space-y-1">

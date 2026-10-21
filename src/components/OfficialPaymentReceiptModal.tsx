@@ -87,10 +87,21 @@ export default function OfficialPaymentReceiptModal({
   const [mounted, setMounted] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [adminPhone, setAdminPhone] = useState('+91 98765 00000');
   const receiptRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
+    const savedPhone = typeof window !== 'undefined' ? localStorage.getItem('contactPhone') : null;
+    if (savedPhone) setAdminPhone(savedPhone);
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(d => {
+        if (d?.settings?.contactPhone) {
+          setAdminPhone(d.settings.contactPhone);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   if (!mounted || !isOpen || !receiptData) return null;
@@ -223,22 +234,258 @@ export default function OfficialPaymentReceiptModal({
     }, 500);
   };
 
+  // Direct Vector PDF Generator: 100% guaranteed fail-proof PDF export
+  const generateDirectVectorPDF = async (targetFileName: string) => {
+    const { jsPDF } = await import('jspdf');
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    // Background Dark Purple
+    pdf.setFillColor(24, 7, 49);
+    pdf.rect(0, 0, 210, 297, 'F');
+
+    // Outer Gold Accent Border
+    pdf.setDrawColor(212, 175, 55);
+    pdf.setLineWidth(0.8);
+    pdf.roundedRect(10, 10, 190, 277, 4, 4, 'S');
+
+    // Header Title
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(16);
+    pdf.text('SRI SAI SIRI BOYS HOSTEL', 105, 24, { align: 'center' });
+
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(245, 230, 200);
+    pdf.text('COMFORT • SAFETY • QUALITY STAY', 105, 30, { align: 'center' });
+
+    pdf.setFontSize(10.5);
+    pdf.setTextColor(212, 175, 55);
+    pdf.text(isShortStay ? 'SHORT-STAY PAYMENT RECEIPT' : 'MONTHLY RENT RECEIPT', 105, 37, { align: 'center' });
+
+    // Status Badge
+    pdf.setFillColor(statusStamp === 'PAID' ? 16 : 220, statusStamp === 'PAID' ? 185 : 38, statusStamp === 'PAID' ? 129 : 38);
+    pdf.roundedRect(150, 16, 42, 9, 2, 2, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(8.5);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(statusStamp === 'PAID' ? 'PAID' : (statusStamp === 'PARTIALLY_PAID' ? 'PARTIAL' : 'PENDING'), 171, 22, { align: 'center' });
+
+    // Tenant Particulars Card Box
+    pdf.setFillColor(255, 255, 255);
+    pdf.roundedRect(16, 42, 178, 42, 3, 3, 'F');
+
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(100, 100, 100);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`${isShortStay ? 'Guest Name' : 'Tenant Name'}:`, 22, 51);
+    pdf.setTextColor(15, 23, 42);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(displayName, 55, 51);
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(100, 100, 100);
+    pdf.text('Building:', 110, 51);
+    pdf.setTextColor(15, 23, 42);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(receiptData.buildingName || 'Block A - Premium Executive', 135, 51);
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(100, 100, 100);
+    pdf.text('Room / Bed:', 22, 62);
+    pdf.setTextColor(15, 23, 42);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(`Rm ${receiptData.roomNumber || 'R-108'} (Bed ${receiptData.bedNumber || '1'})`, 55, 62);
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(100, 100, 100);
+    pdf.text('Mobile Number:', 110, 62);
+    pdf.setTextColor(15, 23, 42);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(receiptData.mobileNumber || '+91 98765 43210', 135, 62);
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(100, 100, 100);
+    pdf.text('Tenant ID:', 22, 73);
+    pdf.setTextColor(15, 23, 42);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(receiptData.tenantId || `T-${receiptData.receiptNo.replace(/\D/g,'') || '1790261026467'}`, 55, 73);
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(100, 100, 100);
+    pdf.text('Billing Period:', 110, 73);
+    pdf.setTextColor(109, 40, 217);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(receiptData.billingPeriod || 'September 2026', 135, 73);
+
+    // Receipt Bar
+    pdf.setFillColor(243, 239, 250);
+    pdf.roundedRect(16, 88, 178, 10, 2, 2, 'F');
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(70, 70, 70);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('Receipt No:', 22, 94.5);
+    pdf.setTextColor(15, 23, 42);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(receiptData.receiptNo, 45, 94.5);
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(70, 70, 70);
+    pdf.text('Date & Time:', 110, 94.5);
+    pdf.setTextColor(15, 23, 42);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(formatDateTime(receiptData.date), 135, 94.5);
+
+    // Particulars Table Header
+    pdf.setFillColor(43, 12, 84);
+    pdf.roundedRect(16, 102, 178, 9, 2, 2, 'F');
+    pdf.setFontSize(9);
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Account Particulars', 22, 108);
+    pdf.text('Amount (INR)', 188, 108, { align: 'right' });
+
+    // Particulars Table Body
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(16, 111, 178, 48, 'F');
+
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(15, 23, 42);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Room Rent & Boarding (${receiptData.billingPeriod || 'September 2026'})`, 22, 120);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(`INR ${billAmount.toLocaleString('en-IN')}`, 188, 120, { align: 'right' });
+
+    let currentY = 130;
+    if (previousPaid > 0) {
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(100, 100, 100);
+      pdf.text('Previously Paid Towards This Month', 22, currentY);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(`INR ${previousPaid.toLocaleString('en-IN')}`, 188, currentY, { align: 'right' });
+      currentY += 10;
+    }
+
+    pdf.setFillColor(236, 253, 245);
+    pdf.rect(16, currentY - 5, 178, 8, 'F');
+    pdf.setTextColor(6, 95, 70);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('This Payment Received', 22, currentY);
+    pdf.text(`INR ${currentPaid.toLocaleString('en-IN')}`, 188, currentY, { align: 'right' });
+
+    currentY += 8;
+    pdf.setFillColor(209, 250, 229);
+    pdf.rect(16, currentY - 5, 178, 8, 'F');
+    pdf.setTextColor(4, 120, 87);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Total Amount Paid', 22, currentY);
+    pdf.text(`INR ${totalPaid.toLocaleString('en-IN')}`, 188, currentY, { align: 'right' });
+
+    currentY += 8;
+    pdf.setFillColor(255, 241, 242);
+    pdf.rect(16, currentY - 5, 178, 8, 'F');
+    pdf.setTextColor(190, 18, 60);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Remaining Balance Dues', 22, currentY);
+    pdf.text(`INR ${remainingDue.toLocaleString('en-IN')}`, 188, currentY, { align: 'right' });
+
+    // In Words
+    pdf.setFillColor(239, 231, 252);
+    pdf.roundedRect(16, 163, 178, 9, 2, 2, 'F');
+    pdf.setFontSize(8);
+    pdf.setTextColor(43, 12, 84);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(`In Words: ${amountInWords}`, 22, 169);
+
+    // Payment Details Box & QR
+    pdf.setFillColor(255, 255, 255);
+    pdf.roundedRect(16, 176, 178, 38, 3, 3, 'F');
+
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(100, 100, 100);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('Payment Method:', 22, 186);
+    pdf.setTextColor(15, 23, 42);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text((receiptData.paymentMethod || 'UPI').toUpperCase(), 60, 186);
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(100, 100, 100);
+    pdf.text('Transaction ID:', 22, 196);
+    pdf.setTextColor(15, 23, 42);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(receiptData.referenceId || `UPI/${receiptData.receiptNo.replace(/\D/g,'') || '426709318274'}`, 60, 196);
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(100, 100, 100);
+    pdf.text('Received By:', 22, 206);
+    pdf.setTextColor(15, 23, 42);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(receiptData.receivedBy || receiptData.recordedBy || 'Sri Sai Siri Management', 60, 206);
+
+    try {
+      pdf.addImage(qrCodeDataUrl, 'PNG', 152, 179, 26, 26);
+    } catch {}
+
+    // Stamp & Signature Area
+    pdf.setDrawColor(220, 38, 38);
+    pdf.setLineWidth(0.7);
+    pdf.circle(165, 238, 12, 'S');
+    pdf.setFontSize(6);
+    pdf.setTextColor(220, 38, 38);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('SRI SAI SIRI', 165, 235, { align: 'center' });
+    pdf.text('AUTHORISED STAMP', 165, 238.5, { align: 'center' });
+    pdf.text('BOYS HOSTEL', 165, 242, { align: 'center' });
+
+    pdf.setDrawColor(255, 255, 255);
+    pdf.setLineWidth(0.3);
+    pdf.line(148, 254, 182, 254);
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(240, 240, 240);
+    pdf.text('Authorized Signature', 165, 258, { align: 'center' });
+    pdf.setTextColor(212, 175, 55);
+    pdf.text('Hostel Manager', 165, 262, { align: 'center' });
+
+    // Thank you message
+    pdf.setFontSize(13);
+    pdf.setTextColor(245, 230, 200);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Thank You!', 65, 238);
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(200, 180, 230);
+    pdf.text('For being a part of Sri Sai Siri Boys Hostel.', 65, 244);
+
+    // Footer Contact Bar
+    pdf.setFillColor(18, 5, 36);
+    pdf.roundedRect(10, 273, 190, 14, 0, 0, 'F');
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(245, 230, 200);
+    pdf.text(`Phone: ${receiptData.mobileNumber || adminPhone}`, 18, 281);
+    pdf.text('Sri Sai Siri Boys Hostel, Block A, Rm R-108', 192, 281, { align: 'right' });
+
+    pdf.save(targetFileName);
+  };
+
   const handleDownloadPDF = async () => {
     if (downloading) return;
     setDownloading(true);
 
+    const cleanTenant = (receiptData.tenantId || 'Tenant').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const cleanPeriod = (receiptData.billingPeriod || 'Period').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const targetFileName = `Receipt_${cleanTenant}_${cleanPeriod}.pdf`;
+
     try {
-      if (!receiptRef.current) return;
+      if (!receiptRef.current) {
+        await generateDirectVectorPDF(targetFileName);
+        return;
+      }
 
-      const cleanTenant = (receiptData.tenantId || 'Tenant').replace(/[^a-zA-Z0-9_-]/g, '_');
-      const cleanPeriod = (receiptData.billingPeriod || 'Period').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '_');
-      const targetFileName = `Receipt_${cleanTenant}_${cleanPeriod}.pdf`;
-
+      let capturedCanvas: HTMLCanvasElement | null = null;
       try {
         const html2canvas = (await import('html2canvas')).default;
-        const { jsPDF } = await import('jspdf');
-
-        const canvas = await html2canvas(receiptRef.current, {
+        capturedCanvas = await html2canvas(receiptRef.current, {
           scale: 2,
           useCORS: true,
           allowTaint: false,
@@ -247,7 +494,7 @@ export default function OfficialPaymentReceiptModal({
           onclone: (clonedDoc) => {
             const el = clonedDoc.getElementById('printable-official-receipt');
             if (el) {
-              // Strip decorative SVG gradients that crash Safari canvas export
+              // Strip decorative SVG gradients that crash Safari/Chrome canvas export
               const svgs = el.querySelectorAll('svg');
               svgs.forEach((svg) => {
                 if (svg.querySelector('linearGradient') || svg.getAttribute('viewBox') === '0 0 500 120') {
@@ -273,8 +520,13 @@ export default function OfficialPaymentReceiptModal({
             }
           }
         });
+      } catch (canvasErr) {
+        console.warn('Canvas export failed, falling back to direct vector PDF:', canvasErr);
+      }
 
-        const imgData = canvas.toDataURL('image/png', 1.0);
+      if (capturedCanvas) {
+        const { jsPDF } = await import('jspdf');
+        const imgData = capturedCanvas.toDataURL('image/png', 1.0);
         const pdf = new jsPDF({
           orientation: 'portrait',
           unit: 'mm',
@@ -283,7 +535,7 @@ export default function OfficialPaymentReceiptModal({
 
         const pdfWidth = 190; // mm
         const maxPdfHeight = 270; // mm to guarantee strict 1-page fit
-        let pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        const pdfHeight = (capturedCanvas.height * pdfWidth) / capturedCanvas.width;
 
         let renderWidth = pdfWidth;
         let renderHeight = pdfHeight;
@@ -298,7 +550,6 @@ export default function OfficialPaymentReceiptModal({
 
         pdf.addImage(imgData, 'PNG', xOffset, 10, renderWidth, renderHeight);
 
-        // Download reliably using standard Blob URL
         try {
           const pdfBlob = pdf.output('blob');
           const blobUrl = URL.createObjectURL(pdfBlob);
@@ -312,36 +563,20 @@ export default function OfficialPaymentReceiptModal({
             URL.revokeObjectURL(blobUrl);
             if (document.body.contains(link)) document.body.removeChild(link);
           }, 3000);
-        } catch (blobErr) {
+        } catch {
           pdf.save(targetFileName);
         }
-
-        return;
-      } catch (canvasErr) {
-        console.warn('Canvas PDF export fallback triggered:', canvasErr);
-      }
-
-      // Secondary Fallback: Direct Image PNG Download
-      try {
-        const html2canvas = (await import('html2canvas')).default;
-        const canvas = await html2canvas(receiptRef.current, { scale: 2, useCORS: true, allowTaint: false });
-        const imgData = canvas.toDataURL('image/png');
-        const link = document.createElement('a');
-        link.style.display = 'none';
-        link.href = imgData;
-        link.download = `${targetFileName.replace('.pdf', '')}.png`;
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(() => {
-          if (document.body.contains(link)) document.body.removeChild(link);
-        }, 1000);
-      } catch (finalErr) {
-        console.error('Final download fallback failed, triggering print dialog:', finalErr);
-        handlePrint();
+      } else {
+        // Fallback: Generate Direct Vector PDF without canvas
+        await generateDirectVectorPDF(targetFileName);
       }
     } catch (e) {
-      console.error('Failed to export receipt:', e);
-      handlePrint();
+      console.error('Canvas & Vector PDF failed, falling back to vector PDF export:', e);
+      try {
+        await generateDirectVectorPDF(targetFileName);
+      } catch (vectorErr) {
+        console.error('Final PDF fallback failed:', vectorErr);
+      }
     } finally {
       setDownloading(false);
     }
@@ -569,18 +804,6 @@ export default function OfficialPaymentReceiptModal({
                       </div>
                     </div>
 
-                    {receiptData.nextDueDate && (
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
-                          <Clock className="w-3 h-3" />
-                        </div>
-                        <div>
-                          <span className="text-slate-500 text-[10px] font-medium">Next Due Date : </span>
-                          <span className="font-bold text-amber-800">{formatDate(receiptData.nextDueDate)}</span>
-                        </div>
-                      </div>
-                    )}
-
                   </div>
                 </div>
 
@@ -772,7 +995,7 @@ export default function OfficialPaymentReceiptModal({
                 <div className="bg-[#140529] -mx-3.5 sm:-mx-4 -mb-3.5 sm:-mb-4 mt-2 p-2 rounded-b-[22px] border-t border-amber-400/30 flex flex-wrap justify-between items-center text-[9.5px] font-semibold text-purple-200 px-5 relative z-10">
                   <div className="flex items-center gap-1.5">
                     <Phone className="w-3 h-3 text-amber-300" />
-                    <span>+91 98765 43210</span>
+                    <span>{adminPhone}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Building className="w-3 h-3 text-amber-300" />

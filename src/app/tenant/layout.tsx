@@ -16,7 +16,8 @@ import {
   Search, 
   ChevronLeft,
   ChevronRight,
-  Palette
+  Palette,
+  Phone
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -48,27 +49,33 @@ function TenantLayoutContent({ children }: TenantLayoutProps) {
   const [showNotif, setShowNotif] = useState(false);
 
   const [hostelName, setHostelName] = useState('Sri Sai Siri Hostel');
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    if (savedTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, []);
+  const [adminPhone, setAdminPhone] = useState('+91 98765 00000');
 
   useEffect(() => {
     const savedName = localStorage.getItem('hostelName');
     if (savedName) setHostelName(savedName);
+    const savedPhone = localStorage.getItem('contactPhone');
+    if (savedPhone) setAdminPhone(savedPhone);
 
-    const updateHostelName = () => {
+    const updateSettings = () => {
       const name = localStorage.getItem('hostelName');
       if (name) setHostelName(name);
+      const phone = localStorage.getItem('contactPhone');
+      if (phone) setAdminPhone(phone);
     };
 
-    window.addEventListener('settingsUpdated', updateHostelName);
-    return () => window.removeEventListener('settingsUpdated', updateHostelName);
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(d => {
+        if (d?.settings) {
+          if (d.settings.hostelName) setHostelName(d.settings.hostelName);
+          if (d.settings.contactPhone) setAdminPhone(d.settings.contactPhone);
+        }
+      })
+      .catch(() => {});
+
+    window.addEventListener('settingsUpdated', updateSettings);
+    return () => window.removeEventListener('settingsUpdated', updateSettings);
   }, []);
 
   const fetchTenantNotifications = () => {
@@ -242,7 +249,18 @@ function TenantLayoutContent({ children }: TenantLayoutProps) {
           </div>
 
           {/* Sidebar Bottom Actions */}
-          <div className="space-y-3 pt-4 border-t border-[#DDD8CE] dark:border-[#293832]">
+          <div className="space-y-2 pt-4 border-t border-[#DDD8CE] dark:border-[#293832]">
+            <a
+              href={`tel:${adminPhone}`}
+              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs border border-emerald-500/20 hover:bg-emerald-500 hover:text-white transition-all cursor-pointer ${
+                sidebarCollapsed ? 'px-2' : 'px-4'
+              }`}
+              title={`Call Hostel Admin: ${adminPhone}`}
+            >
+              <Phone className="w-4 h-4 shrink-0" />
+              {!sidebarCollapsed && <span className="truncate">Admin: {adminPhone}</span>}
+            </a>
+
             <button
               onClick={logout}
               className={`w-full flex items-center justify-center gap-2.5 py-3 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold text-xs border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all cursor-pointer ${
@@ -324,13 +342,23 @@ function TenantLayoutContent({ children }: TenantLayoutProps) {
                   </nav>
                 </div>
 
-                <button
-                  onClick={() => { setMobileMenuOpen(false); logout(); }}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-rose-500/10 text-rose-600 font-bold text-xs border border-rose-500/20"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>Sign Out</span>
-                </button>
+                <div className="space-y-2">
+                  <a
+                    href={`tel:${adminPhone}`}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs border border-emerald-500/20"
+                  >
+                    <Phone className="w-4 h-4 text-emerald-500" />
+                    <span>Call Admin: {adminPhone}</span>
+                  </a>
+
+                  <button
+                    onClick={() => { setMobileMenuOpen(false); logout(); }}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-rose-500/10 text-rose-600 font-bold text-xs border border-rose-500/20"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
               </motion.aside>
             </motion.div>
           )}
@@ -623,7 +651,11 @@ function TenantLayoutContent({ children }: TenantLayoutProps) {
                   <span className="font-black text-[#1C2522] dark:text-[#F2F5F2]">{tenantProfile?.moveInDate ? formatDate(tenantProfile.moveInDate) : '15 Jan 2026'}</span>
                 </div>
                 <div className="flex justify-between items-center text-[#68736E] dark:text-[#9BAAA4]">
-                  <span className="font-bold">Contact Phone</span>
+                  <span className="font-bold">Admin Helpline</span>
+                  <a href={`tel:${adminPhone}`} className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline">{adminPhone}</a>
+                </div>
+                <div className="flex justify-between items-center text-[#68736E] dark:text-[#9BAAA4]">
+                  <span className="font-bold">Resident Phone</span>
                   <span className="font-bold text-[#1C2522] dark:text-[#F2F5F2]">{tenantProfile?.phone || '+91 98765 43210'}</span>
                 </div>
                 <div className="flex justify-between items-center text-[#68736E] dark:text-[#9BAAA4]">

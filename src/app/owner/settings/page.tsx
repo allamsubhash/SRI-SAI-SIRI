@@ -309,8 +309,11 @@ export default function SettingsPage() {
       });
       if (res.ok) {
         localStorage.setItem('hostelName', propertyConfig.hostelName);
+        localStorage.setItem('contactPhone', propertyConfig.contactPhone);
+        localStorage.setItem('contactEmail', propertyConfig.contactEmail);
+        localStorage.setItem('hostelAddress', propertyConfig.address);
         window.dispatchEvent(new Event('settingsUpdated'));
-        showToast('Hostel Profile Saved', `Hostel name permanently updated to "${propertyConfig.hostelName}".`, 'success');
+        showToast('Hostel Profile Saved', `Settings permanently updated. Contact phone: ${propertyConfig.contactPhone}`, 'success');
       } else {
         showToast('Save Failed', 'Could not update property settings.', 'danger');
       }

@@ -245,11 +245,32 @@ export function computeTenantBillingState(
 
   // Derive tenant's billing cycle day from moveInDate / joiningDate
   let cycleDay = 15;
+  let moveInObj: Date | null = null;
   if (moveInDate) {
     const parsedMoveIn = new Date(moveInDate);
     if (!isNaN(parsedMoveIn.getTime())) {
       cycleDay = parsedMoveIn.getDate();
+      moveInObj = parsedMoveIn;
     }
+  }
+
+  // Pre-move-in safeguard: A resident must NEVER be charged or show unpaid dues for periods prior to moveInDate
+  if (moveInObj) {
+    const moveInYear = moveInObj.getFullYear();
+    const moveInMonth = moveInObj.getMonth();
+    tenantInvoicesRaw = tenantInvoicesRaw.filter((inv: any) => {
+      if (inv.dueDate) {
+        const d = new Date(inv.dueDate);
+        if (!isNaN(d.getTime())) {
+          const y = d.getFullYear();
+          const m = d.getMonth();
+          if (y < moveInYear || (y === moveInYear && m < moveInMonth)) {
+            return false;
+          }
+        }
+      }
+      return true;
+    });
   }
 
   // Helper to normalize period name
@@ -399,7 +420,14 @@ export function computeTenantBillingState(
       itemsList = [];
     }
 
-    const billingPeriod = inv.billingMonth || inv.billingPeriod || currentMonthStr;
+    let derivedBillingPeriod = '';
+    if (inv.dueDate) {
+      const dueD = new Date(inv.dueDate);
+      if (!isNaN(dueD.getTime())) {
+        derivedBillingPeriod = dueD.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+      }
+    }
+    const billingPeriod = inv.billingMonth || inv.billingPeriod || derivedBillingPeriod || currentMonthStr;
 
     if (itemsList.length === 0) {
       itemsList = [{ description: `Monthly Hostel Rent (${billingPeriod})`, amount: Number(inv.amount) || monthlyRent }];
